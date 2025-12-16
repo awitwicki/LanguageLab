@@ -208,6 +208,5 @@ __marimo__/
 
 .idea
 
-.lock
-.fb2
-.txt
+*.txt
+*.fb2
