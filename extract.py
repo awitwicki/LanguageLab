@@ -111,10 +111,17 @@ def extract_text_from_fb2(fb2_file: str) -> str:
     tree = etree.parse(fb2_file)
     root = tree.getroot()
     text_elements = root.xpath('//text() | //p/text()')
-    return ' '.join(text_elements)
+    total_text = ' '.join(text_elements)
+    total_text = total_text.replace('—', ' ')
+    return total_text
 
 
-def extract_and_translate(fb2_file: str, output_file: str):
+def main():
+    fb2_file = "book.fb2"
+    output_file = "result/new_words.txt"
+
+    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
+
     text = extract_text_from_fb2(fb2_file)
 
     print("Tokenizing text...")
@@ -142,15 +149,6 @@ def extract_and_translate(fb2_file: str, output_file: str):
 
     print(f"Done! Processed {len(words)} total words, found {len(clean_words)} unique new words.")
     print(f"Results saved to {output_file}")
-
-
-def main():
-    fb2_file = "book.fb2"
-    output_file = "result/new_words.txt"
-
-    Path(output_file).parent.mkdir(parents=True, exist_ok=True)
-
-    extract_and_translate(fb2_file, output_file)
 
 if __name__ == "__main__":
     main()
