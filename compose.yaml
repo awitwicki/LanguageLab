@@ -1,0 +1,7 @@
+﻿services:
+  languagelab.tgbot:
+    image: languagelab.tgbot
+    build:
+      context: .
+      dockerfile: LanguageLab.TgBot/Dockerfile
+

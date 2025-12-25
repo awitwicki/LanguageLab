@@ -215,4 +215,4 @@ __marimo__/
 bin/
 obj/
 
-.user
+*.user
