@@ -30,12 +30,34 @@ public class BotHandler : BaseHandler
 
         var startMessageText = @$"LanguageLab bot.
 Use command /train to start testing from first dictionary in database.
+Use command /list to see all available dictionaries.
 Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for admins).
 
 `Bot version: {version}`";
         
         await BotClient.SendMessage(chatId: ChatId,
             text: startMessageText,
+            parseMode: ParseMode.Markdown);
+    }
+
+    [MessageReaction(ChatAction.Typing)]
+    [MessageHandler("^/list$")]
+    public async Task ListDictionaries()
+    {
+        var dictionaries = _dbContext.Dictionaries.ToList();
+
+        if (dictionaries.Count == 0)
+        {
+            await BotClient.SendMessage(chatId: ChatId,
+                text: "No dictionaries found. Please add some first.",
+                parseMode: ParseMode.Markdown);
+            return;
+        }
+
+        var messageText = "Available dictionaries:\n" + string.Join("\n", dictionaries.Select(d => $"- {d.Name} ({d.WordsCount} words)"));
+
+        await BotClient.SendMessage(chatId: ChatId,
+            text: messageText,
             parseMode: ParseMode.Markdown);
     }
     
@@ -107,6 +129,7 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
         var dictionary = new LanguageLab.Domain.Entities.Dictionary
         {
             Name = document.FileName ?? "Новий словник",
+            WordsCount = wordPairs.Count,
             Words = wordPairs
         };
 

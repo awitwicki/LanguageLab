@@ -11,7 +11,7 @@ Telegram bot for learn new words
 * [ ] english words translator and export
 * [x] docker compose file
 * [x] Database with migrations for telegram bot
-* [ ] Telegram bot -> dictionary list
+* [x] Telegram bot -> dictionary list
 * [ ] Telegram bot -> procedural exercises (pick dict, learn new 20 words)
 * [ ] Telegram bot -> procedural exercises (test yourself, if not ok - relearn)
 * [ ] Telegram bot -> procedural exercises (learn next batch of words from dictionary)
@@ -57,5 +57,3 @@ uv run sort_words.py
 ```
 
 `extract.py` - extract words in base from fb2 file and save to txt file
-
-
