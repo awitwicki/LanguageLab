@@ -26,6 +26,7 @@ Use next environment variables:
 
 * `TELEGRAM_TOKEN={your token}` - telegram token
 * `DB_CONNECTION_STRING={connection string}` - postgres connection string for entity framework
+* `MODERATORS_LIST={userid1,userid2,...}` - (optional) list of telegram users id allowed to upload dictionaries
 
 **Docker compose:**  create `.env` file and fill it with that variables.
 
@@ -50,7 +51,9 @@ pip install uv
 uv init
 uv sync
 uv pip install -r requirements.txt
+uv pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.0.0/en_core_web_sm-3.0.0.tar.gz
 uv run extract.py 
+uv run sort_words.py
 ```
 
 `extract.py` - extract words in base from fb2 file and save to txt file

@@ -1,11 +1,23 @@
 ﻿// See https://aka.ms/new-console-template for more information
 using Autofac;
+using LanguageLab.Domain.Interfaces;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using PowerBot.Lite;
 using LanguageLab.TgBot.Handlers;
+using LanguageLab.TgBot.Services;
+using NLog;
 
-Console.WriteLine("Starting LanguageLabBot");
+LogManager.Setup().LoadConfiguration(builder => {
+    builder.ForLogger()
+        .FilterMinLevel(LogLevel.Info)
+        .WriteToConsole();
+});
+
+var logger = LogManager.GetCurrentClassLogger();
+
+logger.Debug("Starting LanguaDebugDebugDebuggeLabBot");
+logger.Info("Starting LanguageLabBot");
 
 var botToken = Environment.GetEnvironmentVariable("TELEGRAM_TOKEN")!;
 
@@ -21,7 +33,7 @@ var dbContextOptions = optionsBuilder.Options;
 await using (var dbContext = new ApplicationDbContext(dbContextOptions))
 {
     await dbContext.Database.MigrateAsync();
-    Console.WriteLine("Database is synchronized");
+    logger.Info("Database is synchronized");
 }
 
 // Register middlewares and handlers
@@ -36,6 +48,11 @@ botClient.RegisterContainers(x =>
 
     x.RegisterType<ApplicationDbContext>()
         .AsSelf()
+        .InstancePerLifetimeScope();
+
+    x.RegisterType<ModeratorsService>()
+        .WithParameter("input", Environment.GetEnvironmentVariable("MODERATORS_LIST"))
+        .As<IModeratorsService>()
         .InstancePerLifetimeScope();
 });
 

@@ -1,9 +1,11 @@
 using System.Diagnostics;
 using System.Reflection;
+using LanguageLab.Domain.Interfaces;
 using LanguageLab.Infrastructure.Database;
 using PowerBot.Lite.Attributes;
 using PowerBot.Lite.Handlers;
 using Telegram.Bot;
+using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 using Telegram.Bot.Types.ReplyMarkups;
 
@@ -12,10 +14,12 @@ namespace LanguageLab.TgBot.Handlers;
 public class BotHandler : BaseHandler
 {
     private readonly ApplicationDbContext _dbContext;
+    private readonly IModeratorsService _moderatorsService;
 
-    public BotHandler(ApplicationDbContext dbContext)
+    public BotHandler(ApplicationDbContext dbContext, IModeratorsService moderatorsService)
     {
         _dbContext = dbContext;
+        _moderatorsService = moderatorsService;
     }
 
     [MessageReaction(ChatAction.Typing)]
@@ -26,8 +30,9 @@ public class BotHandler : BaseHandler
 
         var startMessageText = @$"LanguageLab bot.
 Use command /train to start testing from first dictionary in database.
+Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for admins).
 
-`Версія: {version}`";
+`Bot version: {version}`";
         
         await BotClient.SendMessage(chatId: ChatId,
             text: startMessageText,
@@ -38,7 +43,33 @@ Use command /train to start testing from first dictionary in database.
     [MessageTypeFilter(MessageType.Document)]
     public async Task ProcessNewDictionary()
     {
+        if (!_moderatorsService.IsUserModerator(User.Id))
+        {
+            await BotClient.SendMessage(chatId: ChatId,
+                text: "You are not allowed to add new dictionaries",
+                parseMode: ParseMode.Markdown);
+            return;
+        }
+        
         var document = Message.Document!;
+        
+        // Check document size
+        if (document.FileSize > 1024 * 1024 * 10)
+        {
+            await BotClient.SendMessage(chatId: ChatId,
+                text: "File size exceeds the limit of 10 MB",
+                parseMode: ParseMode.Markdown);
+            return;
+        }
+        
+        // Check file extension
+        if (document.MimeType != "text/plain")
+        {
+            await BotClient.SendMessage(chatId: ChatId,
+                text: "Unsupported file format. Only text files are allowed",
+                parseMode: ParseMode.Markdown);
+            return;
+        }
      
         // Download file
         var file = await BotClient.GetFile(document.FileId);
