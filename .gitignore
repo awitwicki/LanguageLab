@@ -216,3 +216,4 @@ bin/
 obj/
 
 *.user
+LanguageLab.TgBot/Properties/launchSettings.json
