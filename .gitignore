@@ -210,3 +210,9 @@ __marimo__/
 
 *.txt
 *.fb2
+.DS_Store
+
+bin/
+obj/
+
+*.user
