@@ -127,7 +127,7 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
         // Create dictionary
         var dictionary = new LanguageLab.Domain.Entities.Dictionary
         {
-            Name = document.FileName ?? "Новий словник",
+            Name = document.FileName?.Replace(".txt", "") ?? "Новий невідомий словник",
             WordsCount = wordPairs.Count,
             Words = wordPairs
         };
