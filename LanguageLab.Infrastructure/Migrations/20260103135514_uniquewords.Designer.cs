@@ -3,6 +3,7 @@ using System;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LanguageLab.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260103135514_uniquewords")]
+    partial class uniquewords
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -40,29 +43,6 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Dictionaries");
-                });
-
-            modelBuilder.Entity("LanguageLab.Domain.Entities.KnownWord", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<long>("UserId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("WordPairId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("WordPairId");
-
-                    b.ToTable("KnownWords");
                 });
 
             modelBuilder.Entity("LanguageLab.Domain.Entities.TelegramUser", b =>
@@ -141,29 +121,6 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.ToTable("TrainingEvents");
                 });
 
-            modelBuilder.Entity("LanguageLab.Domain.Entities.UnknownWord", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<long>("UserId")
-                        .HasColumnType("bigint");
-
-                    b.Property<long>("WordPairId")
-                        .HasColumnType("bigint");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.HasIndex("WordPairId");
-
-                    b.ToTable("UnknownWords");
-                });
-
             modelBuilder.Entity("LanguageLab.Domain.Entities.WordPair", b =>
                 {
                     b.Property<long>("Id")
@@ -191,25 +148,6 @@ namespace LanguageLab.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("Words");
-                });
-
-            modelBuilder.Entity("LanguageLab.Domain.Entities.KnownWord", b =>
-                {
-                    b.HasOne("LanguageLab.Domain.Entities.TelegramUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LanguageLab.Domain.Entities.WordPair", "WordPair")
-                        .WithMany()
-                        .HasForeignKey("WordPairId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-
-                    b.Navigation("WordPair");
                 });
 
             modelBuilder.Entity("LanguageLab.Domain.Entities.Training", b =>
@@ -252,25 +190,6 @@ namespace LanguageLab.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Training");
-
-                    b.Navigation("User");
-
-                    b.Navigation("WordPair");
-                });
-
-            modelBuilder.Entity("LanguageLab.Domain.Entities.UnknownWord", b =>
-                {
-                    b.HasOne("LanguageLab.Domain.Entities.TelegramUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("LanguageLab.Domain.Entities.WordPair", "WordPair")
-                        .WithMany()
-                        .HasForeignKey("WordPairId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
 
                     b.Navigation("User");
 
