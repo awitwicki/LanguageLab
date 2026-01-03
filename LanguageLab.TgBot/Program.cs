@@ -15,7 +15,6 @@ LogManager.Setup().LoadConfiguration(builder => {
 });
 
 var logger = LogManager.GetCurrentClassLogger();
-
 logger.Info("Starting LanguageLabBot");
 
 var botToken = Environment.GetEnvironmentVariable("TELEGRAM_TOKEN")!;
@@ -41,6 +40,11 @@ botClient.RegisterHandler<BotHandler>();
 // Register services
 botClient.RegisterContainers(x =>
 {
+    x.Register(l => logger)
+        .As<ILogger>()
+        .AsSelf()
+        .SingleInstance();
+    
     x.Register(ctx => dbContextOptions)
         .As<DbContextOptions<ApplicationDbContext>>()
         .SingleInstance();

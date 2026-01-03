@@ -16,4 +16,11 @@ public class ApplicationDbContext : DbContext
     {
 
     }
+    
+    protected override void OnModelCreating(ModelBuilder builder)
+    {
+        builder.Entity<WordPair>()
+            .HasIndex(u => u.Word)
+            .IsUnique();
+    }
 }

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using LanguageLab.Domain.Interfaces;
 using LanguageLab.Infrastructure.Database;
+using NLog;
 using PowerBot.Lite.Attributes;
 using PowerBot.Lite.Handlers;
 using Telegram.Bot;
@@ -14,11 +15,13 @@ public class BotHandler : BaseHandler
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly IModeratorsService _moderatorsService;
+    private readonly ILogger _logger;
 
-    public BotHandler(ApplicationDbContext dbContext, IModeratorsService moderatorsService)
+    public BotHandler(ApplicationDbContext dbContext, IModeratorsService moderatorsService, ILogger logger)
     {
         _dbContext = dbContext;
         _moderatorsService = moderatorsService;
+        _logger = logger;
     }
 
     [MessageReaction(ChatAction.Typing)]
@@ -64,78 +67,123 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
     [MessageTypeFilter(MessageType.Document)]
     public async Task ProcessNewDictionary()
     {
-        if (!_moderatorsService.IsUserModerator(User.Id))
+        try
         {
-            await BotClient.SendMessage(chatId: ChatId,
-                text: "You are not allowed to add new dictionaries",
-                parseMode: ParseMode.Markdown);
-            return;
-        }
-        
-        var document = Message.Document!;
-        
-        // Check document size
-        if (document.FileSize > 1024 * 1024 * 10)
-        {
-            await BotClient.SendMessage(chatId: ChatId,
-                text: "File size exceeds the limit of 10 MB",
-                parseMode: ParseMode.Markdown);
-            return;
-        }
-        
-        // Check file extension
-        if (document.MimeType != "text/plain")
-        {
-            await BotClient.SendMessage(chatId: ChatId,
-                text: "Unsupported file format. Only text files are allowed",
-                parseMode: ParseMode.Markdown);
-            return;
-        }
-     
-        // Download file
-        var file = await BotClient.GetFile(document.FileId);
-        using var memoryStream = new MemoryStream();
-        await BotClient.DownloadFile(file.FilePath!, memoryStream);
-        memoryStream.Position = 0;
-
-        using var reader = new StreamReader(memoryStream);
-        var content = await reader.ReadToEndAsync();
-
-        // Parse content
-        var lines = content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        var wordPairs = new List<LanguageLab.Domain.Entities.WordPair>();
-
-        foreach (var line in lines)
-        {
-            var parts = line.Split([','], StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 2)
+            if (!_moderatorsService.IsUserModerator(User.Id))
             {
-                wordPairs.Add(new LanguageLab.Domain.Entities.WordPair
-                {
-                    Word = parts[0].Trim(),
-                    Translation = parts[1].Trim()
-                });
+                await BotClient.SendMessage(chatId: ChatId,
+                    text: "You are not allowed to add new dictionaries",
+                    parseMode: ParseMode.Markdown);
+                return;
             }
+
+            var document = Message.Document!;
+
+            // Check document size
+            if (document.FileSize > 1024 * 1024 * 10)
+            {
+                await BotClient.SendMessage(chatId: ChatId,
+                    text: "File size exceeds the limit of 10 MB",
+                    parseMode: ParseMode.Markdown);
+                return;
+            }
+
+            // Check file extension
+            if (document.MimeType != "text/plain")
+            {
+                await BotClient.SendMessage(chatId: ChatId,
+                    text: "Unsupported file format. Only text files are allowed",
+                    parseMode: ParseMode.Markdown);
+                return;
+            }
+
+            // Download file
+            var file = await BotClient.GetFile(document.FileId);
+            using var memoryStream = new MemoryStream();
+            await BotClient.DownloadFile(file.FilePath!, memoryStream);
+            memoryStream.Position = 0;
+
+            using var reader = new StreamReader(memoryStream);
+            var content = await reader.ReadToEndAsync();
+
+            // Parse content
+            var lines = content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            var wordPairs = new List<LanguageLab.Domain.Entities.WordPair>();
+
+            foreach (var line in lines)
+            {
+                var parts = line.Split([','], StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length >= 2)
+                {
+                    wordPairs.Add(new LanguageLab.Domain.Entities.WordPair
+                    {
+                        Word = parts[0].Trim(),
+                        Translation = parts[1].Trim()
+                    });
+                }
+            }
+
+            if (wordPairs.Count == 0)
+            {
+                await BotClient.SendMessage(ChatId, "Не вдалося знайти жодної пари слів у файлі.");
+                return;
+            }
+
+
+            // 1. Get all unique words from the file to minimize DB queries
+            var uniqueWords = wordPairs.Select(p => p.Word).Distinct().ToList();
+
+            // 2. Fetch existing word pairs from DB that match the incoming words
+            var existingWordPairs = _dbContext.Words
+                .Where(wp => uniqueWords.Contains(wp.Word))
+                .ToList();
+
+            var finalWordPairs = new List<Domain.Entities.WordPair>();
+
+            foreach (var incoming in wordPairs)
+            {
+                // 3. Try to find if this specific Word + Translation combo already exists
+                var existing = existingWordPairs.FirstOrDefault(wp =>
+                    wp.Word.Equals(incoming.Word, StringComparison.OrdinalIgnoreCase));
+
+                if (existing != null)
+                {
+                    // Use the existing entity
+                    finalWordPairs.Add(existing);
+                }
+                else
+                {
+                    // Create a new entity
+                    finalWordPairs.Add(new LanguageLab.Domain.Entities.WordPair
+                    {
+                        Word = incoming.Word,
+                        Translation = incoming.Translation
+                    });
+                }
+            }
+            
+            // find duplicates
+            finalWordPairs.GroupBy(x => x.Word).Where(g => g.Count() > 1).ToList().ForEach(x => _logger.Warn($"Duplicate word found: {x.Key}"));
+
+            // Create dictionary
+            var dictionary = new LanguageLab.Domain.Entities.Dictionary
+            {
+                Name = document.FileName?.Replace(".txt", "") ?? "Новий невідомий словник",
+                WordsCount = wordPairs.Count,
+                Words = finalWordPairs
+            };
+
+            _dbContext.Dictionaries.Add(dictionary);
+            await _dbContext.SaveChangesAsync();
+
+            await BotClient.SendMessage(ChatId,
+                $"Словник '{dictionary.Name}' успішно створено! Додано {wordPairs.Count} слів.");
         }
-
-        if (wordPairs.Count == 0)
+        catch (Exception e)
         {
-            await BotClient.SendMessage(ChatId, "Не вдалося знайти жодної пари слів у файлі.");
-            return;
+            _logger.Error(e, e.Message);
+            await BotClient.SendMessage(ChatId, "Помилка при створенні словника.");
         }
-
-        // Create dictionary
-        var dictionary = new LanguageLab.Domain.Entities.Dictionary
-        {
-            Name = document.FileName?.Replace(".txt", "") ?? "Новий невідомий словник",
-            WordsCount = wordPairs.Count,
-            Words = wordPairs
-        };
-
-        _dbContext.Dictionaries.Add(dictionary);
-        await _dbContext.SaveChangesAsync();
-
-        await BotClient.SendMessage(ChatId, $"Словник '{dictionary.Name}' успішно створено! Додано {wordPairs.Count} слів.");
     }
     
     [MessageReaction(ChatAction.Typing)]
