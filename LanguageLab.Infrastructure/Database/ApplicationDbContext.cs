@@ -10,6 +10,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<TelegramUser> Users { get; set; }
     public DbSet<Training> Trainings { get; set; }
     public DbSet<TrainingEvent> TrainingEvents { get; set; }
+    public DbSet<KnownWord> KnownWords { get; set; }
+    public DbSet<UnknownWord> UnknownWords { get; set; }
    
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)

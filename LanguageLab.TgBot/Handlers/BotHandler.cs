@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Reflection;
+using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Interfaces;
 using LanguageLab.Infrastructure.Database;
+using Microsoft.EntityFrameworkCore;
 using NLog;
 using PowerBot.Lite.Attributes;
 using PowerBot.Lite.Handlers;
@@ -28,11 +30,23 @@ public class BotHandler : BaseHandler
     [MessageHandler("^/start$")]
     public async Task Start()
     {
+        // TODO extract to middleware
+        // Register user in db
+        var user = await _dbContext.Users.FirstOrDefaultAsync(x => x.TelegramUserId == Message.From!.Id);
+        if (user == null)
+        {
+            user = new TelegramUser { TelegramUserId = User.Id };
+            _dbContext.Users.Add(user);
+            await _dbContext.SaveChangesAsync();
+        }
+        
+        // Start info stuff
         var version = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location).FileVersion;
 
         var startMessageText = @$"LanguageLab bot.
 Use command /train to start testing from first dictionary in database.
 Use command /list to see all available dictionaries.
+Use command /sort to check all words in dictionary to check if you already know them.
 Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for admins).
 
 `Bot version: {version}`";
@@ -214,6 +228,200 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
         });
 
         await BotClient.SendMessage(chatId: ChatId,
+            text: messageText,
+            replyMarkup: keyboardMarkup,
+            parseMode: ParseMode.Markdown);
+    }
+    
+    [MessageReaction(ChatAction.Typing)]
+    [MessageHandler("^/sort")]
+    public async Task Sort()
+    {
+        var dictionaries = await _dbContext.Dictionaries
+            .Include(x => x.Words)
+            .ToListAsync();
+        
+        if (dictionaries.Count == 0)
+        {
+            await BotClient.SendMessage(ChatId, "Немає словників для сортування.");
+            return;
+        }
+        
+        var messageText = "Вибери словник:";
+
+        var dictButtons = dictionaries.Select(x => new List<InlineKeyboardButton>
+        {
+            InlineKeyboardButton.WithCallbackData($"{x.Name} ({x.Words.Count} слів)", $"sortdict_{x.Id}")
+        }).ToList();
+        
+        var keyboardMarkup = new InlineKeyboardMarkup(dictButtons);
+
+        await BotClient.SendMessage(chatId: ChatId,
+            text: messageText,
+            replyMarkup: keyboardMarkup,
+            parseMode: ParseMode.Markdown);
+    }
+
+    private async Task<WordPair?> GetNextUnknownWord(long dictionaryId, long telegramUserId)
+    {
+        var dict = await _dbContext.Dictionaries
+            .Include(x => x.Words)
+            .FirstAsync(x => x.Id == dictionaryId);
+
+        var telegramUser = await _dbContext.Users
+            .FirstAsync(x => x.TelegramUserId == telegramUserId);
+
+        var knownWordsId = await _dbContext.KnownWords
+            .Where(x => x.UserId == telegramUser.Id)
+            .Select(x => x.WordPairId)
+            .ToListAsync();
+        
+        var unknownWordsId = await _dbContext.UnknownWords
+            .Where(x => !knownWordsId.Any(kw => kw == x.Id))
+            .Select(x => x.WordPairId)
+            .ToListAsync();
+        
+        var reviewedWordsId = knownWordsId.Concat(unknownWordsId);
+      
+        return dict.Words.FirstOrDefault(x => !reviewedWordsId.Any(kw => kw == x.Id));
+    }
+    
+    [MessageReaction(ChatAction.Typing)]
+    [CallbackQueryHandler("^sortdict_")]
+    public async Task SortDictClicked()
+    {
+        await BotClient.EditMessageText(chatId: ChatId,
+            messageId: MessageId,
+            text: "Обознач всі слова словника",
+            replyMarkup: null,
+            parseMode: ParseMode.Markdown);
+
+        // Parse user id
+        var dictId = long.Parse(CallbackQuery.Data!.Split('_').Last());
+
+        var unknownWord = await GetNextUnknownWord(dictId, User.Id);
+
+        if (unknownWord == null)
+        {
+            var finalText = "Невідомих слів більше немає";
+
+            await BotClient.EditMessageText(chatId: ChatId,
+                messageId: MessageId,
+                text: finalText,
+                replyMarkup: null,
+                parseMode: ParseMode.Markdown);
+
+            await BotClient.EditMessageReplyMarkup(ChatId, MessageId, null);
+            
+            return;
+        }
+        
+        var messageText = $"{unknownWord.Word}";
+
+        var keyboardMarkup = new InlineKeyboardMarkup(new List<List<InlineKeyboardButton>> {
+            new () {
+                InlineKeyboardButton.WithCallbackData("знаю", $"add_known_word_{unknownWord.Id}"),
+                InlineKeyboardButton.WithCallbackData("не знаю", $"add_unknown_word_{unknownWord.Id}"),
+            }
+        });
+
+        await BotClient.SendMessage(chatId: ChatId,
+            text: messageText,
+            replyMarkup: keyboardMarkup,
+            parseMode: ParseMode.Markdown);
+    }
+    
+    [MessageReaction(ChatAction.Typing)]
+    [CallbackQueryHandler("^add_known_word_")]
+    public async Task AddKnownWordClicked()
+    {
+        var wordPairId = long.Parse(CallbackQuery.Data!.Split('_').Last());
+        var telegramUser = await _dbContext.Users
+            .FirstAsync(x => x.TelegramUserId == User.Id);
+
+        if (!_dbContext.KnownWords.Any(x => x.WordPairId == wordPairId && x.UserId == telegramUser.Id))
+        {
+            _dbContext.KnownWords.Add(new KnownWord { WordPairId = wordPairId, UserId = telegramUser.Id });
+            await _dbContext.SaveChangesAsync();
+        }
+
+        var wordPair = await _dbContext.Words.FirstAsync(x => x.Id == wordPairId);
+        var unknownWord = await GetNextUnknownWord(wordPair.DictionaryId, User.Id);
+
+        if (unknownWord == null)
+        {
+            var finalText = "Невідомих слів більше немає";
+
+            await BotClient.EditMessageText(chatId: ChatId,
+                messageId: MessageId,
+                text: finalText,
+                replyMarkup: null,
+                parseMode: ParseMode.Markdown);
+
+            await BotClient.EditMessageReplyMarkup(ChatId, MessageId, null);
+
+            return;
+        }
+
+        var messageText = $"{unknownWord.Word}";
+
+        var keyboardMarkup = new InlineKeyboardMarkup(new List<List<InlineKeyboardButton>> {
+            new () {
+                InlineKeyboardButton.WithCallbackData("знаю", $"add_known_word_{unknownWord.Id}"),
+                InlineKeyboardButton.WithCallbackData("не знаю", $"add_unknown_word_{unknownWord.Id}"),
+            }
+        });
+
+        await BotClient.EditMessageText(chatId: ChatId,
+            messageId: MessageId,
+            text: messageText,
+            replyMarkup: keyboardMarkup,
+            parseMode: ParseMode.Markdown);
+    }
+
+    [MessageReaction(ChatAction.Typing)]
+    [CallbackQueryHandler("^add_unknown_word_")]
+    public async Task AddUnknownWordClicked()
+    {
+        var wordPairId = long.Parse(CallbackQuery.Data!.Split('_').Last());
+        var telegramUser = await _dbContext.Users
+            .FirstAsync(x => x.TelegramUserId == User.Id);
+        
+        if (!_dbContext.UnknownWords.Any(x => x.WordPairId == wordPairId && x.UserId == telegramUser.Id))
+        {
+            _dbContext.UnknownWords.Add(new UnknownWord { WordPairId = wordPairId, UserId = telegramUser.Id });
+            await _dbContext.SaveChangesAsync();
+        }
+
+        var wordPair = await _dbContext.Words.FirstAsync(x => x.Id == wordPairId);
+        var unknownWord = await GetNextUnknownWord(wordPair.DictionaryId, User.Id);
+
+        if (unknownWord == null)
+        {
+            var finalText = "Невідомих слів більше немає";
+
+            await BotClient.EditMessageText(chatId: ChatId,
+                messageId: MessageId,
+                text: finalText,
+                replyMarkup: null,
+                parseMode: ParseMode.Markdown);
+
+            await BotClient.EditMessageReplyMarkup(ChatId, MessageId, null);
+            
+            return;
+        }
+
+        var messageText = $"{unknownWord.Word}";
+
+        var keyboardMarkup = new InlineKeyboardMarkup(new List<List<InlineKeyboardButton>> {
+            new () {
+                InlineKeyboardButton.WithCallbackData("знаю", $"add_known_word_{unknownWord.Id}"),
+                InlineKeyboardButton.WithCallbackData("не знаю", $"add_unknown_word_{unknownWord.Id}"),
+            }
+        });
+
+        await BotClient.EditMessageText(chatId: ChatId,
+            messageId: MessageId,
             text: messageText,
             replyMarkup: keyboardMarkup,
             parseMode: ParseMode.Markdown);
