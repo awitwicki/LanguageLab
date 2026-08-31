@@ -1,17 +1,18 @@
 import re
 from pathlib import Path
-from typing import Set, Dict
+from typing import Set
 from lxml import etree
 import nltk
 from nltk.stem import WordNetLemmatizer
 from nltk.corpus import wordnet, stopwords
-from nltk.tokenize import word_tokenize
+from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk import pos_tag
 from functools import lru_cache
 from tqdm import tqdm
 
 # Download required NLTK data
 nltk.download('punkt', quiet=True)
+nltk.download('punkt_tab', quiet=True)
 nltk.download('wordnet', quiet=True)
 nltk.download('averaged_perceptron_tagger_eng', quiet=True)
 nltk.download('stopwords', quiet=True)
@@ -23,9 +24,6 @@ stop_words = set(stopwords.words('english'))
 # Common prefixes and suffixes for filtering
 prefixes = {'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'}
 suffixes = {'th', 'st', 'nd', 'rd'}
-
-# Cache for lemmas to improve performance
-lemma_cache: Dict[str, str] = {}
 
 
 def get_wordnet_pos(treebank_tag: str) -> str:
@@ -42,36 +40,33 @@ def get_wordnet_pos(treebank_tag: str) -> str:
         return wordnet.NOUN  # default
 
 
-@lru_cache(maxsize=10000)
-def get_lemma(word: str) -> str:
-    """Get the lemma (base form) of a word with POS tagging."""
+@lru_cache(maxsize=20000)
+def get_lemma(word: str, treebank_tag: str = '') -> str:
+    """Get the lemma (base form) of a word.
+
+    If treebank_tag is provided (from sentence-context pos_tag) we use it —
+    this is far more accurate than tagging a word in isolation, which
+    defaults to NN and leaves verb gerunds like 'surrounding' untouched.
+    When no tag is provided (e.g. hyphenated compound parts) we fall back
+    to single-word tagging.
+    """
     if not word or len(word) < 2:
         return word
 
-    # Check cache first
-    if word in lemma_cache:
-        return lemma_cache[word]
+    if not treebank_tag:
+        tagged = pos_tag([word])
+        if not tagged:
+            return word
+        treebank_tag = tagged[0][1]
 
-    # Tag part of speech
-    pos_tag_result = pos_tag([word])
-    if not pos_tag_result:
-        lemma_cache[word] = word
-        return word
-
-    treebank_tag = pos_tag_result[0][1]
     wordnet_pos = get_wordnet_pos(treebank_tag)
-
-    # Lemmatize with appropriate POS
     lemma = lemmatizer.lemmatize(word, pos=wordnet_pos)
 
-    # If lemmatization didn't change the word, try with default (noun)
+    # If the context POS didn't reduce the word, try default (noun) as a safety net
     if lemma == word and wordnet_pos != wordnet.NOUN:
         lemma = lemmatizer.lemmatize(word)
 
-    # Cache the result
-    lemma_cache[word] = lemma.lower()
-
-    return lemma_cache[word]
+    return lemma.lower()
 
 
 def clean_word(word: str) -> str:
@@ -118,32 +113,24 @@ def split_compound_word(word: str) -> Set[str]:
     return parts
 
 
-def get_word_base_forms(word: str) -> Set[str]:
+def get_word_base_forms(word: str, treebank_tag: str = '') -> Set[str]:
     """Get base forms of a word including lemmas and split parts."""
     base_forms = set()
 
-    # Clean the word first
     cleaned_word = clean_word(word)
-
     if not cleaned_word:
         return base_forms
 
-    # Get lemma of the full word
-    lemma = get_lemma(cleaned_word)
+    lemma = get_lemma(cleaned_word, treebank_tag)
     if lemma and len(lemma) > 1:
         base_forms.add(lemma)
 
-    # Handle compound words
+    # Hyphenated compounds: lemmatize each part without context
     if '-' in cleaned_word:
-        parts = split_compound_word(cleaned_word)
-        for part in parts:
+        for part in split_compound_word(cleaned_word):
             part_lemma = get_lemma(part)
             if part_lemma and len(part_lemma) > 1:
                 base_forms.add(part_lemma)
-    else:
-        # For non-compound words, just add the lemma
-        if lemma and len(lemma) > 1:
-            base_forms.add(lemma)
 
     return base_forms
 
@@ -231,7 +218,7 @@ def extract_text_from_fb2(fb2_file: str) -> str:
         return ""
 
 
-def process_word(word: str, vocabulary: Set[str]) -> None:
+def process_word(word: str, vocabulary: Set[str], treebank_tag: str = '') -> None:
     """Process a single word and add its base form to vocabulary."""
     if not is_valid_word(word):
         return
@@ -240,13 +227,58 @@ def process_word(word: str, vocabulary: Set[str]) -> None:
     if not cleaned_word:
         return
 
-    # Get base forms (lemmas)
-    base_forms = get_word_base_forms(cleaned_word)
+    base_forms = get_word_base_forms(cleaned_word, treebank_tag)
 
-    # Add valid base forms to vocabulary
     for base_form in base_forms:
         if is_valid_word(base_form) and len(base_form) > 1:
             vocabulary.add(base_form)
+
+
+# -ing nouns that happen to match an unrelated verb under WordNet's morphy
+# rules. WordNet strips 'evening' -> 'even' even though the time-of-day noun
+# has nothing to do with the verb 'to even'. Extend this set if you spot
+# similar homographs in future books.
+ING_HOMOGRAPH_KEEP = {'evening', 'evenings'}
+
+
+def consolidate_ing_forms(vocabulary: Set[str]) -> int:
+    """Remove -ing / -ings forms whose verb base is already in the vocabulary.
+
+    Two mechanisms:
+      - -ing words: trust WordNet's verb-lemmatizer. It already protects real
+        noun-ings like 'morning', 'ceiling', 'king', 'ring' (they don't reduce).
+        A small ING_HOMOGRAPH_KEEP blocklist handles the escapes (currently
+        just 'evening', which morphy wrongly strips to 'even').
+      - -ings plurals: WordNet leaves plural gerund-nouns like 'surroundings',
+        'belongings' unreduced, so we strip '-ings' (optionally restoring a
+        trailing 'e') and keep the reduction only if the stem is a verb base
+        already in the vocab.
+    """
+    to_remove = set()
+    for w in vocabulary:
+        if w in ING_HOMOGRAPH_KEEP:
+            continue
+
+        if w.endswith('ings') and len(w) >= 7:
+            stem = w[:-4]
+            for cand in (stem, stem + 'e'):
+                if (
+                    cand in vocabulary
+                    and wordnet.synsets(cand, pos='v')
+                    and lemmatizer.lemmatize(cand, 'v') == cand
+                ):
+                    to_remove.add(w)
+                    break
+            if w in to_remove:
+                continue
+
+        if w.endswith('ing') and len(w) >= 5:
+            verb = lemmatizer.lemmatize(w, 'v')
+            if verb != w and verb in vocabulary:
+                to_remove.add(w)
+
+    vocabulary -= to_remove
+    return len(to_remove)
 
 
 def main():
@@ -265,40 +297,39 @@ def main():
 
     print(f"Extracted {len(text)} characters of text.")
 
-    # Tokenize text
-    print("Tokenizing text...")
-    words = word_tokenize(text)
+    # Split into sentences so POS tagging has real context
+    print("Tokenizing sentences...")
+    sentences = sent_tokenize(text)
+    print(f"Found {len(sentences)} sentences.")
 
-    # Process words and build vocabulary
-    print("Processing words...")
-    vocabulary = set()
+    vocabulary: Set[str] = set()
+    total_tokens = 0
 
-    for word in tqdm(words, desc="Extracting vocabulary"):
-        # Check if it's a compound word
-        if '-' in word:
-            # Process both the full word and its parts
-            process_word(word, vocabulary)
+    for sent in tqdm(sentences, desc="Extracting vocabulary"):
+        tokens = word_tokenize(sent)
+        total_tokens += len(tokens)
+        tagged = pos_tag(tokens)
+        for word, tag in tagged:
+            if '-' in word:
+                process_word(word, vocabulary, tag)
+                for part in split_compound_word(word):
+                    process_word(part, vocabulary)
+            else:
+                process_word(word, vocabulary, tag)
 
-            # Also process individual parts
-            parts = split_compound_word(word)
-            for part in parts:
-                process_word(part, vocabulary)
-        else:
-            # Process single word
-            process_word(word, vocabulary)
+    # Unify '-ing'/'-ings' forms with their verb base when both are present
+    removed = consolidate_ing_forms(vocabulary)
 
-    # Sort vocabulary alphabetically
     sorted_vocabulary = sorted(vocabulary)
 
-    # Save to file
     print(f"Saving {len(sorted_vocabulary)} words to {output_file}...")
     with open(output_file, 'w', encoding='utf-8') as f:
         for word in sorted_vocabulary:
             f.write(f"{word}\n")
 
-    # Print statistics
     print("\nProcessing complete!")
-    print(f"Total words processed: {len(words)}")
+    print(f"Total tokens processed: {total_tokens}")
+    print(f"Unified -ing/-ings forms removed: {removed}")
     print(f"Unique base forms found: {len(sorted_vocabulary)}")
     print(f"Results saved to: {output_file}")
 

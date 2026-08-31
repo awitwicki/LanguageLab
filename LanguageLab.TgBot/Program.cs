@@ -36,6 +36,7 @@ await using (var dbContext = new ApplicationDbContext(dbContextOptions))
 
 // Register middlewares and handlers
 botClient.RegisterHandler<BotHandler>();
+botClient.RegisterHandler<TrainingHandler>();
 
 // Register services
 botClient.RegisterContainers(x =>
@@ -56,6 +57,14 @@ botClient.RegisterContainers(x =>
     x.RegisterType<ModeratorsService>()
         .WithParameter("input", Environment.GetEnvironmentVariable("MODERATORS_LIST"))
         .As<IModeratorsService>()
+        .InstancePerLifetimeScope();
+
+    x.RegisterType<WordSelectionService>()
+        .AsSelf()
+        .InstancePerLifetimeScope();
+
+    x.RegisterType<TrainingSessionService>()
+        .AsSelf()
         .InstancePerLifetimeScope();
 });
 

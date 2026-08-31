@@ -44,7 +44,8 @@ public class BotHandler : BaseHandler
         var version = FileVersionInfo.GetVersionInfo(Assembly.GetExecutingAssembly().Location).FileVersion;
 
         var startMessageText = @$"LanguageLab bot.
-Use command /train to start testing from first dictionary in database.
+Use command /train to start learning words from a dictionary.
+Use command /stats to see your progress.
 Use command /list to see all available dictionaries.
 Use command /sort to check all words in dictionary to check if you already know them.
 Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for admins).
@@ -120,78 +121,84 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
             using var reader = new StreamReader(memoryStream);
             var content = await reader.ReadToEndAsync();
 
-            // Parse content
+            // Parse content: ділимо по ПЕРШІЙ комі — у перекладах трапляються свої коми,
+            // напр. "long-sleeping,той, що довго спить".
             var lines = content.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-            var wordPairs = new List<LanguageLab.Domain.Entities.WordPair>();
+
+            // Порівняння за Ordinal, бо унікальний індекс на "Word" у Postgres теж регістрозалежний.
+            var parsed = new System.Collections.Generic.Dictionary<string, string>(StringComparer.Ordinal);
 
             foreach (var line in lines)
             {
-                var parts = line.Split([','], StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length >= 2)
+                var parts = line.Split(',', 2);
+                if (parts.Length < 2)
                 {
-                    wordPairs.Add(new LanguageLab.Domain.Entities.WordPair
-                    {
-                        Word = parts[0].Trim(),
-                        Translation = parts[1].Trim()
-                    });
+                    continue;
+                }
+
+                var parsedWord = parts[0].Trim();
+                var parsedTranslation = parts[1].Trim();
+
+                if (parsedWord.Length == 0 || parsedTranslation.Length == 0)
+                {
+                    continue;
+                }
+
+                if (!parsed.TryAdd(parsedWord, parsedTranslation))
+                {
+                    _logger.Warn($"Duplicate word found: {parsedWord}");
                 }
             }
 
-            if (wordPairs.Count == 0)
+            if (parsed.Count == 0)
             {
                 await BotClient.SendMessage(ChatId, "Не вдалося знайти жодної пари слів у файлі.");
                 return;
             }
 
+            var incomingWords = parsed.Keys.ToList();
 
-            // 1. Get all unique words from the file to minimize DB queries
-            var uniqueWords = wordPairs.Select(p => p.Word).Distinct().ToList();
+            var existingWords = await _dbContext.Words
+                .Where(w => incomingWords.Contains(w.Word))
+                .ToListAsync();
 
-            // 2. Fetch existing word pairs from DB that match the incoming words
-            var existingWordPairs = _dbContext.Words
-                .Where(wp => uniqueWords.Contains(wp.Word))
-                .ToList();
+            var byWord = existingWords.ToDictionary(w => w.Word, StringComparer.Ordinal);
 
-            var finalWordPairs = new List<Domain.Entities.WordPair>();
+            var dictionaryWords = new List<WordPair>(parsed.Count);
 
-            foreach (var incoming in wordPairs)
+            foreach (var (word, translation) in parsed)
             {
-                // 3. Try to find if this specific Word + Translation combo already exists
-                var existing = existingWordPairs.FirstOrDefault(wp =>
-                    wp.Word.Equals(incoming.Word, StringComparison.OrdinalIgnoreCase));
-
-                if (existing != null)
+                if (byWord.TryGetValue(word, out var wordPair))
                 {
-                    // Use the existing entity
-                    finalWordPairs.Add(existing);
+                    // Орфан, імпортований раніше зі списку known/unknown без перекладу,
+                    // нарешті його отримує і стає придатним для навчання.
+                    if (string.IsNullOrWhiteSpace(wordPair.Translation))
+                    {
+                        wordPair.Translation = translation;
+                    }
                 }
                 else
                 {
-                    // Create a new entity
-                    finalWordPairs.Add(new LanguageLab.Domain.Entities.WordPair
-                    {
-                        Word = incoming.Word,
-                        Translation = incoming.Translation
-                    });
+                    wordPair = new WordPair { Word = word, Translation = translation };
+                    _dbContext.Words.Add(wordPair);
+                    byWord[word] = wordPair;
                 }
-            }
-            
-            // find duplicates
-            finalWordPairs.GroupBy(x => x.Word).Where(g => g.Count() > 1).ToList().ForEach(x => _logger.Warn($"Duplicate word found: {x.Key}"));
 
-            // Create dictionary
+                dictionaryWords.Add(wordPair);
+            }
+
             var dictionary = new LanguageLab.Domain.Entities.Dictionary
             {
-                Name = document.FileName?.Replace(".txt", "") ?? "Новий невідомий словник",
-                WordsCount = wordPairs.Count,
-                Words = finalWordPairs
+                Name = Path.GetFileNameWithoutExtension(document.FileName) ?? "Новий невідомий словник",
+                WordsCount = dictionaryWords.Count,
+                Words = dictionaryWords
             };
 
             _dbContext.Dictionaries.Add(dictionary);
             await _dbContext.SaveChangesAsync();
 
             await BotClient.SendMessage(ChatId,
-                $"Словник '{dictionary.Name}' успішно створено! Додано {wordPairs.Count} слів.");
+                $"Словник '{dictionary.Name}' успішно створено! Додано {dictionaryWords.Count} слів.");
         }
         catch (Exception e)
         {
@@ -201,57 +208,22 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
     }
     
     [MessageReaction(ChatAction.Typing)]
-    [MessageHandler("^/train")]
-    public async Task Train()
-    {
-        var wordId = 5;
-        var word = "cat";
-        var translation = "кіт";
-        var translations = new List<string> { translation, "пес", "авто", "телефон", "місто", "криниця" }.Shuffle().ToList();
-        
-        var messageText = @$"Вибери правильний варіант для слова:
-**Cat**";
-
-        var keyboardMarkup = new InlineKeyboardMarkup(new List<List<InlineKeyboardButton>> {
-            new List<InlineKeyboardButton> {
-                InlineKeyboardButton.WithCallbackData(translations[0], $"train_true_{wordId}"),
-                InlineKeyboardButton.WithCallbackData(translations[1], $"train_false_{wordId}"),
-            },
-            new List<InlineKeyboardButton> {
-                InlineKeyboardButton.WithCallbackData(translations[2], $"train_false_{wordId}"),
-                InlineKeyboardButton.WithCallbackData(translations[3], $"train_false_{wordId}"),
-            },
-            new List<InlineKeyboardButton> {
-                InlineKeyboardButton.WithCallbackData(translations[4], $"train_false_{wordId}"),
-                InlineKeyboardButton.WithCallbackData(translations[5], $"train_false_{wordId}"),
-            }
-        });
-
-        await BotClient.SendMessage(chatId: ChatId,
-            text: messageText,
-            replyMarkup: keyboardMarkup,
-            parseMode: ParseMode.Markdown);
-    }
-    
-    [MessageReaction(ChatAction.Typing)]
     [MessageHandler("^/sort")]
     public async Task Sort()
     {
-        var dictionaries = await _dbContext.Dictionaries
-            .Include(x => x.Words)
-            .ToListAsync();
-        
+        var dictionaries = await _dbContext.Dictionaries.ToListAsync();
+
         if (dictionaries.Count == 0)
         {
             await BotClient.SendMessage(ChatId, "Немає словників для сортування.");
             return;
         }
-        
+
         var messageText = "Вибери словник:";
 
         var dictButtons = dictionaries.Select(x => new List<InlineKeyboardButton>
         {
-            InlineKeyboardButton.WithCallbackData($"{x.Name} ({x.Words.Count} слів)", $"sortdict_{x.Id}")
+            InlineKeyboardButton.WithCallbackData($"{x.Name} ({x.WordsCount} слів)", $"sortdict_{x.Id}")
         }).ToList();
         
         var keyboardMarkup = new InlineKeyboardMarkup(dictButtons);
@@ -264,26 +236,24 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
 
     private async Task<WordPair?> GetNextUnknownWord(long dictionaryId, long telegramUserId)
     {
-        var dict = await _dbContext.Dictionaries
-            .Include(x => x.Words)
-            .FirstAsync(x => x.Id == dictionaryId);
-
         var telegramUser = await _dbContext.Users
             .FirstAsync(x => x.TelegramUserId == telegramUserId);
 
-        var knownWordsId = await _dbContext.KnownWords
+        var knownIds = _dbContext.KnownWords
             .Where(x => x.UserId == telegramUser.Id)
-            .Select(x => x.WordPairId)
-            .ToListAsync();
-        
-        var unknownWordsId = await _dbContext.UnknownWords
-            .Where(x => !knownWordsId.Any(kw => kw == x.Id))
-            .Select(x => x.WordPairId)
-            .ToListAsync();
-        
-        var reviewedWordsId = knownWordsId.Concat(unknownWordsId);
-      
-        return dict.Words.FirstOrDefault(x => !reviewedWordsId.Any(kw => kw == x.Id));
+            .Select(x => x.WordPairId);
+
+        var unknownIds = _dbContext.UnknownWords
+            .Where(x => x.UserId == telegramUser.Id)
+            .Select(x => x.WordPairId);
+
+        var reviewedIds = await knownIds.Union(unknownIds).ToListAsync();
+
+        return await _dbContext.Words
+            .Where(w => w.Dictionaries.Any(d => d.Id == dictionaryId))
+            .Where(w => !reviewedIds.Contains(w.Id))
+            .OrderBy(w => w.Id)
+            .FirstOrDefaultAsync();
     }
     
     [MessageReaction(ChatAction.Typing)]
@@ -320,8 +290,8 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
 
         var keyboardMarkup = new InlineKeyboardMarkup(new List<List<InlineKeyboardButton>> {
             new () {
-                InlineKeyboardButton.WithCallbackData("знаю", $"add_known_word_{unknownWord.Id}"),
-                InlineKeyboardButton.WithCallbackData("не знаю", $"add_unknown_word_{unknownWord.Id}"),
+                InlineKeyboardButton.WithCallbackData("знаю", $"add_known_word_{dictId}_{unknownWord.Id}"),
+                InlineKeyboardButton.WithCallbackData("не знаю", $"add_unknown_word_{dictId}_{unknownWord.Id}"),
             }
         });
 
@@ -330,12 +300,15 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
             replyMarkup: keyboardMarkup,
             parseMode: ParseMode.Markdown);
     }
-    
+
     [MessageReaction(ChatAction.Typing)]
     [CallbackQueryHandler("^add_known_word_")]
     public async Task AddKnownWordClicked()
     {
-        var wordPairId = long.Parse(CallbackQuery.Data!.Split('_').Last());
+        var parts = CallbackQuery.Data!.Split('_');
+        var dictionaryId = long.Parse(parts[^2]);
+        var wordPairId = long.Parse(parts[^1]);
+
         var telegramUser = await _dbContext.Users
             .FirstAsync(x => x.TelegramUserId == User.Id);
 
@@ -345,8 +318,7 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
             await _dbContext.SaveChangesAsync();
         }
 
-        var wordPair = await _dbContext.Words.FirstAsync(x => x.Id == wordPairId);
-        var unknownWord = await GetNextUnknownWord(wordPair.DictionaryId, User.Id);
+        var unknownWord = await GetNextUnknownWord(dictionaryId, User.Id);
 
         if (unknownWord == null)
         {
@@ -367,8 +339,8 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
 
         var keyboardMarkup = new InlineKeyboardMarkup(new List<List<InlineKeyboardButton>> {
             new () {
-                InlineKeyboardButton.WithCallbackData("знаю", $"add_known_word_{unknownWord.Id}"),
-                InlineKeyboardButton.WithCallbackData("не знаю", $"add_unknown_word_{unknownWord.Id}"),
+                InlineKeyboardButton.WithCallbackData("знаю", $"add_known_word_{dictionaryId}_{unknownWord.Id}"),
+                InlineKeyboardButton.WithCallbackData("не знаю", $"add_unknown_word_{dictionaryId}_{unknownWord.Id}"),
             }
         });
 
@@ -383,18 +355,20 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
     [CallbackQueryHandler("^add_unknown_word_")]
     public async Task AddUnknownWordClicked()
     {
-        var wordPairId = long.Parse(CallbackQuery.Data!.Split('_').Last());
+        var parts = CallbackQuery.Data!.Split('_');
+        var dictionaryId = long.Parse(parts[^2]);
+        var wordPairId = long.Parse(parts[^1]);
+
         var telegramUser = await _dbContext.Users
             .FirstAsync(x => x.TelegramUserId == User.Id);
-        
+
         if (!_dbContext.UnknownWords.Any(x => x.WordPairId == wordPairId && x.UserId == telegramUser.Id))
         {
             _dbContext.UnknownWords.Add(new UnknownWord { WordPairId = wordPairId, UserId = telegramUser.Id });
             await _dbContext.SaveChangesAsync();
         }
 
-        var wordPair = await _dbContext.Words.FirstAsync(x => x.Id == wordPairId);
-        var unknownWord = await GetNextUnknownWord(wordPair.DictionaryId, User.Id);
+        var unknownWord = await GetNextUnknownWord(dictionaryId, User.Id);
 
         if (unknownWord == null)
         {
@@ -407,7 +381,7 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
                 parseMode: ParseMode.Markdown);
 
             await BotClient.EditMessageReplyMarkup(ChatId, MessageId, null);
-            
+
             return;
         }
 
@@ -415,58 +389,13 @@ Send csv file with word pairs (WITHOUT HEADER) to add new dictionary (only for a
 
         var keyboardMarkup = new InlineKeyboardMarkup(new List<List<InlineKeyboardButton>> {
             new () {
-                InlineKeyboardButton.WithCallbackData("знаю", $"add_known_word_{unknownWord.Id}"),
-                InlineKeyboardButton.WithCallbackData("не знаю", $"add_unknown_word_{unknownWord.Id}"),
+                InlineKeyboardButton.WithCallbackData("знаю", $"add_known_word_{dictionaryId}_{unknownWord.Id}"),
+                InlineKeyboardButton.WithCallbackData("не знаю", $"add_unknown_word_{dictionaryId}_{unknownWord.Id}"),
             }
         });
 
         await BotClient.EditMessageText(chatId: ChatId,
             messageId: MessageId,
-            text: messageText,
-            replyMarkup: keyboardMarkup,
-            parseMode: ParseMode.Markdown);
-    }
-    
-    [MessageReaction(ChatAction.Typing)]
-    [CallbackQueryHandler("^train_")]
-    public async Task DictWordClicked()
-    {
-        await BotClient.EditMessageReplyMarkup(ChatId, MessageId, null);
-        
-        // Parse user id
-        var oldWordId = long.Parse(CallbackQuery.Data!.Split('_').Last());
-
-        // Parse result
-        var result = CallbackQuery.Data
-            .Split('_')[1] == "true";
-        var resultStr = result ? "Правильно" : "Неправильно";
-
-        var wordId = 5;
-        var word = "cat";
-        var translation = "кіт";
-        var translations = new List<string> { translation, "пес", "авто", "телефон", "місто", "криниця" }.Shuffle().ToList();
-
-        var messageText = @$"{resultStr}
-
-Вибери правильний варіант для слова:
-**Cat**";
-
-        var keyboardMarkup = new InlineKeyboardMarkup(new List<List<InlineKeyboardButton>> {
-            new () {
-                InlineKeyboardButton.WithCallbackData(translations[0], $"train_true_{wordId}"),
-                InlineKeyboardButton.WithCallbackData(translations[1], $"train_false_{wordId}"),
-            },
-            new () {
-                InlineKeyboardButton.WithCallbackData(translations[2], $"train_false_{wordId}"),
-                InlineKeyboardButton.WithCallbackData(translations[3], $"train_false_{wordId}"),
-            },
-            new () {
-                InlineKeyboardButton.WithCallbackData(translations[4], $"train_false_{wordId}"),
-                InlineKeyboardButton.WithCallbackData(translations[5], $"train_false_{wordId}"),
-            }
-        });
-
-        await BotClient.SendMessage(chatId: ChatId,
             text: messageText,
             replyMarkup: keyboardMarkup,
             parseMode: ParseMode.Markdown);
