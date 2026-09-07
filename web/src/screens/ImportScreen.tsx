@@ -3,6 +3,7 @@ import { decodeFb2 } from '../fb2/decode'
 import { flattenChapters, parseBook, type ChapterMode, type SectionNode } from '../fb2/chapters'
 import type { WorkerRequest, WorkerResponse } from '../worker/parseBook.worker'
 import { api } from '../api/client'
+import './ImportScreen.css'
 
 interface Props {
   onImported: (dictionaryId: number) => void
@@ -108,8 +109,8 @@ export function ImportScreen({ onImported }: Props) {
   }, [ask, sections, mode, name, onImported])
 
   return (
-    <section className="screen">
-      <h1>Імпорт книжки</h1>
+    <section className="import">
+      <h1 className="large-title">Імпорт книжки</h1>
 
       {error && <p className="error">{error}</p>}
 
@@ -120,11 +121,12 @@ export function ImportScreen({ onImported }: Props) {
             accept=".fb2"
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
           />
-          Перетягни сюди .fb2 або натисни, щоб обрати
+          <strong>Обери файл .fb2</strong>
+          <span>або перетягни його сюди</span>
         </label>
       )}
 
-      {stage === 'parsing' && <p>Розбираю книжку…</p>}
+      {stage === 'parsing' && <p className="footnote">Розбираю книжку…</p>}
 
       {stage !== 'idle' && stage !== 'parsing' && (
         <>
@@ -149,8 +151,8 @@ export function ImportScreen({ onImported }: Props) {
             </select>
           </label>
 
-          <p>
-            Знайдено глав: <strong>{chapters.length}</strong>
+          <p className="footnote">
+            Знайдено глав: <strong className="num">{chapters.length}</strong>
           </p>
 
           <ol className="chapter-preview">
@@ -159,11 +161,18 @@ export function ImportScreen({ onImported }: Props) {
             ))}
           </ol>
 
-          <button disabled={stage !== 'preview' || chapters.length === 0} onClick={onUpload}>
-            {stage === 'aggregating' && 'Розбираю слова…'}
-            {stage === 'uploading' && 'Заливаю…'}
-            {stage === 'preview' && 'Імпортувати'}
-          </button>
+          <div>
+            <button
+              type="button"
+              className="btn btn-primary btn-lg"
+              disabled={stage !== 'preview' || chapters.length === 0}
+              onClick={onUpload}
+            >
+              {stage === 'aggregating' && 'Розбираю слова…'}
+              {stage === 'uploading' && 'Заливаю…'}
+              {stage === 'preview' && 'Імпортувати'}
+            </button>
+          </div>
         </>
       )}
     </section>

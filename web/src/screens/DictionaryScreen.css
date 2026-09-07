@@ -1,0 +1,127 @@
+.dict-header {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.dict-meta {
+  color: var(--text-2);
+}
+
+.dict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 44px;
+}
+
+.section {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 44px;
+}
+
+.top-words {
+  display: grid;
+  gap: 2px;
+}
+
+.top-word {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+}
+
+.top-word .rank {
+  font-size: var(--fs-footnote);
+  color: var(--text-3);
+}
+
+.word-cell {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.word-cell .word {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-cell .bar {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.top-word .count {
+  font-size: var(--fs-footnote);
+  color: var(--text-2);
+}
+
+.chapter-list {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.chapter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  color: var(--text);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.chapter-row + .chapter-row {
+  border-top: 1px solid var(--hairline);
+}
+
+.chapter-row:focus-visible {
+  outline-offset: -2px;
+}
+
+.chapter-row:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.chapter-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chapter-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chapter-sub,
+.chapter-pct {
+  font-size: var(--fs-footnote);
+  color: var(--text-2);
+}
+
+.chapter-row.done .chapter-pct {
+  color: var(--known);
+  font-weight: 600;
+}
+
+.chevron {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-3);
+}

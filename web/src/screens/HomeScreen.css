@@ -1,0 +1,13 @@
+.welcome {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  max-width: 520px;
+  padding-top: 24px;
+}
+
+.welcome-hint {
+  font-size: var(--fs-headline);
+  line-height: 26px;
+  color: var(--text-2);
+}

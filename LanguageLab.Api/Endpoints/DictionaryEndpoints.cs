@@ -9,7 +9,12 @@ public sealed record DictionaryListItem(long Id, string Name, int WordsCount, bo
 public sealed record ChapterView(long Id, int Order, string Title, int WordsCount, int SortedCount);
 
 public sealed record DictionaryDetail(
-    long Id, string Name, int WordsCount, int SortedCount, IReadOnlyList<ChapterView> Chapters);
+    long Id,
+    string Name,
+    int WordsCount,
+    int SortedCount,
+    IReadOnlyList<ChapterView> Chapters,
+    IReadOnlyList<TopWord> TopWords);
 
 public static class DictionaryEndpoints
 {
@@ -39,7 +44,11 @@ public static class DictionaryEndpoints
         });
 
         group.MapGet("/{id:long}", async (
-            long id, ApplicationDbContext db, WordSortingService sorting, ICurrentUser currentUser) =>
+            long id,
+            ApplicationDbContext db,
+            WordSortingService sorting,
+            DictionaryStatsService stats,
+            ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetIdAsync();
 
@@ -64,6 +73,8 @@ public static class DictionaryEndpoints
 
             var whole = await sorting.GetQueueAsync(userId, id, chapterIds: null, take: 1);
 
+            var topWords = await stats.GetTopWordsAsync(id);
+
             return Results.Ok(new DictionaryDetail(
                 dictionary.Id,
                 dictionary.Name,
@@ -73,7 +84,8 @@ public static class DictionaryEndpoints
                     .Select(c => new ChapterView(
                         c.Id, c.Order, c.Title, c.WordsCount,
                         progress.TryGetValue(c.Id, out var p) ? p.Sorted : 0))
-                    .ToList()));
+                    .ToList(),
+                topWords));
         });
 
         group.MapPost("/import", async (ImportRequest request, BookImportService import) =>

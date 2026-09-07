@@ -1,41 +1,32 @@
-import { useEffect, useState } from 'react'
-import { api, type DictionaryListItem } from '../api/client'
-import { ProgressBar } from '../components/ProgressBar'
+import './HomeScreen.css'
 
 interface Props {
-  onOpen: (id: number) => void
+  hasDictionaries: boolean
   onImport: () => void
 }
 
-export function HomeScreen({ onOpen, onImport }: Props) {
-  const [items, setItems] = useState<DictionaryListItem[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    api.listDictionaries().then(setItems).catch((e) => setError(String(e)))
-  }, [])
-
+/// Список словників живе в сайдбарі, тож «домівка» — це порожній стан:
+/// або підказка обрати словник, або запрошення імпортувати першу книжку.
+export function HomeScreen({ hasDictionaries, onImport }: Props) {
   return (
-    <section className="screen">
-      <header className="row">
-        <h1>Словники</h1>
-        <button onClick={onImport}>Імпорт книжки</button>
-      </header>
+    <section className="welcome">
+      <h1 className="large-title">{hasDictionaries ? 'Обери словник' : 'Почнімо з книжки'}</h1>
 
-      {error && <p className="error">{error}</p>}
-      {!items && !error && <p>Завантажую…</p>}
-
-      <ul className="dictionary-list">
-        {items?.map((item) => (
-          <li key={item.id}>
-            <button className="dictionary-card" onClick={() => onOpen(item.id)}>
-              <strong>{item.name}</strong>
-              <span>{item.hasChapters ? 'книжка з главами' : 'плаский список'}</span>
-              <ProgressBar sorted={item.sortedCount} total={item.wordsCount} />
-            </button>
-          </li>
-        ))}
-      </ul>
+      {hasDictionaries ? (
+        <p className="welcome-hint">
+          Словники — у бічній панелі. Відкрий будь-який, щоб побачити статистику й почати сортування.
+        </p>
+      ) : (
+        <>
+          <p className="welcome-hint">
+            Тут поки порожньо. Імпортуй книжку у форматі .fb2 — слова розкладуться по главах, і їх
+            можна буде сортувати на «знаю» та «не знаю».
+          </p>
+          <button type="button" className="btn btn-primary btn-lg" onClick={onImport}>
+            Імпортувати книжку
+          </button>
+        </>
+      )}
     </section>
   )
 }

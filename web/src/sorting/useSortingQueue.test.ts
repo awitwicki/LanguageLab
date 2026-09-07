@@ -180,4 +180,16 @@ describe('useSortingQueue', () => {
 
     expect(result.current.current?.wordPairId).toBe(3)
   })
+
+  it('loaded стає true після першого завантаження черги, навіть якщо вона порожня', async () => {
+    words = makeWords(0)
+    const result = await renderHook(() => useSortingQueue({ dictionaryId: 1, chapterIds: null }))
+    await flush()
+
+    // Порожній словник: total=0, current=null — але це «завантажено й порожньо»,
+    // а не «ще вантажиться». Саме цю різницю екран показує по-різному.
+    expect(result.current.loaded).toBe(true)
+    expect(result.current.current).toBeNull()
+    expect(result.current.total).toBe(0)
+  })
 })

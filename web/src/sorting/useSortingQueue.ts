@@ -17,6 +17,8 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
   const [total, setTotal] = useState(0)
   const [sorted, setSorted] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  // Поки перша черга не приїхала, екран не має казати «усе посортовано»: total=0 — це ще не порожньо.
+  const [loaded, setLoaded] = useState(false)
 
   // Одна активна відправка за раз. Це не перестраховка: undo на сервері знімає
   // «найсвіжішу позначку», і якщо mark ще летить — undo зніме не те слово.
@@ -52,6 +54,7 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
         setUnknown(recent.unknown)
       })
       .catch((e) => setError(String(e)))
+      .finally(() => setLoaded(true))
   }, [refill])
 
   const mark = useCallback(
@@ -125,5 +128,5 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
     }).catch((e) => setError(String(e)))
   }, [enqueue])
 
-  return { current: buffer[0] ?? null, known, unknown, total, sorted, error, mark, undo }
+  return { current: buffer[0] ?? null, known, unknown, total, sorted, loaded, error, mark, undo }
 }

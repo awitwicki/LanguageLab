@@ -1,0 +1,28 @@
+.progress {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 240ms var(--ease);
+}
+
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--fs-footnote);
+  line-height: var(--lh-footnote);
+  color: var(--text-2);
+}

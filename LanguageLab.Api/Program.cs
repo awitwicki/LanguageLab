@@ -16,6 +16,7 @@ builder.Services.AddScoped<BookImportService>();
 builder.Services.AddScoped<WordSortingService>();
 builder.Services.AddScoped<WordSelectionService>();
 builder.Services.AddScoped<TrainingSessionService>();
+builder.Services.AddScoped<DictionaryStatsService>();
 
 builder.Services.AddRequestDecompression();
 

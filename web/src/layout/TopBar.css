@@ -1,0 +1,43 @@
+/* Sticky живе на .shell-topbar (AppShell.css): grid-комірка висотою 52px
+   не дала б прилипнути елементу всередині себе. */
+.topbar {
+  height: var(--topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-headline);
+  font-weight: 600;
+  letter-spacing: -0.2px;
+  color: var(--text);
+}
+
+.account {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  color: var(--text-2);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.account:hover {
+  background: color-mix(in srgb, var(--surface-2) 80%, var(--text-3));
+}
+
+.account svg {
+  width: 18px;
+  height: 18px;
+}

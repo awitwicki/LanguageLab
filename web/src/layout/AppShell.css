@@ -1,0 +1,52 @@
+.shell {
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: var(--topbar-h) 1fr;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+}
+
+/* Sticky саме тут: containing block — уся .shell на висоту сторінки, тож
+   топбар їде з прокруткою. Усередині 52px-комірки він би не зрушив. */
+.shell-topbar {
+  grid-column: 1 / -1;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.shell-sidebar {
+  grid-row: 2;
+  grid-column: 1;
+}
+
+.shell-content {
+  grid-row: 2;
+  grid-column: 2;
+  min-width: 0;
+}
+
+.content {
+  max-width: var(--content-max);
+  padding: 40px 48px 64px;
+}
+
+@media (max-width: 800px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: var(--topbar-h) auto 1fr;
+  }
+
+  .shell-sidebar {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .shell-content {
+    grid-row: 3;
+    grid-column: 1;
+  }
+
+  .content {
+    padding: 24px 20px 48px;
+  }
+}

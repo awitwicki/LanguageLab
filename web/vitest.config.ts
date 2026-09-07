@@ -4,6 +4,6 @@ export default defineConfig({
   test: {
     // DOMParser потрібен chapters.ts; у чистому node його немає.
     environment: 'jsdom',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
   },
 })

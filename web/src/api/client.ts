@@ -14,12 +14,19 @@ export interface ChapterView {
   sortedCount: number
 }
 
+export interface TopWord {
+  wordPairId: number
+  word: string
+  frequency: number
+}
+
 export interface DictionaryDetail {
   id: number
   name: string
   wordsCount: number
   sortedCount: number
   chapters: ChapterView[]
+  topWords: TopWord[]
 }
 
 export interface ImportWord {

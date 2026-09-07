@@ -1,32 +1,29 @@
-# React + TypeScript + Vite
+# LanguageLab — web
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React 19 + TypeScript + Vite. SPA роздається `LanguageLab.Api`; у розробці — Vite з проксі `/api` → `http://localhost:5080`.
 
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm test         # vitest (jsdom)
+npm run lint     # oxlint
+npm run build    # tsc -b && vite build → dist/
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Структура
+
+- `src/layout/` — `AppShell` (топбар + сайдбар + контент), `TopBar`, `Sidebar`.
+- `src/screens/` — екрани: `HomeScreen`, `ImportScreen`, `DictionaryScreen`, `SortingScreen`.
+- `src/components/` — `ProgressBar`, `SortingProgress`.
+- `src/lib/` — форматери чисел і підписів (`format.ts`, `labels.ts`).
+- `src/fb2/`, `src/worker/` — розбір fb2 і лематизація в браузері.
+- `src/sorting/useSortingQueue.ts` — буфер черги сортування з оптимістичними позначками.
+- `src/api/client.ts` — типи відповідей API і fetch-обгортки.
+
+## Стилі
+
+Токени (кольори, типографіка, радіуси, рух) — у `src/index.css`; там же базові класи `.btn*`, `.large-title`, `.title`, `.footnote`, `.num`. CSS кожного компонента лежить поруч із ним і імпортується з `.tsx`. Нових кольорів поза токенами не додаємо; теми — через `prefers-color-scheme`.
+
+## Тести
+
+`src/test/render.ts` — мінімальний рендер на `react-dom/client` + `act` (без testing-library): `render`, `flush`, `click`. Тести лежать поруч із кодом: `*.test.ts(x)`.

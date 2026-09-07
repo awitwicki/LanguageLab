@@ -1,0 +1,46 @@
+.sorting-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 10px 24px;
+  padding: 20px 24px;
+  margin-bottom: 28px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+}
+
+.sorting-progress-head {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sorting-progress .scope {
+  font-size: var(--fs-footnote);
+  color: var(--text-2);
+}
+
+.sorting-progress .title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sorting-progress .percent {
+  font-size: 40px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -1px;
+  color: var(--text);
+}
+
+.sorting-progress .progress,
+.sorting-progress .counts {
+  grid-column: 1 / -1;
+}
+
+.sorting-progress .counts {
+  font-size: var(--fs-footnote);
+  color: var(--text-2);
+}
