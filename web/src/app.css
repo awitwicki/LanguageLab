@@ -1,0 +1,132 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dropzone {
+  display: block;
+  padding: 48px;
+  border: 2px dashed currentColor;
+  border-radius: 12px;
+  text-align: center;
+  cursor: pointer;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 420px;
+}
+
+.chapter-preview {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.error {
+  color: #c0392b;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dictionary-list,
+.chapter-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.dictionary-card {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.progress {
+  position: relative;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: currentColor;
+  opacity: 0.25;
+}
+
+.progress-label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+}
+
+.sorter {
+  display: grid;
+  grid-template-columns: 200px 1fr 200px;
+  gap: 24px;
+  align-items: start;
+}
+
+.column ol {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.column .newest {
+  font-weight: 700;
+  outline: 2px solid currentColor;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.card {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  padding: 48px 24px;
+  border: 1px solid currentColor;
+  border-radius: 12px;
+}
+
+.word {
+  font-size: 40px;
+  margin: 0;
+}
+
+.frequency {
+  margin: 0;
+  opacity: 0.7;
+}
+
+@media (max-width: 800px) {
+  .sorter {
+    grid-template-columns: 1fr;
+  }
+}

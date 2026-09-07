@@ -1,6 +1,6 @@
 using LanguageLab.Domain.Entities;
 using LanguageLab.Infrastructure.Database;
-using LanguageLab.TgBot.Services;
+using LanguageLab.Application.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Tests;
@@ -37,8 +37,9 @@ public class WordSelectionServiceTests
         var orphanWithoutTranslation = Word(5, "orphan", "");
         var fromAnotherDictionary = Word(6, "outside", "ззовні");
         var neverSorted = Word(7, "unsorted", "невідсортоване");
+        var excluded = Word(8, "solo", "соло");
 
-        silo.Words = [learnableOne, learnableTwo, alreadyKnown, alreadyInProgress, orphanWithoutTranslation, neverSorted];
+        silo.Words = [learnableOne, learnableTwo, alreadyKnown, alreadyInProgress, orphanWithoutTranslation, neverSorted, excluded];
         other.Words = [fromAnotherDictionary];
 
         db.Users.Add(new TelegramUser { Id = UserId, TelegramUserId = 1111111111 });
@@ -49,6 +50,16 @@ public class WordSelectionServiceTests
         {
             db.UnknownWords.Add(new UnknownWord { Id = wordPairId, UserId = UserId, WordPairId = wordPairId });
         }
+
+        // Слово 8 юзер позначив і як «хочу вчити», і як виключене — виключення має перемогти.
+        db.UnknownWords.Add(new UnknownWord { Id = 8, UserId = UserId, WordPairId = excluded.Id });
+        db.ExcludedWords.Add(new ExcludedWord
+        {
+            Id = 1,
+            UserId = UserId,
+            WordPairId = excluded.Id,
+            CreatedAt = Now
+        });
 
         db.KnownWords.Add(new KnownWord { Id = 1, UserId = UserId, WordPairId = alreadyKnown.Id });
 
@@ -205,5 +216,20 @@ public class WordSelectionServiceTests
         var pool = await new WordSelectionService(db).GetDistractorPoolAsync(dictionaryId: null, size: 60, new Random(1));
 
         Assert.Contains(pool, w => w.Id == 6);
+    }
+
+    /// <summary>
+    /// Виключене слово не вчиться, навіть якщо воно лежить у UnknownWords:
+    /// інакше бот далі показував би те, що юзер викинув у вебі.
+    /// </summary>
+    [Fact]
+    public async Task Excluded_word_never_enters_a_new_batch()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSelectionService(db);
+
+        var batch = await service.GetNewBatchAsync(UserId, DictionaryId, size: 10, new Random(1));
+
+        Assert.DoesNotContain(batch, w => w.Word == "solo");
     }
 }

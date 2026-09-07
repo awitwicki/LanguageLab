@@ -1,7 +1,7 @@
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Training;
 using LanguageLab.Infrastructure.Database;
-using LanguageLab.TgBot.Services;
+using LanguageLab.Application.Services;
 using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Tests;
@@ -143,6 +143,25 @@ public class TrainingSessionServiceTests
         Assert.Null(progress.DueAt);
 
         Assert.False(await db.TrainingQuestions.AnyAsync(q => q.TrainingId == training.Id && q.WordPairId == wordPairId));
+    }
+
+    [Fact]
+    public async Task MarkKnown_MovesTheWordOffTheUnknownShelfInsteadOfDuplicatingIt()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var question = await service.GetNextQuestionAsync(training!.Id);
+        var wordPairId = question!.WordPairId;
+
+        // У тренування слово потрапляє тільки з полиці «не знаю» — тобто рядок там є.
+        Assert.True(await db.UnknownWords.AnyAsync(u => u.UserId == UserId && u.WordPairId == wordPairId));
+
+        await service.MarkKnownAsync(question.Id, Now);
+
+        var known = await db.KnownWords.SingleAsync(k => k.UserId == UserId && k.WordPairId == wordPairId);
+        Assert.Equal(Now, known.CreatedAt);
+        Assert.False(await db.UnknownWords.AnyAsync(u => u.UserId == UserId && u.WordPairId == wordPairId));
     }
 
     [Fact]

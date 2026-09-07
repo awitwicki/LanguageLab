@@ -217,6 +217,10 @@ obj/
 
 *.user
 LanguageLab.TgBot/Properties/launchSettings.json
+LanguageLab.Api/appsettings.Development.json
 
 .env.bak*
 data/
+
+web/node_modules/
+web/dist/

@@ -13,6 +13,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<KnownWord> KnownWords { get; set; }
     public DbSet<UnknownWord> UnknownWords { get; set; }
     public DbSet<WordProgress> WordProgresses { get; set; }
+    public DbSet<Chapter> Chapters { get; set; }
+    public DbSet<ChapterWord> ChapterWords { get; set; }
+    public DbSet<DictionaryWord> DictionaryWords { get; set; }
+    public DbSet<ExcludedWord> ExcludedWords { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -25,19 +29,25 @@ public class ApplicationDbContext : DbContext
             .HasIndex(w => w.Word)
             .IsUnique();
 
-        // Join-таблиця налаштована явно, а не за конвенцією: інакше EF назвав би колонки
-        // "DictionariesId"/"WordsId", і SQL-сід із задачі 6 залежав би від вгадування імен.
+        // Join-таблиця тепер сутність із навантаженням (Frequency), але назва й каскади
+        // ті самі, що були за конвенцією — міграція лише додає колонку.
         // Каскад потрібен кнопці «🗑 Видалити», яка зносить WordPair глобально.
         builder.Entity<Dictionary>()
             .HasMany(d => d.Words)
             .WithMany(w => w.Dictionaries)
-            .UsingEntity(
-                "DictionaryWords",
-                l => l.HasOne(typeof(WordPair)).WithMany()
-                    .HasForeignKey("WordPairId").OnDelete(DeleteBehavior.Cascade),
-                r => r.HasOne(typeof(Dictionary)).WithMany()
-                    .HasForeignKey("DictionaryId").OnDelete(DeleteBehavior.Cascade),
-                j => j.HasKey("DictionaryId", "WordPairId"));
+            .UsingEntity<DictionaryWord>(
+                l => l.HasOne(dw => dw.WordPair).WithMany()
+                    .HasForeignKey(dw => dw.WordPairId).OnDelete(DeleteBehavior.Cascade),
+                r => r.HasOne(dw => dw.Dictionary).WithMany()
+                    .HasForeignKey(dw => dw.DictionaryId).OnDelete(DeleteBehavior.Cascade),
+                j =>
+                {
+                    j.ToTable("DictionaryWords");
+                    j.HasKey(dw => new { dw.DictionaryId, dw.WordPairId });
+
+                    // Черга сортування завжди йде ORDER BY Frequency DESC у межах словника.
+                    j.HasIndex(dw => new { dw.DictionaryId, dw.Frequency });
+                });
 
         // Одне слово не може бути двічі відоме або двічі невідоме одному юзеру.
         // Досі це трималося тільки перевіркою в C#; сід із задачі 6 покладається на ON CONFLICT.
@@ -59,5 +69,40 @@ public class ApplicationDbContext : DbContext
 
         builder.Entity<TrainingQuestion>()
             .HasIndex(q => new { q.TrainingId, q.Order });
+
+        builder.Entity<Chapter>()
+            .HasIndex(c => new { c.DictionaryId, c.Order })
+            .IsUnique();
+
+        builder.Entity<Chapter>()
+            .HasOne(c => c.Dictionary)
+            .WithMany(d => d.Chapters)
+            .HasForeignKey(c => c.DictionaryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<ChapterWord>()
+            .HasKey(cw => new { cw.ChapterId, cw.WordPairId });
+
+        builder.Entity<ChapterWord>()
+            .HasOne(cw => cw.Chapter)
+            .WithMany(c => c.Words)
+            .HasForeignKey(cw => cw.ChapterId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<ChapterWord>()
+            .HasOne(cw => cw.WordPair)
+            .WithMany()
+            .HasForeignKey(cw => cw.WordPairId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Третя полиця живе за тими самими правилами, що дві попередні.
+        builder.Entity<ExcludedWord>()
+            .HasIndex(e => new { e.UserId, e.WordPairId })
+            .IsUnique();
+
+        // Вибірка «останні 10» на кожній полиці — це ORDER BY CreatedAt DESC по юзеру.
+        builder.Entity<KnownWord>().HasIndex(k => new { k.UserId, k.CreatedAt });
+        builder.Entity<UnknownWord>().HasIndex(u => new { u.UserId, u.CreatedAt });
+        builder.Entity<ExcludedWord>().HasIndex(e => new { e.UserId, e.CreatedAt });
     }
 }

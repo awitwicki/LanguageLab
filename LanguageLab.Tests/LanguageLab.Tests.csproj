@@ -23,7 +23,7 @@
   <ItemGroup>
     <ProjectReference Include="..\LanguageLab.Domain\LanguageLab.Domain.csproj" />
     <ProjectReference Include="..\LanguageLab.Infrastructure\LanguageLab.Infrastructure.csproj" />
-    <ProjectReference Include="..\LanguageLab.TgBot\LanguageLab.TgBot.csproj" />
+    <ProjectReference Include="..\LanguageLab.Application\LanguageLab.Application.csproj" />
   </ItemGroup>
 
 </Project>

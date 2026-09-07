@@ -7,4 +7,6 @@ public class Dictionary : BaseEntity
     public int WordsCount { get; set; }
 
     public IList<WordPair> Words { get; set; } = new List<WordPair>();
+
+    public IList<Chapter> Chapters { get; set; } = new List<Chapter>();
 }
