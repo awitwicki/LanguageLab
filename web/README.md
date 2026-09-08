@@ -1,6 +1,6 @@
 # LanguageLab — web
 
-React 19 + TypeScript + Vite. SPA роздається `LanguageLab.Api`; у розробці — Vite з проксі `/api` → `http://localhost:5080`.
+React 19 + TypeScript + Vite. The SPA is served by `LanguageLab.Api`; in development — Vite with a `/api` → `http://localhost:5080` proxy.
 
 ```bash
 npm install
@@ -10,21 +10,21 @@ npm run lint     # oxlint
 npm run build    # tsc -b && vite build → dist/
 ```
 
-## Структура
+## Structure
 
-- `src/layout/` — `AppShell` (топбар + сайдбар + контент), `TopBar`, `Sidebar`.
-- `src/screens/` — екрани: `HomeScreen`, `ImportScreen`, `DictionaryScreen`, `SortingScreen`, `TrainingStartScreen` (розмір батча), `TrainingScreen` (картки → квіз → підсумок).
-- `src/components/` — `ProgressBar`, `SortingProgress`, `LeitnerScale` (шкала боксів Leitner + зважений відсоток).
-- `src/lib/` — форматери чисел і підписів (`format.ts`, `labels.ts`).
-- `src/fb2/`, `src/worker/` — розбір fb2 і лематизація в браузері.
-- `src/sorting/useSortingQueue.ts` — буфер черги сортування з оптимістичними позначками.
-- `src/training/useBatchPreview.ts` — превью батча для екрана старту: кандидати за частотою, хрестик «знаю» / «Повернути», чиста `reconcileRows`.
-- `src/api/client.ts` — типи відповідей API і fetch-обгортки.
+- `src/layout/` — `AppShell` (top bar + sidebar + content), `TopBar`, `Sidebar`.
+- `src/screens/` — screens: `HomeScreen`, `ImportScreen`, `DictionaryScreen`, `SortingScreen`, `TrainingStartScreen` (batch size), `TrainingScreen` (cards → quiz → summary).
+- `src/components/` — `ProgressBar`, `SortingProgress`, `LeitnerScale` (Leitner box scale + weighted percent).
+- `src/lib/` — number and label formatters (`format.ts`, `labels.ts`).
+- `src/fb2/`, `src/worker/` — fb2 parsing and lemmatization in the browser.
+- `src/sorting/useSortingQueue.ts` — sorting-queue buffer with optimistic marks.
+- `src/training/useBatchPreview.ts` — batch preview for the start screen: candidates by frequency, "know" cross-out / "bring back", pure `reconcileRows`.
+- `src/api/client.ts` — API response types and fetch wrappers.
 
-## Стилі
+## Styles
 
-Токени (кольори, типографіка, радіуси, рух) — у `src/index.css`; там же базові класи `.btn*`, `.large-title`, `.title`, `.footnote`, `.num`. CSS кожного компонента лежить поруч із ним і імпортується з `.tsx`. Нових кольорів поза токенами не додаємо; теми — через `prefers-color-scheme`.
+Tokens (colors, typography, radii, motion) — in `src/index.css`; same place has the base classes `.btn*`, `.large-title`, `.title`, `.footnote`, `.num`. Each component's CSS lives next to it and is imported from its `.tsx`. No new colors outside the tokens; themes — via `prefers-color-scheme`.
 
-## Тести
+## Tests
 
-`src/test/render.ts` — мінімальний рендер на `react-dom/client` + `act` (без testing-library): `render`, `flush`, `click`. Тести лежать поруч із кодом: `*.test.ts(x)`.
+`src/test/render.ts` — a minimal renderer on `react-dom/client` + `act` (no testing-library): `render`, `flush`, `click`. Tests live next to the code: `*.test.ts(x)`.

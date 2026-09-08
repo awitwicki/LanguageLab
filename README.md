@@ -8,87 +8,91 @@ Web app for learning new words from books
 
 ## TODO
 
-Беклог коротких тем. Коли щось відкладається (заглушка, кнопка без дії, «зробимо пізніше») —
-сюди додається один рядок у тому ж наборі змін. Виконане позначається `[x]`.
+Backlog of short topics. When something gets deferred (a stub, an inactive button, "we'll do it later") —
+add one line here **in the same set of changes**. Done items are marked `[x]`.
 
-- [ ] Меню акаунта в топбарі: зараз кнопка без дії (профіль, вихід)
-- [x] «Почати вправу» на екрані словника: Leitner-квіз у вебі по главі або книжці, батч 5/10/20 (`/api/training`)
-- [ ] Видалення словника з UI (`DELETE /api/dictionaries/{id}` уже є)
-- [ ] Автопереклад при імпорті книжки та при позначенні «не знаю» + правка перекладу в UI (бекфіл 2797 слів полиці «не знаю» зроблено 2026-09-07 одноразово; нові «не знаю» без перекладу у вправи не потрапляють)
-- [ ] Показ перекладу на картці сортування (тепер є для перекладених слів)
-- [ ] Відновити незавершене тренування після перезавантаження сторінки (сесія в БД є, входу з UI немає)
-- [ ] Статистика Leitner: гістограма боксів, вивчено / на сьогодні (`TrainingSessionService.GetStatsAsync` уже є)
-- [ ] Статистика юзера: скільки знаю / вчу / виключено загалом
-- [ ] Колірний контраст WCAG AA: перевірити `.btn-known`/`.btn-unknown` у світлій темі й `.btn-primary` на `--accent` у темній
-- [ ] Фокус-менеджмент при зміні маршруту: анонс нового екрана для скрінрідерів (зараз фокус падає на `<body>`)
-- [ ] Spacing-токени в design system: `web/src/index.css` токенізує колір/типографіку/радіуси, але не відступи
-- [ ] Клавіатурна навігація сегмент-контролу розміру батча: role="radio" без стрілок (ARIA APG для radiogroup) — зараз лише Tab+Space
-- [ ] Повернути слово з «знаю» на «не знаю» поза екраном старту вправи: хрестик у превью батча (`web/src/training/useBatchPreview.ts`) — «Повернути» працює лише в межах візиту, далі слово можна знайти хіба через `POST /api/sorting/mark`
-- [ ] GET /api/dictionaries/{id}: 3 COUNT-запити на главу (сортування + learnable) — об'єднати в один GROUP BY, якщо колись стане повільно
-- [ ] Адмінка полиць: список усіх слів у базі, список «знаю», список «не знаю», список виключених — з можливістю розвідмічити (перекласти назад між полицями) прямо там
-- [ ] Акаунти й реєстрація: зараз єдиний юзер із `appsettings` (`WebUser:TelegramId`, `LanguageLab.Api/CurrentUser.cs`), реального логіну немає
-- [ ] Можливість виключити слово прямо зі списку «Найчастіші слова» на екрані словника (`web/src/screens/DictionaryScreen.tsx`) — туди пролізають імена персонажів/топоніми
-- [ ] Підпис під шкалою прогресу глави/книжки (`web/src/components/LeitnerScale.tsx`): зараз незрозуміло, що це саме прогрес вивчення слів, а не довільний відсоток
-- [ ] Головна сторінка: останні вправи з кнопкою «Повторити», останні словники/глави, які сортував — щоб можна було повернутися й досортувати (`web/src/screens/HomeScreen.tsx`)
-- [ ] Публічність словника: перемикач при імпорті/у налаштуваннях — публічний (видно всім юзерам) чи приватний (лише той, хто створив); зараз `Dictionary` (`LanguageLab.Domain/Entities/Dictionary.cs`) власника й видимості не має
-- [ ] Словник неправильних дієслів, поділений на 4 групи — юзер скине табличку; уточнити деталі формату/груп у юзера перед імплементацією
-- [ ] Словники топ-100/200/500/1000 англійських слів, публічні
-- [x] .fb2 words extractor у браузері (імпорт книжки з главами)
-- [x] Docker compose, міграції БД
-- [x] Сортування слів «знаю / не знаю / виключити» по книжці або главі
+- [ ] Account menu in the top bar: currently an inactive button (profile, sign out)
+- [x] "Start exercise" on the dictionary screen: Leitner quiz in the web app per chapter or book, batch of 5/10/20 (`/api/training`)
+- [ ] Delete dictionary from the UI (`DELETE /api/dictionaries/{id}` already exists)
+- [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
+- [ ] Show translation on the sorting card (now available for translated words)
+- [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
+- [ ] Leitner stats: box histogram, learned / due today (`TrainingSessionService.GetStatsAsync` already exists)
+- [ ] User stats: total known / learning / excluded counts
+- [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
+- [ ] Focus management on route change: announce the new screen for screen readers (focus currently falls back to `<body>`)
+- [ ] Spacing tokens in the design system: `web/src/index.css` tokenizes color/typography/radii, but not spacing
+- [ ] Keyboard navigation for the batch-size segment control: role="radio" without arrow keys (ARIA APG for radiogroup) — currently only Tab+Space
+- [ ] Move a word back from "know" to "don't know" outside the exercise-start screen: the cross-out in the batch preview (`web/src/training/useBatchPreview.ts`) — "bring back" only works within the current visit; after that the word can only be reached via `POST /api/sorting/mark`
+- [ ] GET /api/dictionaries/{id}: 3 COUNT queries per chapter (sorted + learnable) — merge into one GROUP BY if this ever becomes slow
+- [ ] Shelf admin panel: list of all words in the DB, list of "know", list of "don't know", list of excluded — with the ability to un-mark (move back between shelves) right there
+- [ ] Accounts and registration: currently a single user from `appsettings` (`WebUser:TelegramId`, `LanguageLab.Api/CurrentUser.cs`), no real login yet
+- [ ] Ability to exclude a word directly from the "Most frequent words" list on the dictionary screen (`web/src/screens/DictionaryScreen.tsx`) — character names and place names leak in there
+- [ ] Caption under the chapter/book progress scale (`web/src/components/LeitnerScale.tsx`): currently unclear that this is specifically word-learning progress, not an arbitrary percentage
+- [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
+- [ ] Dictionary visibility: a toggle at import time / in settings — public (visible to all users) or private (only the creator); `Dictionary` (`LanguageLab.Domain/Entities/Dictionary.cs`) currently has no owner or visibility field
+- [ ] Irregular-verbs dictionary, split into 4 groups — the user will share a table; confirm the format/group details with the user before implementing
+- [ ] Top-100/200/500/1000 English word dictionaries, public
+- [x] .fb2 words extractor in the browser (book import with chapters)
+- [x] Docker compose, DB migrations
+- [x] Sorting words "know / don't know / exclude" per book or chapter
 
 ## Development
 
+### Conventions
+
+Everything in the project — code, comments, docs, UI copy — is English. The one exception: the vocabulary translation shown to the learner (`WordPair.Translation`, the Ukrainian meaning of each English word) stays Ukrainian, since that's the point of the app. See `CLAUDE.md` → Frontend conventions.
+
 ### Docker / .env
 
-`compose.yaml` піднімає Postgres і `LanguageLab.Api` разом. Env змінні:
+`compose.yaml` brings up Postgres and `LanguageLab.Api` together. Env vars:
 
 * `POSTGRES_PASSWORD={password}` - Postgres password, referenced by `compose.yaml` for both the database container and the API's connection string
 
-**Docker compose:**  create `.env` file and fill it with that variable.
+**Docker compose:** create `.env` file and fill it with that variable.
 
 ### LanguageLab.Api
 
-`LanguageLab.Api` бере конфіг з `appsettings.json` / `appsettings.Development.json`
-(другий — локальний, у git не потрапляє), а не з env змінних:
+`LanguageLab.Api` reads its config from `appsettings.json` / `appsettings.Development.json`
+(the latter is local, gitignored), not from env vars:
 
 * `ConnectionStrings:DefaultConnection` - postgres connection string
-* `WebUser:TelegramId` - користувач, від імені якого працює веб (авторизації поки немає)
+* `WebUser:TelegramId` - the user the web app acts as (no auth yet)
 
-Для локального запуску заповни `LanguageLab.Api/appsettings.Development.json` (див. приклад
-нижче). У Docker ті самі значення передаються через env змінні за стандартною
-ASP.NET Core конвенцією (`__` замість `:`): `ConnectionStrings__DefaultConnection`,
+For a local run, fill in `LanguageLab.Api/appsettings.Development.json` (see the example
+below). In Docker the same values are passed via env vars using the standard
+ASP.NET Core convention (`__` instead of `:`): `ConnectionStrings__DefaultConnection`,
 `WebUser__TelegramId`.
 
 ## Run
 
-### З Docker (весь стек)
+### With Docker (whole stack)
 
 ```
 docker-compose up --build -d
 ```
 
-Піднімає Postgres і `LanguageLab.Api` (роздає й веб-застосунок на `http://localhost:5080`)
-одним рухом.
+Brings up Postgres and `LanguageLab.Api` (which also serves the web app at `http://localhost:5080`)
+in one move.
 
-### Локально, без Docker (dotnet + npm)
+### Locally, without Docker (dotnet + npm)
 
-Потрібен лише запущений Postgres — найпростіше підняти саме його контейнером
-(решта процесів далі йдуть напряму на хості):
+Only a running Postgres is needed — easiest to bring up just that in a container
+(the rest of the processes run directly on the host):
 
 ```bash
 docker compose up -d dbpostgres
 ```
 
-(або вкажи власний локальний Postgres — головне, щоб `ConnectionStrings:DefaultConnection`
-у `appsettings.Development.json` вказував на нього; порт `5433` — це те, що compose
-мапить назовні з контейнера).
+(or point to your own local Postgres — the key requirement is that `ConnectionStrings:DefaultConnection`
+in `appsettings.Development.json` points to it; port `5433` is what compose
+maps out of the container).
 
-**API** (окремий термінал; він же мігрує схему БД на старті й роздає веб-застосунок,
-якщо `web/` зібраний — у дев-режимі краще користуватись Vite нижче).
+**API** (separate terminal; it also migrates the DB schema on startup and serves the web app
+if `web/` is built — in dev mode, use Vite below instead).
 
-Спершу заповни `LanguageLab.Api/appsettings.Development.json` (файл локальний,
-у git не потрапляє):
+First fill in `LanguageLab.Api/appsettings.Development.json` (a local file,
+not committed to git):
 
 ```json
 {
@@ -105,9 +109,9 @@ docker compose up -d dbpostgres
 dotnet run --project LanguageLab.Api
 ```
 
-Підніметься на `http://localhost:5080`.
+Comes up at `http://localhost:5080`.
 
-**Веб-застосунок** (окремий термінал; Vite з проксі на API, потрібен для розробки фронтенду):
+**Web app** (separate terminal; Vite with a proxy to the API, needed for frontend development):
 
 ```bash
 cd web
