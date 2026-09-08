@@ -1,19 +1,19 @@
 ﻿services:
-  dbpostgres:
-      image: timescale/timescaledb:2.29.1-pg17
-      container_name: pgLanguageLab
-      environment:
-        POSTGRES_DB: "LanguageLabTgBot"
-        POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
-      volumes:
-        - ./data/pgData:/var/lib/postgresql/data
-      ports:
-        - "5433:5432"
-      healthcheck:
-        test: ["CMD-SHELL", "pg_isready -U postgres -d LanguageLabTgBot"]
-        interval: 5s
-        timeout: 5s
-        retries: 10
+#  dbpostgres:
+#      image: timescale/timescaledb:2.29.1-pg17
+#      container_name: pgLanguageLab
+#      environment:
+#        POSTGRES_DB: "LanguageLabTgBot"
+#        POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+#      volumes:
+#        - ./data/pgData:/var/lib/postgresql/data
+#      ports:
+#        - "5433:5432"
+#      healthcheck:
+#        test: ["CMD-SHELL", "pg_isready -U postgres -d LanguageLabTgBot"]
+#        interval: 5s
+#        timeout: 5s
+#        retries: 10
   languagelab.api:
     image: languagelab.api
     container_name: languagelab.api-container
@@ -24,9 +24,12 @@
       - .env
     environment:
       ASPNETCORE_URLS: "http://+:8080"
-      ConnectionStrings__DefaultConnection: 'Host=dbpostgres;Port=5432;Database=LanguageLabTgBot;Username=postgres;Password=${POSTGRES_PASSWORD};'
-    ports:
-      - "5080:8080"
-    depends_on:
-      dbpostgres:
-        condition: service_healthy
+#      ConnectionStrings__DefaultConnection: 'Host=dbpostgres;Port=5432;Database=LanguageLabTgBot;Username=postgres;Password=${POSTGRES_PASSWORD};'
+    networks:
+      - kodzuverse
+
+networks:
+  kodzuverse:
+    name: kodzuverse_network
+    driver: bridge
+    external: true
