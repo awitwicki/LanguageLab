@@ -29,6 +29,24 @@ public class ApplicationDbContext : DbContext
             .HasIndex(w => w.Word)
             .IsUnique();
 
+        // Login upserts by TelegramUserId; without the unique index two concurrent
+        // first logins could create two accounts for the same Telegram user.
+        builder.Entity<TelegramUser>()
+            .HasIndex(u => u.TelegramUserId)
+            .IsUnique();
+
+        // Deleting an account must not delete the books it imported — they become
+        // ownerless system dictionaries instead.
+        builder.Entity<Dictionary>()
+            .HasOne(d => d.Owner)
+            .WithMany()
+            .HasForeignKey(d => d.OwnerId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Listing dictionaries always filters on visibility.
+        builder.Entity<Dictionary>()
+            .HasIndex(d => new { d.IsPublic, d.OwnerId });
+
         // Join-таблиця тепер сутність із навантаженням (Frequency), але назва й каскади
         // ті самі, що були за конвенцією — міграція лише додає колонку.
         // Каскад потрібен кнопці «🗑 Видалити», яка зносить WordPair глобально.

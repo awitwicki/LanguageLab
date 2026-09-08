@@ -11,7 +11,7 @@ Web app for learning new words from books
 Backlog of short topics. When something gets deferred (a stub, an inactive button, "we'll do it later") —
 add one line here **in the same set of changes**. Done items are marked `[x]`.
 
-- [ ] Account menu in the top bar: currently an inactive button (profile, sign out)
+- [x] Account menu in the top bar: currently an inactive button (profile, sign out)
 - [x] "Start exercise" on the dictionary screen: Leitner quiz in the web app per chapter or book, batch of 5/10/20 (`/api/training`)
 - [ ] Delete dictionary from the UI (`DELETE /api/dictionaries/{id}` already exists)
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
@@ -26,13 +26,19 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Move a word back from "know" to "don't know" outside the exercise-start screen: the cross-out in the batch preview (`web/src/training/useBatchPreview.ts`) — "bring back" only works within the current visit; after that the word can only be reached via `POST /api/sorting/mark`
 - [ ] GET /api/dictionaries/{id}: 3 COUNT queries per chapter (sorted + learnable) — merge into one GROUP BY if this ever becomes slow
 - [ ] Shelf admin panel: list of all words in the DB, list of "know", list of "don't know", list of excluded — with the ability to un-mark (move back between shelves) right there
-- [ ] Accounts and registration: currently a single user from `appsettings` (`WebUser:TelegramId`, `LanguageLab.Api/CurrentUser.cs`), no real login yet
+- [x] Accounts and registration: currently a single user from `appsettings` (`WebUser:TelegramId`, `LanguageLab.Api/CurrentUser.cs`), no real login yet
 - [ ] Ability to exclude a word directly from the "Most frequent words" list on the dictionary screen (`web/src/screens/DictionaryScreen.tsx`) — character names and place names leak in there
 - [ ] Caption under the chapter/book progress scale (`web/src/components/LeitnerScale.tsx`): currently unclear that this is specifically word-learning progress, not an arbitrary percentage
 - [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
-- [ ] Dictionary visibility: a toggle at import time / in settings — public (visible to all users) or private (only the creator); `Dictionary` (`LanguageLab.Domain/Entities/Dictionary.cs`) currently has no owner or visibility field
+- [x] Dictionary visibility: a toggle at import time / in settings — public (visible to all users) or private (only the creator); `Dictionary` (`LanguageLab.Domain/Entities/Dictionary.cs`) currently has no owner or visibility field
 - [ ] Irregular-verbs dictionary, split into 4 groups — the user will share a table; confirm the format/group details with the user before implementing
 - [ ] Top-100/200/500/1000 English word dictionaries, public
+- [ ] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
+- [ ] SPA copy sweep: parts of the UI are still Ukrainian (`Sidebar`, `ImportScreen`, `App` route titles) while newer screens are English
+- [ ] Admin user list: pagination and search (`GET /api/admin/users` returns every row)
+- [ ] Let a user delete their own account from the account menu (admins can already delete others)
+- [ ] Change a dictionary's visibility after import — `PATCH /api/dictionaries/{id}` exists, no UI entry point yet
+- [ ] Telegram scopes `phone` and `telegram:bot_access` are not requested; revisit if the bot ever needs to message web users
 - [x] .fb2 words extractor in the browser (book import with chapters)
 - [x] Docker compose, DB migrations
 - [x] Sorting words "know / don't know / exclude" per book or chapter
@@ -48,8 +54,9 @@ Everything in the project — code, comments, docs, UI copy — is English. The 
 `compose.yaml` brings up Postgres and `LanguageLab.Api` together. Env vars:
 
 * `POSTGRES_PASSWORD={password}` - Postgres password, referenced by `compose.yaml` for both the database container and the API's connection string
+* `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` - OpenID Connect credentials, passed through to `Telegram:ClientId` / `Telegram:ClientSecret` (see Accounts, below)
 
-**Docker compose:** create `.env` file and fill it with that variable.
+**Docker compose:** create `.env` file and fill it with those variables.
 
 ### LanguageLab.Api
 
@@ -57,12 +64,71 @@ Everything in the project — code, comments, docs, UI copy — is English. The 
 (the latter is local, gitignored), not from env vars:
 
 * `ConnectionStrings:DefaultConnection` - postgres connection string
-* `WebUser:TelegramId` - the user the web app acts as (no auth yet)
+* `Telegram:ClientId` / `Telegram:ClientSecret` - OpenID Connect credentials from
+  @BotFather → your bot → **Login Widget**. Required in every environment, including
+  Development; the app refuses to start without them.
 
 For a local run, fill in `LanguageLab.Api/appsettings.Development.json` (see the example
 below). In Docker the same values are passed via env vars using the standard
 ASP.NET Core convention (`__` instead of `:`): `ConnectionStrings__DefaultConnection`,
-`WebUser__TelegramId`.
+`Telegram__ClientId`, `Telegram__ClientSecret`.
+
+### Accounts
+
+Sign-in is Telegram over OpenID Connect ([docs](https://core.telegram.org/bots/telegram-login)) —
+there is no password. The browser goes to `/api/auth/telegram/start`, authorises at
+`oauth.telegram.org`, and comes back to `/api/auth/telegram/callback`, where the app exchanges
+the code, validates the `id_token` and issues its own `ll_session` cookie. The cookie holds an
+internal user id and a role, never Telegram's claims.
+
+The first person to sign in successfully becomes the administrator; everyone after them is a
+regular user. Regular users can use the dictionaries an admin made public but cannot import,
+delete or re-publish one. Admins additionally get **Users** in the account menu, where they can
+promote, ban and delete accounts. A ban takes effect on the banned user's next request, not at
+their next login.
+
+**First deploy.** The migration leaves every existing account at the regular role, so right
+after a fresh deploy the instance has zero admins — the first person to sign in becomes one.
+Since the app is reachable at a public domain, sign in yourself immediately after the first
+deploy, before sharing the URL, or promote yourself by hand:
+`UPDATE "Users" SET "Role" = 1 WHERE "TelegramUserId" = <your id>;`
+
+**Before the first deploy of this change**, check for duplicate Telegram ids, since the new
+unique index on `Users.TelegramUserId` will fail to build if any exist — the old
+single-config-user code had a check-then-insert race, and the database was historically also
+written by a separate bot process:
+```sql
+SELECT "TelegramUserId", count(*) FROM "Users" GROUP BY 1 HAVING count(*) > 1;
+```
+
+**Allowed URLs.** In the same @BotFather *Login Widget* section, register every callback the
+app is reached through — the flow is refused for any URL that is not listed:
+
+```
+https://l.kodzuverse.com/api/auth/telegram/callback
+http://localhost:5173/api/auth/telegram/callback
+```
+
+Development uses the same real flow as production; there is no bypass. The Vite dev server
+proxies `/api` without rewriting `Host`, so the callback URL the app builds is the
+`localhost:5173` one registered above.
+
+**Production.** The app sits behind a TLS-terminating proxy at `l.kodzuverse.com` and reads
+`X-Forwarded-Proto`. Without that it would consider the request plain HTTP, refuse to issue the
+`Secure` session cookie, and build an `http://` redirect URI that does not match the registered
+Allowed URL.
+
+The reverse proxy must also forward the original `Host` header (e.g. nginx's
+`proxy_set_header Host $host;`) — the OIDC handler builds its `redirect_uri` from
+`Request.Host`, and `ForwardedHeaders.XForwardedHost` is not enabled, so a proxy that
+rewrites `Host` to an internal container name breaks every login with a `redirect_uri`
+mismatch.
+
+When registering the bot's OpenID Connect credentials in @BotFather's Login Widget section,
+keep the default signing algorithm (RS256). Telegram's own docs state that the Web3-oriented
+algorithms (ES256K, EdDSA) reject the `profile` scope — since the app requests `openid profile`
+and the numeric Telegram id arrives via the `profile` scope's `id` claim, picking one of those
+algorithms would break sign-in in a way that looks identical to a claim-mapping bug.
 
 ## Run
 
@@ -99,8 +165,9 @@ not committed to git):
   "ConnectionStrings": {
     "DefaultConnection": "Host=localhost;Port=5433;Database=LanguageLabTgBot;Username=postgres;Password={password};"
   },
-  "WebUser": {
-    "TelegramId": {your telegram id}
+  "Telegram": {
+    "ClientId": "{your bot's OpenID Connect client id}",
+    "ClientSecret": "{your bot's OpenID Connect client secret}"
   }
 }
 ```

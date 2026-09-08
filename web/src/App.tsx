@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type DictionaryListItem, type TrainingStarted } from './api/client'
+import { useAuth } from './auth/useAuth'
 import { AppShell } from './layout/AppShell'
 import { Sidebar } from './layout/Sidebar'
 import { HomeScreen } from './screens/HomeScreen'
@@ -8,6 +9,9 @@ import { DictionaryScreen } from './screens/DictionaryScreen'
 import { SortingScreen } from './screens/SortingScreen'
 import { TrainingStartScreen } from './screens/TrainingStartScreen'
 import { TrainingScreen } from './screens/TrainingScreen'
+import { LoginScreen } from './screens/LoginScreen'
+import { BannedScreen } from './screens/BannedScreen'
+import { AdminScreen } from './screens/AdminScreen'
 
 type Route =
   | { name: 'home' }
@@ -23,10 +27,13 @@ type Route =
       batchSize: number | null
       started: TrainingStarted
     }
+  | { name: 'admin' }
 
 const REVIEW_TITLE = 'Повторення'
 
 export default function App() {
+  const { state, loginFailed, signOut, dismissBanned } = useAuth()
+
   const [route, setRoute] = useState<Route>({ name: 'home' })
   const [dictionaries, setDictionaries] = useState<DictionaryListItem[] | null>(null)
   const [listError, setListError] = useState<string | null>(null)
@@ -51,22 +58,44 @@ export default function App() {
   const routeKey = activeId === null ? route.name : `${route.name}:${activeId}`
 
   useEffect(() => {
+    if (state.status !== 'signed-in') {
+      return
+    }
+
     void reload()
-  }, [reload, routeKey])
+  }, [reload, routeKey, state.status])
 
   const activeName = dictionaries?.find((d) => d.id === activeId)?.name ?? 'Словник'
 
   const openDictionary = (id: number) => setRoute({ name: 'dictionary', id })
 
+  // The shell only makes sense for someone signed in: the sidebar lists their dictionaries
+  // and every API call behind it needs the cookie.
+  if (state.status === 'loading') {
+    return <main className="boot" aria-busy="true" />
+  }
+
+  if (state.status === 'banned') {
+    return <BannedScreen onBack={dismissBanned} />
+  }
+
+  if (state.status === 'anonymous') {
+    return <LoginScreen loginFailed={loginFailed} />
+  }
+
   return (
     <AppShell
+      user={state.user}
       onHome={() => setRoute({ name: 'home' })}
+      onAdmin={() => setRoute({ name: 'admin' })}
+      onSignOut={() => void signOut()}
       sidebar={
         <Sidebar
           items={dictionaries}
           error={listError}
           activeId={activeId}
           importActive={route.name === 'import'}
+          canImport={state.user.role === 'admin'}
           onSelect={openDictionary}
           onImport={() => setRoute({ name: 'import' })}
         />
@@ -145,6 +174,8 @@ export default function App() {
           onBack={() => openDictionary(route.dictionaryId)}
         />
       )}
+
+      {route.name === 'admin' && <AdminScreen meId={state.user.id} />}
     </AppShell>
   )
 }

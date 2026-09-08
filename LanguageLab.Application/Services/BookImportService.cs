@@ -15,7 +15,8 @@ public sealed record ImportChapter(int Order, string Title, IReadOnlyList<Import
 public sealed record ImportRequest(
     string Name,
     IReadOnlyList<ImportChapter>? Chapters,
-    IReadOnlyList<ImportWord>? Words);
+    IReadOnlyList<ImportWord>? Words,
+    bool? IsPublic = null);
 
 public sealed record ImportResult(long DictionaryId, int TotalWords, int NewWords, int ReusedWords);
 
@@ -32,7 +33,7 @@ public class BookImportService
         _dbContext = dbContext;
     }
 
-    public async Task<ImportResult> ImportAsync(ImportRequest request)
+    public async Task<ImportResult> ImportAsync(ImportRequest request, long ownerId, bool isPublic)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
@@ -86,7 +87,9 @@ public class BookImportService
         var dictionary = new Domain.Entities.Dictionary
         {
             Name = request.Name.Trim(),
-            WordsCount = totals.Count
+            WordsCount = totals.Count,
+            OwnerId = ownerId,
+            IsPublic = isPublic,
         };
 
         _dbContext.Dictionaries.Add(dictionary);

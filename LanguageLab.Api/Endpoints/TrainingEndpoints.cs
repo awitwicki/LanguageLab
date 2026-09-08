@@ -39,7 +39,7 @@ public static class TrainingEndpoints
 {
     public static void MapTrainingEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/training");
+        var group = app.MapGroup("/api/training").RequireAuthorization();
 
         // Превью для екрана старту: шкала скоупу + топ кандидатів за частотою. Те, що тут показано,
         // клієнт потім передає в new-batch явними id. Неіснуючий словник дає порожнє превью, як і new-batch дає 204.
@@ -49,9 +49,16 @@ public static class TrainingEndpoints
             int? take,
             WordSelectionService selection,
             LearningProgressService learningProgress,
-            ICurrentUser currentUser) =>
+            DictionaryAccessService access,
+            ICurrentUserContext currentUser) =>
         {
-            var userId = await currentUser.GetIdAsync();
+            var (userId, role) = currentUser.Require();
+
+            if (!await access.IsVisibleAsync(dictionaryId, userId, role))
+            {
+                return Results.NotFound();
+            }
+
             var chapters = QueryParsing.ParseChapterIds(chapterIds);
 
             var learning = await learningProgress.GetAsync(userId, dictionaryId, chapters);
@@ -66,9 +73,15 @@ public static class TrainingEndpoints
             NewBatchRequest request,
             TrainingSessionService sessions,
             ApplicationDbContext db,
-            ICurrentUser currentUser) =>
+            DictionaryAccessService access,
+            ICurrentUserContext currentUser) =>
         {
-            var userId = await currentUser.GetIdAsync();
+            var (userId, role) = currentUser.Require();
+
+            if (!await access.IsVisibleAsync(request.DictionaryId, userId, role))
+            {
+                return Results.NotFound();
+            }
 
             var training = await sessions.StartNewBatchAsync(
                 userId, request.DictionaryId, DateTime.UtcNow, request.ChapterIds, request.BatchSize, request.WordPairIds);

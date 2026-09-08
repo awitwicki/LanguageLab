@@ -12,7 +12,15 @@ describe('Sidebar', () => {
   it('показує словники з відсотком, позначає активний і віддає клік', async () => {
     const onSelect = vi.fn()
     const { container } = await render(
-      <Sidebar items={items} error={null} activeId={2} importActive={false} onSelect={onSelect} onImport={() => {}} />,
+      <Sidebar
+        items={items}
+        error={null}
+        activeId={2}
+        importActive={false}
+        canImport
+        onSelect={onSelect}
+        onImport={() => {}}
+      />,
     )
 
     const rows = [...container.querySelectorAll<HTMLButtonElement>('.sidebar-item')]
@@ -29,7 +37,15 @@ describe('Sidebar', () => {
 
   it('порожній список — підказка, а не «Завантажую…»', async () => {
     const { container } = await render(
-      <Sidebar items={[]} error={null} activeId={null} importActive={false} onSelect={() => {}} onImport={() => {}} />,
+      <Sidebar
+        items={[]}
+        error={null}
+        activeId={null}
+        importActive={false}
+        canImport
+        onSelect={() => {}}
+        onImport={() => {}}
+      />,
     )
 
     expect(container.textContent).toContain('Поки жодного словника')
@@ -39,7 +55,15 @@ describe('Sidebar', () => {
   it('кнопка імпорту стає primary, коли відкритий екран імпорту', async () => {
     const onImport = vi.fn()
     const { container } = await render(
-      <Sidebar items={items} error={null} activeId={null} importActive onSelect={() => {}} onImport={onImport} />,
+      <Sidebar
+        items={items}
+        error={null}
+        activeId={null}
+        importActive
+        canImport
+        onSelect={() => {}}
+        onImport={onImport}
+      />,
     )
 
     const button = container.querySelector<HTMLButtonElement>('.sidebar-footer .btn')!
@@ -49,5 +73,21 @@ describe('Sidebar', () => {
     await click(button)
 
     expect(onImport).toHaveBeenCalledTimes(1)
+  })
+
+  it('hides the import button from a user who cannot create dictionaries', async () => {
+    const { container } = await render(
+      <Sidebar
+        items={[]}
+        error={null}
+        activeId={null}
+        importActive={false}
+        canImport={false}
+        onSelect={vi.fn()}
+        onImport={vi.fn()}
+      />,
+    )
+
+    expect(container.querySelector('.sidebar-footer')).toBeNull()
   })
 })

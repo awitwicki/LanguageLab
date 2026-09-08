@@ -20,6 +20,9 @@ npm run build    # tsc -b && vite build → dist/
 - `src/sorting/useSortingQueue.ts` — sorting-queue buffer with optimistic marks.
 - `src/training/useBatchPreview.ts` — batch preview for the start screen: candidates by frequency, "know" cross-out / "bring back", pure `reconcileRows`.
 - `src/api/client.ts` — API response types and fetch wrappers.
+- `src/auth/useAuth.ts` — session state machine: `loading | anonymous | banned | signed-in`.
+- `src/screens/LoginScreen.tsx`, `BannedScreen.tsx`, `AdminScreen.tsx` — sign-in, suspension notice, user management.
+- `src/layout/AccountMenu.tsx` — top-bar account menu: identity, admin panel, sign out.
 
 ## Styles
 

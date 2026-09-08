@@ -75,4 +75,71 @@ public class SchemaTests
 
         Assert.Equal(["Chapter 1", "Chapter 2"], titles);
     }
+
+    /// <summary>Deleting a user takes their shelves and progress with them: no orphan rows keyed to a gone user.</summary>
+    [Fact]
+    public async Task Deleting_a_user_removes_their_shelves_and_progress()
+    {
+        await using var db = NewContext();
+
+        var user = new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = DateTime.UtcNow };
+        var word = new WordPair { Id = 1, Word = "abide", Translation = "дотримуватися" };
+
+        db.Users.Add(user);
+        db.Words.Add(word);
+        db.KnownWords.Add(new KnownWord { Id = 1, UserId = 1, WordPairId = 1, CreatedAt = DateTime.UtcNow });
+        db.WordProgresses.Add(new WordProgress { Id = 1, UserId = 1, WordPairId = 1, Box = 1 });
+        await db.SaveChangesAsync();
+
+        // The in-memory provider cascades through the change tracker, so the dependents
+        // must be loaded for the cascade to be observable — the relational provider
+        // does the same work in the database via ON DELETE CASCADE.
+        await db.KnownWords.ToListAsync();
+        await db.WordProgresses.ToListAsync();
+
+        db.Users.Remove(await db.Users.FirstAsync(u => u.Id == 1));
+        await db.SaveChangesAsync();
+
+        Assert.Empty(await db.KnownWords.ToListAsync());
+        Assert.Empty(await db.WordProgresses.ToListAsync());
+        Assert.Single(await db.Words.ToListAsync());
+    }
+
+    /// <summary>A deleted user must not take their dictionaries with them: the book survives, ownerless.</summary>
+    [Fact]
+    public async Task Deleting_a_user_keeps_their_dictionaries_and_clears_the_owner()
+    {
+        await using var db = NewContext();
+
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = DateTime.UtcNow });
+        db.Dictionaries.Add(new Domain.Entities.Dictionary
+        {
+            Id = 1, Name = "Wool", WordsCount = 0, OwnerId = 1, IsPublic = true,
+        });
+        await db.SaveChangesAsync();
+
+        await db.Dictionaries.ToListAsync();
+
+        db.Users.Remove(await db.Users.FirstAsync(u => u.Id == 1));
+        await db.SaveChangesAsync();
+
+        var dictionary = await db.Dictionaries.FirstAsync(d => d.Id == 1);
+
+        Assert.Null(dictionary.OwnerId);
+        Assert.True(dictionary.IsPublic);
+    }
+
+    /// <summary>Login upserts by TelegramUserId, so the column must not allow a second row with the same id.</summary>
+    [Fact]
+    public void Telegram_user_id_is_unique()
+    {
+        using var db = NewContext();
+
+        var index = db.Model
+            .FindEntityType(typeof(TelegramUser))!
+            .GetIndexes()
+            .Single(i => i.Properties.Any(p => p.Name == nameof(TelegramUser.TelegramUserId)));
+
+        Assert.True(index.IsUnique);
+    }
 }

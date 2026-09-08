@@ -1,54 +1,51 @@
+using LanguageLab.Api.Auth;
 using LanguageLab.Domain.Entities;
-using LanguageLab.Infrastructure.Database;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace LanguageLab.Api;
 
 /// <summary>
-/// Хто зараз працює. Авторизації немає — юзер один і заданий у конфігу.
-/// Інтерфейс існує саме для того, щоб поява акаунтів змінила одну реалізацію,
-/// а не кожен ендпоінт.
+/// Who is working right now. Backed by the session cookie's claims, so it costs no database
+/// round-trip — SessionValidator has already confirmed the user on this request.
 /// </summary>
 public interface ICurrentUser
 {
     Task<long> GetIdAsync();
 }
 
-public class ConfigCurrentUser : ICurrentUser
+public sealed record CurrentUserContext(long Id, UserRole Role);
+
+/// <summary>For the places that need the role too: the visibility filter and the admin guard.</summary>
+public interface ICurrentUserContext
 {
-    private readonly ApplicationDbContext _dbContext;
-    private readonly long _telegramUserId;
+    CurrentUserContext? Get();
+}
 
-    public ConfigCurrentUser(ApplicationDbContext dbContext, IConfiguration configuration)
+public static class CurrentUserContextExtensions
+{
+    /// <summary>
+    /// Every caller sits behind RequireAuthorization, so an anonymous principal here is a
+    /// wiring bug, not a user error — fail loudly rather than silently acting as nobody.
+    /// </summary>
+    public static CurrentUserContext Require(this ICurrentUserContext context) =>
+        context.Get() ?? throw new InvalidOperationException(
+            "An anonymous request reached an endpoint that requires authentication.");
+}
+
+public class ClaimsCurrentUser : ICurrentUser, ICurrentUserContext
+{
+    private readonly IHttpContextAccessor _accessor;
+
+    public ClaimsCurrentUser(IHttpContextAccessor accessor)
     {
-        _dbContext = dbContext;
-
-        var raw = configuration["WebUser:TelegramId"];
-
-        if (!long.TryParse(raw, out _telegramUserId) || _telegramUserId == 0)
-        {
-            throw new InvalidOperationException(
-                "WebUser:TelegramId не задано або воно не число. " +
-                "Це telegram id того самого юзера, під яким ти працюєш у боті.");
-        }
+        _accessor = accessor;
     }
 
-    public async Task<long> GetIdAsync()
+    public CurrentUserContext? Get()
     {
-        var user = await _dbContext.Users
-            .FirstOrDefaultAsync(u => u.TelegramUserId == _telegramUserId);
+        var principal = _accessor.HttpContext?.User;
 
-        if (user != null)
-        {
-            return user.Id;
-        }
-
-        // Веб може стартувати раніше, ніж юзер напише боту.
-        user = new TelegramUser { TelegramUserId = _telegramUserId };
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
-
-        return user.Id;
+        return principal?.Identity?.IsAuthenticated == true ? PrincipalFactory.Read(principal) : null;
     }
+
+    public Task<long> GetIdAsync() => Task.FromResult(this.Require().Id);
 }

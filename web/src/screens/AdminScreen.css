@@ -1,0 +1,52 @@
+.admin {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: middle;
+}
+
+.admin-table thead th {
+  font-size: var(--fs-footnote);
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.admin-table tbody tr:last-child th,
+.admin-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-table tbody th {
+  font-weight: 500;
+}
+
+.user-name {
+  display: block;
+}
+
+.is-banned .user-name,
+.is-banned .status {
+  color: var(--danger);
+}
+
+.actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}

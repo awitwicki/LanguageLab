@@ -18,6 +18,7 @@ export function ImportScreen({ onImported }: Props) {
   const [sections, setSections] = useState<SectionNode[]>([])
   const [maxDepth, setMaxDepth] = useState(1)
   const [mode, setMode] = useState<ChapterMode>('leaf')
+  const [isPublic, setIsPublic] = useState(true)
 
   const worker = useRef<Worker | null>(null)
   const pending = useRef<((response: WorkerResponse) => void) | null>(null)
@@ -94,6 +95,7 @@ export function ImportScreen({ onImported }: Props) {
     try {
       const result = await api.importDictionary({
         name,
+        isPublic,
         chapters: response.chapters.map((c) => ({
           order: c.order,
           title: c.title,
@@ -106,7 +108,7 @@ export function ImportScreen({ onImported }: Props) {
       setError(e instanceof Error ? e.message : String(e))
       setStage('preview')
     }
-  }, [ask, sections, mode, name, onImported])
+  }, [ask, sections, mode, name, isPublic, onImported])
 
   return (
     <section className="import">
@@ -160,6 +162,16 @@ export function ImportScreen({ onImported }: Props) {
               <li key={index}>{chapter.title || <em>без назви</em>}</li>
             ))}
           </ol>
+
+          <label className="field checkbox">
+            <input
+              type="checkbox"
+              checked={isPublic}
+              disabled={stage !== 'preview'}
+              onChange={(e) => setIsPublic(e.target.checked)}
+            />
+            Visible to all users
+          </label>
 
           <div>
             <button

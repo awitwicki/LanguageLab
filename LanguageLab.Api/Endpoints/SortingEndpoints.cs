@@ -8,16 +8,22 @@ public static class SortingEndpoints
 {
     public static void MapSortingEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/sorting");
+        var group = app.MapGroup("/api/sorting").RequireAuthorization();
 
         group.MapGet("/queue", async (
             long dictionaryId,
             string? chapterIds,
             int? take,
             WordSortingService sorting,
-            ICurrentUser currentUser) =>
+            DictionaryAccessService access,
+            ICurrentUserContext currentUser) =>
         {
-            var userId = await currentUser.GetIdAsync();
+            var (userId, role) = currentUser.Require();
+
+            if (!await access.IsVisibleAsync(dictionaryId, userId, role))
+            {
+                return Results.NotFound();
+            }
 
             var chapters = QueryParsing.ParseChapterIds(chapterIds);
 

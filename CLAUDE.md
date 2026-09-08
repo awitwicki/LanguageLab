@@ -16,12 +16,25 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 - `LanguageLab.Infrastructure/` — EF Core `ApplicationDbContext`, PostgreSQL provider, migrations.
 - `LanguageLab.Application/` — services on top of the domain: word selection, training sessions, book import, sorting, per-scope Leitner progress (`LearningProgressService`). Used by the API.
 - `LanguageLab.Api/` — ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. Endpoints: `/api/dictionaries`, `/api/sorting`, `/api/training` (Leitner quiz on top of `TrainingSessionService`; the question queue lives in the DB); `GET /api/training/preview` — scope's progress scale + batch candidates by frequency, `new-batch` accepts explicit `wordPairIds`.
+  `Auth/` (claims, session validation, the OIDC event handlers), `/api/auth/*`
+  (telegram/start, the handler-owned telegram/callback, me, logout), `/api/admin/users*`
+  (list, ban, unban, role, delete).
 - `web/` — React + Vite SPA: fb2 import in the browser, dictionary stats, word sorting. `src/layout/` (shell: top bar + sidebar), `src/screens/`, `src/components/`, `src/lib/` (formatters), tests `*.test.ts(x)` next to the code (vitest + jsdom, helper `src/test/render.ts`). Details in [web/README.md](web/README.md).
 - `extract.py` — Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictionaries under `dictionaries/`.
 
 ## Runtime
 
-- Postgres via `compose.yaml`. `LanguageLab.Api` reads `ConnectionStrings:DefaultConnection` and `WebUser:TelegramId` from `appsettings.json`/`appsettings.Development.json` (the latter is gitignored, local only); in Docker the same keys come from env vars via the `__` convention (`ConnectionStrings__DefaultConnection`, `WebUser__TelegramId`).
+- Postgres via `compose.yaml`. `LanguageLab.Api` reads `ConnectionStrings:DefaultConnection`,
+  `Telegram:ClientId` and `Telegram:ClientSecret` from `appsettings.json`/`appsettings.Development.json`
+  (the latter is gitignored, local only); in Docker the same keys come from env vars via the `__`
+  convention. `WebUser:TelegramId` is gone — there is no config user any more.
+- Auth is Telegram over OpenID Connect → an HttpOnly `ll_session` cookie holding an internal user
+  id and role. `ICurrentUser` reads those claims; `ICurrentUserContext` adds the role. The first
+  successful login becomes the admin. Bans take effect on the next request via the cookie's
+  `OnValidatePrincipal`. Development uses the same real flow — `http://localhost:5173/...` is a
+  registered Allowed URL in @BotFather.
+- Dictionaries have an owner and an `IsPublic` flag: import, delete and visibility changes are
+  admin-only, and regular users see public dictionaries plus their own.
 - Migrations run automatically on startup (`dbContext.Database.MigrateAsync()` in [Program.cs:39](LanguageLab.Api/Program.cs#L39)).
 - Training requires a non-empty `WordPair.Translation` (both for batch words and distractors). Translations for the "don't know" shelf were backfilled once on 2026-09-07 (`result/translations.txt`, local); auto-translation is in the README TODO.
 - Batch = the scope's most frequent learnable words (chapter or book frequency), deterministic; the web app shows a preview and passes `wordPairIds` explicitly.

@@ -20,18 +20,20 @@ public sealed record DictionaryDetail(
     IReadOnlyList<ChapterView> Chapters,
     IReadOnlyList<TopWord> TopWords);
 
+public sealed record VisibilityRequest(bool IsPublic);
+
 public static class DictionaryEndpoints
 {
     public static void MapDictionaryEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/dictionaries");
+        var group = app.MapGroup("/api/dictionaries").RequireAuthorization();
 
         group.MapGet("/", async (
-            ApplicationDbContext db, WordSortingService sorting, ICurrentUser currentUser) =>
+            WordSortingService sorting, DictionaryAccessService access, ICurrentUserContext currentUser) =>
         {
-            var userId = await currentUser.GetIdAsync();
+            var (userId, role) = currentUser.Require();
 
-            var dictionaries = await db.Dictionaries
+            var dictionaries = await access.Visible(userId, role)
                 .OrderBy(d => d.Name)
                 .Select(d => new { d.Id, d.Name, d.WordsCount, HasChapters = d.Chapters.Any() })
                 .ToListAsync();
@@ -54,18 +56,20 @@ public static class DictionaryEndpoints
             DictionaryStatsService stats,
             WordSelectionService selection,
             LearningProgressService learningProgress,
-            ICurrentUser currentUser) =>
+            DictionaryAccessService access,
+            ICurrentUserContext currentUser) =>
         {
-            var userId = await currentUser.GetIdAsync();
+            var (userId, role) = currentUser.Require();
             var now = DateTime.UtcNow;
 
-            var dictionary = await db.Dictionaries
+            var dictionary = await access.Visible(userId, role)
                 .Where(d => d.Id == id)
                 .Select(d => new { d.Id, d.Name, d.WordsCount })
                 .FirstOrDefaultAsync();
 
             if (dictionary == null)
             {
+                // 404 rather than 403: a private dictionary should not be probeable by id.
                 return Results.NotFound();
             }
 
@@ -114,11 +118,14 @@ public static class DictionaryEndpoints
                 topWords));
         });
 
-        group.MapPost("/import", async (ImportRequest request, BookImportService import) =>
+        group.MapPost("/import", async (
+            ImportRequest request, BookImportService import, ICurrentUserContext currentUser) =>
         {
-            var result = await import.ImportAsync(request);
+            var result = await import.ImportAsync(
+                request, currentUser.Require().Id, request.IsPublic ?? true);
+
             return Results.Ok(result);
-        });
+        }).RequireAuthorization("Admin");
 
         group.MapDelete("/{id:long}", async (long id, ApplicationDbContext db) =>
         {
@@ -135,6 +142,21 @@ public static class DictionaryEndpoints
             await db.SaveChangesAsync();
 
             return Results.NoContent();
-        });
+        }).RequireAuthorization("Admin");
+
+        group.MapPatch("/{id:long}", async (long id, VisibilityRequest request, ApplicationDbContext db) =>
+        {
+            var dictionary = await db.Dictionaries.FirstOrDefaultAsync(d => d.Id == id);
+
+            if (dictionary == null)
+            {
+                return Results.NotFound();
+            }
+
+            dictionary.IsPublic = request.IsPublic;
+            await db.SaveChangesAsync();
+
+            return Results.NoContent();
+        }).RequireAuthorization("Admin");
     }
 }

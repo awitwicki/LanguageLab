@@ -28,7 +28,7 @@ public class BookImportServiceTests
         await using var db = NewContext();
         var service = new BookImportService(db);
 
-        var result = await service.ImportAsync(TwoChapterBook());
+        var result = await service.ImportAsync(TwoChapterBook(), ownerId: 1, isPublic: true);
 
         var silo = await db.Words.SingleAsync(w => w.Word == "silo");
         var frequency = await db.DictionaryWords
@@ -45,7 +45,7 @@ public class BookImportServiceTests
         await using var db = NewContext();
         var service = new BookImportService(db);
 
-        var result = await service.ImportAsync(TwoChapterBook());
+        var result = await service.ImportAsync(TwoChapterBook(), ownerId: 1, isPublic: true);
 
         var dictionary = await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId);
 
@@ -60,7 +60,7 @@ public class BookImportServiceTests
         await using var db = NewContext();
         var service = new BookImportService(db);
 
-        var result = await service.ImportAsync(TwoChapterBook());
+        var result = await service.ImportAsync(TwoChapterBook(), ownerId: 1, isPublic: true);
 
         var chapters = await db.Chapters
             .Where(c => c.DictionaryId == result.DictionaryId)
@@ -79,7 +79,7 @@ public class BookImportServiceTests
         await db.SaveChangesAsync();
 
         var service = new BookImportService(db);
-        await service.ImportAsync(TwoChapterBook());
+        await service.ImportAsync(TwoChapterBook(), ownerId: 1, isPublic: true);
 
         var silo = await db.Words.SingleAsync(w => w.Word == "silo");
 
@@ -94,7 +94,7 @@ public class BookImportServiceTests
         await db.SaveChangesAsync();
 
         var service = new BookImportService(db);
-        var result = await service.ImportAsync(TwoChapterBook());
+        var result = await service.ImportAsync(TwoChapterBook(), ownerId: 1, isPublic: true);
 
         Assert.Equal(1, await db.Words.CountAsync(w => w.Word == "silo"));
         Assert.Equal(2, result.NewWords);      // abide, cleaning
@@ -107,8 +107,8 @@ public class BookImportServiceTests
         await using var db = NewContext();
         var service = new BookImportService(db);
 
-        await service.ImportAsync(TwoChapterBook());
-        await service.ImportAsync(TwoChapterBook());
+        await service.ImportAsync(TwoChapterBook(), ownerId: 1, isPublic: true);
+        await service.ImportAsync(TwoChapterBook(), ownerId: 1, isPublic: true);
 
         Assert.Equal(3, await db.Words.CountAsync());
         Assert.Equal(2, await db.Dictionaries.CountAsync());
@@ -120,12 +120,31 @@ public class BookImportServiceTests
         await using var db = NewContext();
         var service = new BookImportService(db);
 
-        var result = await service.ImportAsync(new ImportRequest(
-            Name: "Top 500",
-            Chapters: null,
-            Words: [new ImportWord("the", 100), new ImportWord("be", 90)]));
+        var result = await service.ImportAsync(
+            new ImportRequest(
+                Name: "Top 500",
+                Chapters: null,
+                Words: [new ImportWord("the", 100), new ImportWord("be", 90)]),
+            ownerId: 1,
+            isPublic: true);
 
         Assert.Empty(await db.Chapters.Where(c => c.DictionaryId == result.DictionaryId).ToListAsync());
         Assert.Equal(2, result.TotalWords);
+    }
+
+    [Fact]
+    public async Task Import_stamps_the_owner_and_the_requested_visibility()
+    {
+        await using var db = NewContext();
+
+        var result = await new BookImportService(db).ImportAsync(
+            new ImportRequest("Wool", null, [new ImportWord("abide", 3)]),
+            ownerId: 42,
+            isPublic: false);
+
+        var dictionary = await db.Dictionaries.FirstAsync(d => d.Id == result.DictionaryId);
+
+        Assert.Equal(42, dictionary.OwnerId);
+        Assert.False(dictionary.IsPublic);
     }
 }

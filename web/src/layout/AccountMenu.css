@@ -1,0 +1,51 @@
+.account-menu {
+  position: relative;
+}
+
+.account img {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.account-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 10;
+  min-width: 200px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.account-identity {
+  padding: 8px 10px 10px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.role-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+
+.account-action {
+  display: block;
+  width: 100%;
+  padding: 9px 10px;
+  margin-top: 4px;
+  text-align: left;
+  border-radius: var(--r-md);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.account-action:hover {
+  background: var(--surface-2);
+}

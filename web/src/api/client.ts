@@ -1,3 +1,20 @@
+export type UserRole = 'user' | 'admin'
+
+export interface CurrentUser {
+  id: number
+  telegramUserId: number
+  displayName: string
+  username: string | null
+  photoUrl: string | null
+  role: UserRole
+}
+
+export interface AdminUser extends CurrentUser {
+  isBanned: boolean
+  createdAt: string
+  lastLoginAt: string | null
+}
+
 export interface DictionaryListItem {
   id: number
   name: string
@@ -166,6 +183,33 @@ export interface TrainingSummary {
   words: WordResult[]
 }
 
+let unauthorizedHandler: () => void = () => {}
+
+/**
+ * Called when any request finds the session gone — banned, signed out elsewhere, expired.
+ * `getMe` deliberately does not go through `request`, so the signed-out probe at boot never
+ * fires this.
+ */
+export function setUnauthorizedHandler(handler: () => void) {
+  unauthorizedHandler = handler
+}
+
+// Guarded actions answer 409 with { message }: the reason is written for the user, so show
+// it instead of the status code.
+async function errorMessage(response: Response, method: string, path: string) {
+  try {
+    const body = (await response.json()) as { message?: string }
+
+    if (body?.message) {
+      return body.message
+    }
+  } catch {
+    // Not a JSON body — fall through to the generic message.
+  }
+
+  return `${method} ${path} → ${response.status}`
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   const response = await fetch(path, {
     ...init,
@@ -173,7 +217,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   })
 
   if (!response.ok) {
-    throw new Error(`${init?.method ?? 'GET'} ${path} → ${response.status}`)
+    if (response.status === 401) {
+      unauthorizedHandler()
+    }
+
+    throw new Error(await errorMessage(response, init?.method ?? 'GET', path))
   }
 
   if (response.status === 204) {
@@ -191,7 +239,12 @@ export const api = {
 
   deleteDictionary: (id: number) => request<null>(`/api/dictionaries/${id}`, { method: 'DELETE' }),
 
-  importDictionary: (payload: { name: string; chapters?: ImportChapter[]; words?: ImportWord[] }) =>
+  importDictionary: (payload: {
+    name: string
+    chapters?: ImportChapter[]
+    words?: ImportWord[]
+    isPublic?: boolean
+  }) =>
     request<ImportResult>('/api/dictionaries/import', {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -263,4 +316,42 @@ export const api = {
 
   finish: (trainingId: number) =>
     request<TrainingSummary>(`/api/training/${trainingId}/finish`, { method: 'POST' }) as Promise<TrainingSummary>,
+
+  // Raw fetch, not request(): 401 here means "not signed in yet", which is an answer, not a
+  // dropped session.
+  getMe: async (): Promise<CurrentUser | null> => {
+    const response = await fetch('/api/auth/me')
+
+    if (response.status === 401) {
+      return null
+    }
+
+    if (!response.ok) {
+      throw new Error(`GET /api/auth/me → ${response.status}`)
+    }
+
+    return (await response.json()) as CurrentUser
+  },
+
+  logout: () => request<null>('/api/auth/logout', { method: 'POST' }),
+
+  listUsers: () => request<AdminUser[]>('/api/admin/users') as Promise<AdminUser[]>,
+
+  banUser: (id: number) => request<null>(`/api/admin/users/${id}/ban`, { method: 'POST' }),
+
+  unbanUser: (id: number) => request<null>(`/api/admin/users/${id}/unban`, { method: 'POST' }),
+
+  setUserRole: (id: number, role: UserRole) =>
+    request<null>(`/api/admin/users/${id}/role`, {
+      method: 'POST',
+      body: JSON.stringify({ role }),
+    }),
+
+  deleteUser: (id: number) => request<null>(`/api/admin/users/${id}`, { method: 'DELETE' }),
+
+  setDictionaryVisibility: (id: number, isPublic: boolean) =>
+    request<null>(`/api/dictionaries/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isPublic }),
+    }),
 }

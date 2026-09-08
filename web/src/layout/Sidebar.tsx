@@ -8,11 +8,12 @@ interface Props {
   error: string | null
   activeId: number | null
   importActive: boolean
+  canImport: boolean
   onSelect: (id: number) => void
   onImport: () => void
 }
 
-export function Sidebar({ items, error, activeId, importActive, onSelect, onImport }: Props) {
+export function Sidebar({ items, error, activeId, importActive, canImport, onSelect, onImport }: Props) {
   return (
     <nav className="sidebar" aria-label="Словники">
       <p className="sidebar-heading">Словники</p>
@@ -38,15 +39,17 @@ export function Sidebar({ items, error, activeId, importActive, onSelect, onImpo
         ))}
       </ul>
 
-      <div className="sidebar-footer">
-        <button
-          type="button"
-          className={`btn ${importActive ? 'btn-primary' : 'btn-secondary'}`}
-          onClick={onImport}
-        >
-          Імпортувати книжку
-        </button>
-      </div>
+      {canImport && (
+        <div className="sidebar-footer">
+          <button
+            type="button"
+            className={`btn ${importActive ? 'btn-primary' : 'btn-secondary'}`}
+            onClick={onImport}
+          >
+            Імпортувати книжку
+          </button>
+        </div>
+      )}
     </nav>
   )
 }
