@@ -8,6 +8,8 @@ const chapter = (order: number, title: string): ChapterView => ({
   title,
   wordsCount: 1,
   sortedCount: 0,
+  learnableCount: 0,
+  learning: { notStarted: 0, boxes: [0, 0, 0, 0, 0], learned: 0, total: 0 },
 })
 
 describe('chapterLabel', () => {

@@ -1,0 +1,114 @@
+.training-start {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  max-width: 520px;
+}
+
+.training-start-nav {
+  margin: -8px 0 4px -10px;
+}
+
+.training-start-hint {
+  color: var(--text-2);
+}
+
+/* Сегмент-контрол: одна доріжка з трьома радіо-кнопками, активна — «випливає» поверхнею. */
+.segment {
+  display: inline-flex;
+  padding: 3px;
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+}
+
+.segment-item {
+  min-width: 64px;
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  color: var(--text-2);
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.segment-item.is-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-card);
+}
+
+.training-start-notice {
+  color: var(--text);
+}
+
+/* Шкала й табличка — на всю ширину колонки, решта елементів лишаються start. */
+.training-start > .leitner,
+.training-start > .batch-preview {
+  justify-self: stretch;
+}
+
+.batch-preview {
+  display: grid;
+  gap: 8px;
+}
+
+.batch-preview-list {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.batch-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 12px;
+}
+
+.batch-row + .batch-row {
+  border-top: 1px solid var(--hairline);
+}
+
+.batch-rank {
+  font-size: var(--fs-footnote);
+  color: var(--text-3);
+}
+
+.batch-word {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.batch-word-text {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-row.is-struck .batch-word-text {
+  text-decoration: line-through;
+  color: var(--text-3);
+}
+
+.batch-row.is-struck .batch-word .footnote,
+.batch-row.is-struck .batch-freq {
+  color: var(--text-3);
+}
+
+.batch-know {
+  min-width: 36px;
+  padding: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Контейнер обрізає все за межами (overflow: hidden) — кільце фокуса малюємо всередину. */
+.batch-row .btn:focus-visible {
+  outline-offset: -2px;
+}

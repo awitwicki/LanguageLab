@@ -19,7 +19,7 @@ public static class SortingEndpoints
         {
             var userId = await currentUser.GetIdAsync();
 
-            var chapters = ParseChapterIds(chapterIds);
+            var chapters = QueryParsing.ParseChapterIds(chapterIds);
 
             var queue = await sorting.GetQueueAsync(
                 userId, dictionaryId, chapters, take ?? WordSortingService.DefaultTake);
@@ -49,23 +49,5 @@ public static class SortingEndpoints
             var userId = await currentUser.GetIdAsync();
             return Results.Ok(await sorting.GetRecentAsync(userId, take ?? 10));
         });
-    }
-
-    /// <summary>«1,2,3» → [1, 2, 3]. Порожній або кривий рядок означає «вся книжка».</summary>
-    private static List<long>? ParseChapterIds(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return null;
-        }
-
-        var ids = raw
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(part => long.TryParse(part, out var id) ? id : (long?)null)
-            .Where(id => id.HasValue)
-            .Select(id => id!.Value)
-            .ToList();
-
-        return ids.Count == 0 ? null : ids;
     }
 }

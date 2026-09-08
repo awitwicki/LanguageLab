@@ -42,10 +42,18 @@ const ING_HOMOGRAPH_KEEP = new Set([
   'painting', 'setting', 'something', 'string', 'thing', 'wedding', 'writing',
 ])
 
+/**
+ * Апостроф лишається в слові (не вирізається як звичайна пунктуація):
+ * інакше "don't"/"wasn't" стають "dont"/"wasnt" — валідними на вигляд
+ * словами, і `isRejected` (тільки [a-z]) уже не впізнає в них скорочення.
+ * Книги здебільшого пишуть апостроф типографським символом (’), тож він
+ * спершу нормалізується до звичайного '.
+ */
 export function cleanWord(word: string): string {
   return word
     .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
+    .replace(/[‘’]/g, "'")
+    .replace(/[^\w\s'-]/g, '')
     .replace(/^[-_'"]+|[-_'"]+$/g, '')
 }
 

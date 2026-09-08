@@ -1,0 +1,217 @@
+.training-nav {
+  margin: -8px 0 12px -10px;
+}
+
+/* Картки: той самий груповий список, що й глави на екрані словника. */
+.cards {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+
+.cards-list {
+  width: 100%;
+  max-width: 640px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.cards-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  padding: 12px 16px;
+}
+
+.cards-row + .cards-row {
+  border-top: 1px solid var(--hairline);
+}
+
+.cards-word {
+  font-weight: 600;
+}
+
+.cards-translation {
+  color: var(--text-2);
+}
+
+.quiz-notice {
+  margin: -16px 0 12px;
+}
+
+/* Картка квізу — та ж поверхня, що й картка сортування; клас свій, щоб не ділити CSS між екранами. */
+.quiz-card {
+  display: grid;
+  gap: 24px;
+  justify-items: center;
+  padding: 48px 32px 28px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-card);
+}
+
+.quiz-prompt {
+  font-size: 56px;
+  line-height: 1.05;
+  font-weight: 600;
+  letter-spacing: -1.5px;
+  text-align: center;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  animation: quiz-in var(--dur) var(--ease);
+}
+
+@keyframes quiz-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  width: 100%;
+  max-width: 640px;
+}
+
+.option {
+  height: auto;
+  min-height: 44px;
+  padding: 10px 14px;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: normal;
+}
+
+.option kbd {
+  flex: none;
+}
+
+.option-label {
+  min-width: 0;
+}
+
+/* Єдине місце з семантичною заливкою на цьому екрані — результат відповіді. */
+.option.is-correct {
+  background: color-mix(in srgb, var(--known) 22%, transparent);
+  color: color-mix(in srgb, var(--known) 65%, var(--text));
+  opacity: 1;
+}
+
+.option.is-wrong {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: color-mix(in srgb, var(--danger) 65%, var(--text));
+  opacity: 1;
+}
+
+.quiz-result {
+  font-size: var(--fs-headline);
+  font-weight: 600;
+  text-align: center;
+}
+
+.quiz-result.is-correct {
+  color: color-mix(in srgb, var(--known) 70%, var(--text));
+}
+
+.quiz-result.is-wrong {
+  color: color-mix(in srgb, var(--danger) 70%, var(--text));
+}
+
+.quiz-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.summary {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+}
+
+.summary-badge {
+  font-size: var(--fs-headline);
+  font-weight: 600;
+}
+
+.summary-badge.pass {
+  color: color-mix(in srgb, var(--known) 70%, var(--text));
+}
+
+.summary-badge.fail {
+  color: color-mix(in srgb, var(--danger) 70%, var(--text));
+}
+
+.summary-table {
+  width: 100%;
+  max-width: 760px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.summary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.4fr) 44px 70px 72px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  font-size: var(--fs-body);
+}
+
+.summary-row + .summary-row {
+  border-top: 1px solid var(--hairline);
+}
+
+.summary-word {
+  font-weight: 600;
+}
+
+.summary-translation,
+.summary-box,
+.summary-due,
+.summary-score-cell {
+  color: var(--text-2);
+  font-size: var(--fs-footnote);
+}
+
+.summary-row:not(.clean) .summary-score-cell {
+  color: color-mix(in srgb, var(--danger) 70%, var(--text));
+}
+
+.summary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 800px) {
+  .quiz-prompt {
+    font-size: 40px;
+  }
+
+  .options {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .summary-box,
+  .summary-due,
+  .summary-score-cell {
+    grid-column: span 1;
+  }
+}

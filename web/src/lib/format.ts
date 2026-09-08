@@ -43,3 +43,31 @@ export function wordsLabel(n: number): string {
 export function chaptersLabel(n: number): string {
   return `${formatInt(n)} ${pluralUk(n, ['глава', 'глави', 'глав'])}`
 }
+
+const DAY_MS = 86_400_000
+
+/**
+ * Термін наступного показу для підсумку тренування. Порівнюємо UTC-доби, а не
+ * локальні: Leitner ставить DueAt у UTC, і «завтра» має означати наступну добу сервера.
+ */
+export function formatDue(dueAt: string | null, isLearned: boolean, now: Date): string {
+  if (isLearned || dueAt === null) {
+    return 'вивчено'
+  }
+
+  const due = new Date(dueAt)
+  const dueDay = Math.floor(due.getTime() / DAY_MS)
+  const today = Math.floor(now.getTime() / DAY_MS)
+
+  if (dueDay === today) {
+    return 'сьогодні'
+  }
+
+  if (dueDay === today + 1) {
+    return 'завтра'
+  }
+
+  const dd = String(due.getUTCDate()).padStart(2, '0')
+  const mm = String(due.getUTCMonth() + 1).padStart(2, '0')
+  return `${dd}.${mm}`
+}

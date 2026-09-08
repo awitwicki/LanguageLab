@@ -6,12 +6,22 @@ export interface DictionaryListItem {
   sortedCount: number
 }
 
+/** Розклад слів скоупу по боксах Leitner. boxes: індекс 0 = бокс 1, лише не вивчені; вивчені — learned. */
+export interface LearningProgress {
+  notStarted: number
+  boxes: number[]
+  learned: number
+  total: number
+}
+
 export interface ChapterView {
   id: number
   order: number
   title: string
   wordsCount: number
   sortedCount: number
+  learnableCount: number
+  learning: LearningProgress
 }
 
 export interface TopWord {
@@ -25,6 +35,9 @@ export interface DictionaryDetail {
   name: string
   wordsCount: number
   sortedCount: number
+  learnableCount: number
+  dueCount: number
+  learning: LearningProgress
   chapters: ChapterView[]
   topWords: TopWord[]
 }
@@ -78,6 +91,81 @@ export interface RecentWords {
   unknown: RecentWord[]
 }
 
+export type TrainingMode = 'newBatch' | 'review'
+
+export type QuestionDirection = 'enToUa' | 'uaToEn'
+
+export interface BatchWord {
+  wordPairId: number
+  word: string
+  translation: string
+}
+
+export interface TrainingStarted {
+  trainingId: number
+  mode: TrainingMode
+  words: BatchWord[]
+  totalQuestions: number
+}
+
+export interface BatchCandidate {
+  wordPairId: number
+  word: string
+  translation: string
+  /** Частота в тому скоупі, який тренуємо: по главі або по книжці. */
+  frequency: number
+}
+
+export interface BatchPreview {
+  learning: LearningProgress
+  learnableCount: number
+  candidates: BatchCandidate[]
+}
+
+export interface QuestionOption {
+  wordPairId: number
+  label: string
+}
+
+export interface QuestionDto {
+  id: number
+  wordPairId: number
+  direction: QuestionDirection
+  prompt: string
+  options: QuestionOption[]
+}
+
+export interface NextQuestion {
+  question: QuestionDto | null
+  answered: number
+  total: number
+}
+
+export interface AnswerResult {
+  isCorrect: boolean
+  correctWordPairId: number
+  word: string
+  translation: string
+}
+
+export interface WordResult {
+  word: string
+  translation: string
+  correct: number
+  total: number
+  box: number
+  dueAt: string | null
+  isLearned: boolean
+}
+
+export interface TrainingSummary {
+  correct: number
+  total: number
+  ratio: number
+  passed: boolean
+  words: WordResult[]
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   const response = await fetch(path, {
     ...init,
@@ -129,4 +217,50 @@ export const api = {
 
   getRecent: (take = 10) =>
     request<RecentWords>(`/api/sorting/recent?take=${take}`) as Promise<RecentWords>,
+
+  // 204 (нема слів / нема прострочених / нема помилок) приходить як null — це стан, не помилка.
+  // wordPairIds — «що бачив у превью, те й тренуєш»; без них сервер бере той самий топ за частотою.
+  startNewBatch: (dictionaryId: number, chapterIds: number[] | null, batchSize: number, wordPairIds: number[] | null = null) =>
+    request<TrainingStarted>('/api/training/new-batch', {
+      method: 'POST',
+      body: JSON.stringify({
+        dictionaryId,
+        chapterIds: chapterIds && chapterIds.length > 0 ? chapterIds : null,
+        batchSize,
+        wordPairIds: wordPairIds && wordPairIds.length > 0 ? wordPairIds : null,
+      }),
+    }),
+
+  previewBatch: (dictionaryId: number, chapterIds: number[] | null, take: number) => {
+    const params = new URLSearchParams({ dictionaryId: String(dictionaryId), take: String(take) })
+
+    if (chapterIds && chapterIds.length > 0) {
+      params.set('chapterIds', chapterIds.join(','))
+    }
+
+    return request<BatchPreview>(`/api/training/preview?${params}`) as Promise<BatchPreview>
+  },
+
+  startReview: () => request<TrainingStarted>('/api/training/review', { method: 'POST' }),
+
+  retry: (trainingId: number) =>
+    request<TrainingStarted>(`/api/training/${trainingId}/retry`, { method: 'POST' }),
+
+  nextQuestion: (trainingId: number) =>
+    request<NextQuestion>(`/api/training/${trainingId}/next`) as Promise<NextQuestion>,
+
+  answer: (trainingId: number, questionId: number, pickedWordPairId: number) =>
+    request<AnswerResult>(`/api/training/${trainingId}/answer`, {
+      method: 'POST',
+      body: JSON.stringify({ questionId, pickedWordPairId }),
+    }),
+
+  markKnown: (trainingId: number, questionId: number) =>
+    request<{ word: string }>(`/api/training/${trainingId}/known`, {
+      method: 'POST',
+      body: JSON.stringify({ questionId }),
+    }),
+
+  finish: (trainingId: number) =>
+    request<TrainingSummary>(`/api/training/${trainingId}/finish`, { method: 'POST' }) as Promise<TrainingSummary>,
 }

@@ -21,4 +21,13 @@ describe('SortingProgress', () => {
     expect(container.querySelector('.percent')?.textContent).toBe('100%')
     expect(container.querySelector('.counts')?.textContent).toBe('7 з 7 слів, залишилось 0')
   })
+
+  it('counts замінює стандартний підпис під шкалою', async () => {
+    const { container } = await render(
+      <SortingProgress scope="Wool" title="Holston" sorted={3} total={10} counts="Питання 4 з 10" />,
+    )
+
+    expect(container.querySelector('.counts')?.textContent).toBe('Питання 4 з 10')
+    expect(container.querySelector('.percent')?.textContent).toBe('30%')
+  })
 })

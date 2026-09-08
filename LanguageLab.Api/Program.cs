@@ -17,6 +17,7 @@ builder.Services.AddScoped<WordSortingService>();
 builder.Services.AddScoped<WordSelectionService>();
 builder.Services.AddScoped<TrainingSessionService>();
 builder.Services.AddScoped<DictionaryStatsService>();
+builder.Services.AddScoped<LearningProgressService>();
 
 builder.Services.AddRequestDecompression();
 
@@ -46,6 +47,7 @@ app.UseStaticFiles();
 
 app.MapDictionaryEndpoints();
 app.MapSortingEndpoints();
+app.MapTrainingEndpoints();
 
 // SPA має власний роутинг: усе, що не /api і не файл, віддаємо index.html.
 app.MapFallbackToFile("index.html");

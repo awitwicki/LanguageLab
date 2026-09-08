@@ -8,11 +8,36 @@
   color: var(--text-2);
 }
 
+.dict-learning {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+/* Глави ліворуч, топ слів праворуч; на вузькому екрані — одна колонка, глави першими (порядок DOM). */
+.dict-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 8px 40px;
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .dict-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .dict-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 44px;
+}
+
+.dict-actions-hint {
+  margin: -32px 0 44px;
 }
 
 .section {
@@ -72,7 +97,26 @@
   overflow: hidden;
 }
 
+/* Рядок глави — дві окремі кнопки без вкладення: основна зона (сортування) і «Вправа». */
 .chapter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.chapter-row + .chapter-row {
+  border-top: 1px solid var(--hairline);
+}
+
+/* Третій рядок глави: шкала Leitner під обома кнопками. */
+.chapter-learning {
+  grid-column: 1 / -1;
+  padding: 0 16px 12px;
+}
+
+.chapter-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
@@ -84,16 +128,14 @@
   transition: background-color var(--dur) var(--ease);
 }
 
-.chapter-row + .chapter-row {
-  border-top: 1px solid var(--hairline);
-}
-
-.chapter-row:focus-visible {
-  outline-offset: -2px;
-}
-
-.chapter-row:hover {
+.chapter-main:hover {
   background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+/* Контейнер обрізає все за межами (overflow: hidden) — кільце фокуса малюємо всередину. */
+.chapter-main:focus-visible,
+.chapter-train:focus-visible {
+  outline-offset: -2px;
 }
 
 .chapter-text {

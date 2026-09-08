@@ -13,8 +13,8 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 
 - `LanguageLab.Domain/` — entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces. No dependencies on infrastructure.
 - `LanguageLab.Infrastructure/` — EF Core `ApplicationDbContext`, PostgreSQL provider, migrations.
-- `LanguageLab.Application/` — сервіси поверх домену: вибірка слів, сесії тренування, імпорт книжок, сортування. Використовуються API.
-- `LanguageLab.Api/` — ASP.NET Core Minimal API + роздача SPA. Веде міграції БД.
+- `LanguageLab.Application/` — сервіси поверх домену: вибірка слів, сесії тренування, імпорт книжок, сортування, прогрес Leitner по скоупу (`LearningProgressService`). Використовуються API.
+- `LanguageLab.Api/` — ASP.NET Core Minimal API + роздача SPA. Веде міграції БД. Ендпоінти: `/api/dictionaries`, `/api/sorting`, `/api/training` (Leitner-квіз поверх `TrainingSessionService`; черга питань живе в БД); `GET /api/training/preview` — шкала скоупу + кандидати батча за частотою, `new-batch` приймає явні `wordPairIds`.
 - `web/` — React + Vite SPA: імпорт fb2 у браузері, статистика словника, сортування слів. `src/layout/` (оболонка: топбар + сайдбар), `src/screens/`, `src/components/`, `src/lib/` (форматери), тести `*.test.ts(x)` поруч із кодом (vitest + jsdom, хелпер `src/test/render.ts`). Деталі — у [web/README.md](web/README.md).
 - `extract.py` — Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictionaries under `dictionaries/`.
 
@@ -22,6 +22,8 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 
 - Postgres via `compose.yaml`. `LanguageLab.Api` reads `ConnectionStrings:DefaultConnection` and `WebUser:TelegramId` from `appsettings.json`/`appsettings.Development.json` (the latter is gitignored, local only); in Docker the same keys come from env vars via the `__` convention (`ConnectionStrings__DefaultConnection`, `WebUser__TelegramId`).
 - Migrations run automatically on startup (`dbContext.Database.MigrateAsync()` in [Program.cs:39](LanguageLab.Api/Program.cs#L39)).
+- Тренування вимагає непорожнього `WordPair.Translation` (і для слів батча, і для дистракторів). Переклади для полиці «не знаю» залито одноразово 2026-09-07 (`result/translations.txt`, локально); автопереклад — у README TODO.
+- Батч = найчастіші learnable-слова скоупу (частота глави або книжки), детерміновано; веб показує превью й передає `wordPairIds` явно.
 
 ## Adding a migration
 

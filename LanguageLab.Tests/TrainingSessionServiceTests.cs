@@ -558,4 +558,236 @@ public class TrainingSessionServiceTests
         Assert.Equal(TrainingSessionService.NewBatchRepeats + TrainingSessionService.ReviewRepeats, afterReview.CorrectCount);
         Assert.Equal(0, afterReview.WrongCount);
     }
+
+    [Fact]
+    public async Task StartNewBatch_WithBatchSizeTen_CreatesTwentyQuestions()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, chapterIds: null, batchSize: 10);
+
+        Assert.NotNull(training);
+        var questions = await db.TrainingQuestions.Where(q => q.TrainingId == training.Id).ToListAsync();
+        Assert.Equal(20, questions.Count);
+        Assert.Equal(10, questions.Select(q => q.WordPairId).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task StartNewBatch_ClampsBatchSizeBelowOneToOne()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, chapterIds: null, batchSize: 0);
+
+        Assert.NotNull(training);
+        Assert.Equal(2, await db.TrainingQuestions.CountAsync(q => q.TrainingId == training.Id));
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithChapterScope_UsesOnlyWordsOfThatChapter()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.Add(new Chapter { Id = 1, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 3 });
+        db.ChapterWords.AddRange(
+            new ChapterWord { ChapterId = 1, WordPairId = 1, Count = 1 },
+            new ChapterWord { ChapterId = 1, WordPairId = 2, Count = 1 },
+            new ChapterWord { ChapterId = 1, WordPairId = 3, Count = 1 });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, chapterIds: [1], batchSize: 10);
+
+        Assert.NotNull(training);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(new[] { 1L, 2L, 3L }, wordIds.OrderBy(id => id));
+        Assert.Equal(6, await db.TrainingQuestions.CountAsync(q => q.TrainingId == training.Id));
+    }
+
+    [Fact]
+    public async Task GetNextQuestionView_ReturnsOptionsInOrderAndCounters()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+
+        Assert.NotNull(view.Question);
+        Assert.Equal(0, view.Answered);
+        Assert.Equal(10, view.Total);
+        Assert.Equal(view.Question.OptionIds, view.Options.Select(o => o.Id).ToList());
+        Assert.Contains(view.Options, o => o.Id == view.Question.WordPairId);
+
+        await service.AnswerAsync(view.Question.Id, view.Question.WordPairId, Now);
+
+        var next = await service.GetNextQuestionViewAsync(training.Id);
+        Assert.NotNull(next.Question);
+        Assert.Equal(1, next.Answered);
+        Assert.Equal(10, next.Total);
+        Assert.NotEqual(view.Question.Id, next.Question.Id);
+    }
+
+    [Fact]
+    public async Task GetNextQuestionView_TotalShrinksAfterMarkKnown()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+
+        await service.MarkKnownAsync(view.Question!.Id, Now);
+
+        var next = await service.GetNextQuestionViewAsync(training.Id);
+        // Слово стоїть у черзі двічі — обидва його питання зникли.
+        Assert.Equal(8, next.Total);
+        Assert.Equal(0, next.Answered);
+    }
+
+    [Fact]
+    public async Task GetNextQuestionView_ReinsertsCorrectAnswerWhenItVanishedFromOptions()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var question = (await service.GetNextQuestionAsync(training.Id))!;
+
+        question.OptionIds = question.OptionIds.Where(id => id != question.WordPairId).ToList();
+        await db.SaveChangesAsync();
+
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+
+        Assert.Equal(question.WordPairId, view.Options[0].Id);
+        Assert.Equal(question.OptionIds.Count + 1, view.Options.Count);
+    }
+
+    [Fact]
+    public async Task GetNextQuestionView_ReportsExhaustedQueueWithFinalCounters()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+
+        await AnswerEverythingAsync(service, training.Id);
+
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+        Assert.Null(view.Question);
+        Assert.Empty(view.Options);
+        Assert.Equal(10, view.Answered);
+        Assert.Equal(10, view.Total);
+    }
+
+    [Fact]
+    public async Task GetBatchWords_ReturnsEachWordOnceInAlphabeticalOrder()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+
+        var words = await service.GetBatchWordsAsync(training.Id);
+
+        Assert.Equal(5, words.Count);
+        Assert.Equal(5, words.Select(w => w.Id).Distinct().Count());
+        Assert.Equal(words.Select(w => w.Word).OrderBy(w => w).ToList(), words.Select(w => w.Word).ToList());
+    }
+
+    [Fact]
+    public async Task Find_ReturnsSessionOnlyForItsOwner()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+
+        Assert.NotNull(await service.FindAsync(training.Id, UserId));
+        Assert.Null(await service.FindAsync(training.Id, userId: 999));
+        Assert.Null(await service.FindAsync(trainingId: 12345, UserId));
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithExplicitIds_TrainsExactlyThose()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(
+            UserId, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3, 7, 11]);
+
+        Assert.NotNull(training);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(new long[] { 3, 7, 11 }, wordIds.OrderBy(id => id));
+        Assert.Equal(6, await db.TrainingQuestions.CountAsync(q => q.TrainingId == training.Id));
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithExplicitIds_DropsWordsThatAreNoLongerLearnable()
+    {
+        await using var db = await ArrangeAsync();
+        db.WordProgresses.Add(new WordProgress { Id = 1, UserId = UserId, WordPairId = 3, Box = 1, DueAt = Now, LastSeenAt = Now });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartNewBatchAsync(
+            UserId, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3, 7]);
+
+        Assert.NotNull(training);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(new long[] { 7 }, wordIds);
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithExplicitIds_AllDropped_ReturnsNull()
+    {
+        await using var db = await ArrangeAsync();
+        db.UnknownWords.Remove(await db.UnknownWords.SingleAsync(u => u.WordPairId == 3));
+        await db.SaveChangesAsync();
+
+        Assert.Null(await Service(db).StartNewBatchAsync(
+            UserId, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3]));
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithExplicitIds_IsCappedByBatchSize()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(
+            UserId, DictionaryId, Now, chapterIds: null, batchSize: 2, wordPairIds: [1, 2, 3, 4]);
+
+        Assert.NotNull(training);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(new long[] { 1, 2 }, wordIds.OrderBy(id => id));
+    }
+
+    /// <summary>Без явних id батч має бути рівно тим, що показало б превью — інакше екран старту бреше.</summary>
+    [Fact]
+    public async Task StartNewBatch_WithoutIds_EqualsTopCandidates()
+    {
+        await using var db = await ArrangeAsync();
+        var selection = new WordSelectionService(db);
+
+        var expected = (await selection.GetCandidatesAsync(UserId, DictionaryId, null, take: 5))
+            .Select(c => c.WordPairId)
+            .OrderBy(id => id);
+
+        var training = await new TrainingSessionService(db, selection).StartNewBatchAsync(UserId, DictionaryId, Now);
+
+        var actual = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training!.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(expected, actual.OrderBy(id => id));
+    }
 }

@@ -32,6 +32,16 @@ public sealed record TrainingStats(
     int Wrong);
 
 /// <summary>
+/// Наступне питання для UI: варіанти в порядку OptionIds і лічильники сесії.
+/// Question == null означає, що черга вичерпана — лічильники при цьому фінальні.
+/// </summary>
+public sealed record QuestionView(
+    TrainingQuestion? Question,
+    IReadOnlyList<WordPair> Options,
+    int Answered,
+    int Total);
+
+/// <summary>
 /// Життєвий цикл однієї сесії: створення черги питань, прийом відповідей і підсумкова
 /// оцінка за Leitner. Черга генерується наперед і лежить у БД, тому бот можна
 /// перезапустити посеред квізу, а callback_data вміщає лише два id.
@@ -41,6 +51,8 @@ public class TrainingSessionService
     public const int NewBatchRepeats = 2;
     public const int ReviewRepeats = 1;
     public const double PassThreshold = 0.8;
+    public const int MinBatchSize = 1;
+    public const int MaxBatchSize = WordSelectionService.MaxCandidates;
 
     private readonly ApplicationDbContext _dbContext;
     private readonly WordSelectionService _selection;
@@ -67,15 +79,28 @@ public class TrainingSessionService
         return user;
     }
 
-    public async Task<Training?> StartNewBatchAsync(long userId, long dictionaryId, DateTime nowUtc)
+    public async Task<Training?> StartNewBatchAsync(
+        long userId,
+        long dictionaryId,
+        DateTime nowUtc,
+        IReadOnlyList<long>? chapterIds = null,
+        int batchSize = WordSelectionService.NewBatchSize,
+        IReadOnlyList<long>? wordPairIds = null)
     {
-        var words = await _selection.GetNewBatchAsync(userId, dictionaryId, WordSelectionService.NewBatchSize, _rng);
+        batchSize = Math.Clamp(batchSize, MinBatchSize, MaxBatchSize);
+
+        // Явні id — «що бачив у превью, те й тренуєш»; без них — той самий топ за частотою, що й у превью.
+        var words = wordPairIds is { Count: > 0 }
+            ? (await _selection.GetLearnableByIdsAsync(userId, dictionaryId, chapterIds, wordPairIds)).Take(batchSize).ToList()
+            : await _selection.GetNewBatchAsync(userId, dictionaryId, batchSize, chapterIds);
 
         if (words.Count == 0)
         {
             return null;
         }
 
+        // Дистрактори — з усієї книжки, а не лише з глави: варіанти природніші,
+        // а маленька глава не лишає квіз без валідних дистракторів.
         var pool = await _selection.GetDistractorPoolAsync(dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
@@ -131,6 +156,58 @@ public class TrainingSessionService
             .Where(q => q.TrainingId == trainingId && q.IsCorrect == null)
             .OrderBy(q => q.Order)
             .FirstOrDefaultAsync();
+
+    public Task<Training?> FindAsync(long trainingId, long userId) =>
+        _dbContext.Trainings.FirstOrDefaultAsync(t => t.Id == trainingId && t.UserId == userId);
+
+    /// <summary>Слова сесії для фази карток — по одному разу, за алфавітом.</summary>
+    public async Task<IReadOnlyList<WordPair>> GetBatchWordsAsync(long trainingId)
+    {
+        var wordIds = await _dbContext.TrainingQuestions
+            .Where(q => q.TrainingId == trainingId)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+
+        return await _dbContext.Words
+            .Where(w => wordIds.Contains(w.Id))
+            .OrderBy(w => w.Word)
+            .ToListAsync();
+    }
+
+    /// <summary>
+    /// OptionIds — звичайний масив без зовнішнього ключа: слово могло зникнути після генерації
+    /// черги. Зниклі id пропускаємо, а правильну відповідь підставляємо назад, якщо її не лишилось.
+    /// </summary>
+    public async Task<QuestionView> GetNextQuestionViewAsync(long trainingId)
+    {
+        var total = await _dbContext.TrainingQuestions.CountAsync(q => q.TrainingId == trainingId);
+        var answered = await _dbContext.TrainingQuestions.CountAsync(q => q.TrainingId == trainingId && q.IsCorrect != null);
+
+        var question = await GetNextQuestionAsync(trainingId);
+
+        if (question == null)
+        {
+            return new QuestionView(null, [], answered, total);
+        }
+
+        var found = await _dbContext.Words
+            .Where(w => question.OptionIds.Contains(w.Id))
+            .ToListAsync();
+
+        var options = question.OptionIds
+            .Select(id => found.FirstOrDefault(w => w.Id == id))
+            .Where(w => w is not null)
+            .Select(w => w!)
+            .ToList();
+
+        if (options.All(w => w.Id != question.WordPairId))
+        {
+            options.Insert(0, question.WordPair);
+        }
+
+        return new QuestionView(question, options, answered, total);
+    }
 
     public async Task<AnswerOutcome?> AnswerAsync(long questionId, long pickedWordPairId, DateTime nowUtc)
     {

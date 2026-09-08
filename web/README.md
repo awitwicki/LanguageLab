@@ -13,11 +13,12 @@ npm run build    # tsc -b && vite build → dist/
 ## Структура
 
 - `src/layout/` — `AppShell` (топбар + сайдбар + контент), `TopBar`, `Sidebar`.
-- `src/screens/` — екрани: `HomeScreen`, `ImportScreen`, `DictionaryScreen`, `SortingScreen`.
-- `src/components/` — `ProgressBar`, `SortingProgress`.
+- `src/screens/` — екрани: `HomeScreen`, `ImportScreen`, `DictionaryScreen`, `SortingScreen`, `TrainingStartScreen` (розмір батча), `TrainingScreen` (картки → квіз → підсумок).
+- `src/components/` — `ProgressBar`, `SortingProgress`, `LeitnerScale` (шкала боксів Leitner + зважений відсоток).
 - `src/lib/` — форматери чисел і підписів (`format.ts`, `labels.ts`).
 - `src/fb2/`, `src/worker/` — розбір fb2 і лематизація в браузері.
 - `src/sorting/useSortingQueue.ts` — буфер черги сортування з оптимістичними позначками.
+- `src/training/useBatchPreview.ts` — превью батча для екрана старту: кандидати за частотою, хрестик «знаю» / «Повернути», чиста `reconcileRows`.
 - `src/api/client.ts` — типи відповідей API і fetch-обгортки.
 
 ## Стилі

@@ -6,13 +6,17 @@ namespace LanguageLab.Api.Endpoints;
 
 public sealed record DictionaryListItem(long Id, string Name, int WordsCount, bool HasChapters, int SortedCount);
 
-public sealed record ChapterView(long Id, int Order, string Title, int WordsCount, int SortedCount);
+public sealed record ChapterView(
+    long Id, int Order, string Title, int WordsCount, int SortedCount, int LearnableCount, LearningProgress Learning);
 
 public sealed record DictionaryDetail(
     long Id,
     string Name,
     int WordsCount,
     int SortedCount,
+    int LearnableCount,
+    int DueCount,
+    LearningProgress Learning,
     IReadOnlyList<ChapterView> Chapters,
     IReadOnlyList<TopWord> TopWords);
 
@@ -48,9 +52,12 @@ public static class DictionaryEndpoints
             ApplicationDbContext db,
             WordSortingService sorting,
             DictionaryStatsService stats,
+            WordSelectionService selection,
+            LearningProgressService learningProgress,
             ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetIdAsync();
+            var now = DateTime.UtcNow;
 
             var dictionary = await db.Dictionaries
                 .Where(d => d.Id == id)
@@ -72,19 +79,38 @@ public static class DictionaryEndpoints
                 .ToDictionary(p => p.ChapterId);
 
             var whole = await sorting.GetQueueAsync(userId, id, chapterIds: null, take: 1);
-
             var topWords = await stats.GetTopWordsAsync(id);
+
+            // «До вивчення» = перекладене, на полиці «не знаю», ще не тренувалось —
+            // саме те, що потрапить у новий батч. По одному COUNT на главу, як і прогрес сортування.
+            var learnable = await selection.CountLearnableAsync(userId, id);
+            var due = await selection.CountDueAsync(userId, now);
+
+            // Розклад по боксах: книжка одним викликом, глави — ще двома запитами на всі одразу.
+            var learning = await learningProgress.GetAsync(userId, id);
+            var chapterLearning = await learningProgress.GetByChapterAsync(userId, id);
+
+            var chapterViews = new List<ChapterView>(chapters.Count);
+
+            foreach (var c in chapters)
+            {
+                var chapterLearnable = await selection.CountLearnableAsync(userId, id, [c.Id]);
+                chapterViews.Add(new ChapterView(
+                    c.Id, c.Order, c.Title, c.WordsCount,
+                    progress.TryGetValue(c.Id, out var p) ? p.Sorted : 0,
+                    chapterLearnable,
+                    chapterLearning.TryGetValue(c.Id, out var l) ? l : LearningProgress.Empty));
+            }
 
             return Results.Ok(new DictionaryDetail(
                 dictionary.Id,
                 dictionary.Name,
                 dictionary.WordsCount,
                 whole.Sorted,
-                chapters
-                    .Select(c => new ChapterView(
-                        c.Id, c.Order, c.Title, c.WordsCount,
-                        progress.TryGetValue(c.Id, out var p) ? p.Sorted : 0))
-                    .ToList(),
+                learnable,
+                due,
+                learning,
+                chapterViews,
                 topWords));
         });
 

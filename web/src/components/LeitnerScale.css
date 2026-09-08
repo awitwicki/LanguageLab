@@ -1,0 +1,90 @@
+.leitner {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.leitner-compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Той самий трек, що в ProgressBar; «не почато» — прозорий сегмент, крізь який видно трек. */
+.leitner-track {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.leitner-large .leitner-track {
+  height: 10px;
+  border-radius: 5px;
+}
+
+.leitner-seg {
+  display: block;
+  flex: 0 0 auto;
+  height: 100%;
+}
+
+/* Градієнт одного акценту: чим вищий бокс, тим густіший. Мішання з --surface дає непрозорі кольори в обох темах. */
+.leitner-learned {
+  background: var(--accent);
+}
+
+.leitner-box4 {
+  background: color-mix(in srgb, var(--accent) 80%, var(--surface));
+}
+
+.leitner-box3 {
+  background: color-mix(in srgb, var(--accent) 60%, var(--surface));
+}
+
+.leitner-box2 {
+  background: color-mix(in srgb, var(--accent) 40%, var(--surface));
+}
+
+.leitner-box1 {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+}
+
+.leitner-new {
+  background: transparent;
+}
+
+.leitner-compact .leitner-percent {
+  color: var(--text-2);
+}
+
+.leitner-large .leitner-percent {
+  color: var(--text);
+}
+
+.leitner-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.leitner-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.leitner-legend .is-empty {
+  opacity: 0.5;
+}
+
+.leitner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.leitner-dot.leitner-new {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}

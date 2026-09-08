@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chaptersLabel, formatInt, formatProgress, percentOf, pluralUk, wordsLabel } from './format'
+import { chaptersLabel, formatDue, formatInt, formatProgress, percentOf, pluralUk, wordsLabel } from './format'
 
 describe('percentOf', () => {
   it('0 з 0 — це 0%, а не NaN', () => {
@@ -60,5 +60,24 @@ describe('labels', () => {
 
   it('formatProgress — «X з Y»', () => {
     expect(formatProgress(500, 2000)).toBe('500 з 2 000')
+  })
+})
+
+describe('formatDue', () => {
+  const now = new Date('2026-09-07T12:00:00Z')
+
+  it('вивчене або без терміну — «вивчено»', () => {
+    expect(formatDue(null, false, now)).toBe('вивчено')
+    expect(formatDue('2026-09-08T00:00:00Z', true, now)).toBe('вивчено')
+  })
+
+  it('сьогодні та завтра — словами, за UTC-добою', () => {
+    expect(formatDue('2026-09-07T23:30:00Z', false, now)).toBe('сьогодні')
+    expect(formatDue('2026-09-08T00:10:00Z', false, now)).toBe('завтра')
+  })
+
+  it('далі — dd.MM', () => {
+    expect(formatDue('2026-09-14T12:00:00Z', false, now)).toBe('14.09')
+    expect(formatDue('2026-10-07T12:00:00Z', false, now)).toBe('07.10')
   })
 })

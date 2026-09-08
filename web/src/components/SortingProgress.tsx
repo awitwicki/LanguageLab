@@ -5,13 +5,15 @@ import './SortingProgress.css'
 interface Props {
   /** Назва словника — дрібно над заголовком. */
   scope: string
-  /** Що саме сортуємо: назва глави або «Уся книжка». */
+  /** Що саме сортуємо чи тренуємо: назва глави або «Уся книжка». */
   title: string
   sorted: number
   total: number
+  /** Підпис під шкалою. За замовчуванням — «X з Y слів, залишилось Z»; квіз передає «Питання N з M». */
+  counts?: string
 }
 
-export function SortingProgress({ scope, title, sorted, total }: Props) {
+export function SortingProgress({ scope, title, sorted, total, counts }: Props) {
   const percent = percentOf(sorted, total)
   const remaining = Math.max(0, total - sorted)
 
@@ -24,7 +26,7 @@ export function SortingProgress({ scope, title, sorted, total }: Props) {
       <p className="percent num">{percent}%</p>
       <ProgressBar sorted={sorted} total={total} showLabel={false} />
       <p className="counts num" aria-live="polite">
-        {formatProgress(sorted, total)} слів, залишилось {formatInt(remaining)}
+        {counts ?? `${formatProgress(sorted, total)} слів, залишилось ${formatInt(remaining)}`}
       </p>
     </section>
   )

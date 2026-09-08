@@ -70,9 +70,17 @@ def get_lemma(word: str, treebank_tag: str = '') -> str:
 
 
 def clean_word(word: str) -> str:
-    """Clean word from punctuation and convert to lowercase."""
-    # Remove punctuation except hyphens (for compound words)
-    cleaned = re.sub(r'[^\w\s-]', '', word.lower())
+    """Clean word from punctuation and convert to lowercase.
+
+    The apostrophe is kept (not stripped as generic punctuation): otherwise
+    "don't"/"wasn't" become "dont"/"wasnt" — valid-looking words that no
+    longer match the stopword list. Books mostly use the typographic
+    apostrophe (’), so it's normalized to a straight ' first.
+    """
+    normalized = word.lower().replace('‘', "'").replace('’', "'")
+
+    # Remove punctuation except hyphens and apostrophes (compounds/contractions)
+    cleaned = re.sub(r"[^\w\s'-]", '', normalized)
 
     # Remove any remaining non-alphabetic characters at the edges
     cleaned = cleaned.strip("-_'\"")
@@ -146,6 +154,13 @@ def is_valid_word(word: str) -> bool:
 
     # Skip stop words
     if cleaned_word in stop_words:
+        return False
+
+    # Skip contractions/possessives that survived cleaning without matching
+    # a known stop word (e.g. "that's", "world's") — an apostrophe here means
+    # it's not a plain word, and letting it through would add it to the
+    # vocabulary with the apostrophe still in it.
+    if "'" in cleaned_word:
         return False
 
     # Skip words that are too long (likely encoded strings or artifacts)

@@ -9,6 +9,14 @@ describe('cleanWord', () => {
   it('strips quotes and underscores from the edges', () => {
     expect(cleanWord('"silo"')).toBe('silo')
   })
+
+  it('keeps a straight apostrophe inside a contraction', () => {
+    expect(cleanWord("Don't")).toBe("don't")
+  })
+
+  it('normalizes a typographic apostrophe to a straight one', () => {
+    expect(cleanWord('wasn’t')).toBe("wasn't")
+  })
 })
 
 describe('splitCompoundWord', () => {
@@ -41,6 +49,12 @@ describe('isRejected', () => {
 
   it('keeps ordinary words', () => {
     expect(isRejected('silo')).toBe(false)
+  })
+
+  it('rejects contractions instead of leaking a stripped-apostrophe form', () => {
+    expect(isRejected(cleanWord('wasn’t'))).toBe(true)
+    expect(isRejected(cleanWord('you’re'))).toBe(true)
+    expect(isRejected(cleanWord("that's"))).toBe(true)
   })
 })
 
