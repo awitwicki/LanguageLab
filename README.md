@@ -130,6 +130,13 @@ algorithms (ES256K, EdDSA) reject the `profile` scope — since the app requests
 and the numeric Telegram id arrives via the `profile` scope's `id` claim, picking one of those
 algorithms would break sign-in in a way that looks identical to a claim-mapping bug.
 
+Telegram also caps the OAuth `state` parameter at 256 characters and answers `state too long`
+before the consent screen ever renders. The OIDC handler's default format protects the whole
+`AuthenticationProperties` — return url, correlation id, PKCE verifier — into roughly 410, so
+`ServerSideStateFormat` (`LanguageLab.Api/Auth/`) keeps them in process memory and sends only a
+43-character handle. That store is per-process: restarting the API mid-login costs the user a
+retry.
+
 ## Run
 
 ### With Docker (whole stack)

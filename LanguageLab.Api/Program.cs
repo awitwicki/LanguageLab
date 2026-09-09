@@ -38,6 +38,7 @@ if (string.IsNullOrWhiteSpace(telegram.ClientId) || string.IsNullOrWhiteSpace(te
 }
 
 builder.Services.AddSingleton(telegram);
+builder.Services.AddSingleton<ServerSideStateFormat>();
 
 builder.Services
     .AddAuthentication(options =>
@@ -121,6 +122,13 @@ builder.Services
         options.Events.OnTokenValidated = TelegramAuth.OnTokenValidatedAsync;
         options.Events.OnRemoteFailure = TelegramAuth.OnRemoteFailureAsync;
     });
+
+// Telegram rejects a `state` longer than 256 characters, and the handler's default format
+// packs the whole AuthenticationProperties into ~410 — see ServerSideStateFormat. It is wired
+// up out here rather than inside AddOpenIdConnect so the store comes from DI as a singleton:
+// an options reload rebuilds the options object, and that must not drop handshakes in flight.
+builder.Services.AddOptions<OpenIdConnectOptions>(TelegramAuth.Scheme)
+    .Configure<ServerSideStateFormat>((options, state) => options.StateDataFormat = state);
 
 builder.Services.AddAuthorization(options =>
     options.AddPolicy("Admin", policy => policy.RequireClaim(ClaimTypes.Role, nameof(UserRole.Admin))));
