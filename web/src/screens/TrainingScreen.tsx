@@ -134,7 +134,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
 
     try {
       const known = await api.markKnown(session.trainingId, next.question.id)
-      setNotice(known ? `${known.word} більше не з’явиться` : null)
+      setNotice(known ? `${known.word} won’t come up again` : null)
       await loadNext()
     } catch (e) {
       setError(String(e))
@@ -151,7 +151,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
       const nextSession = await api.retry(session.trainingId)
 
       if (!nextSession) {
-        setNotice('Помилок для повторення немає.')
+        setNotice('No mistakes to review.')
         return
       }
 
@@ -175,7 +175,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
       const nextSession = await api.startNewBatch(dictionaryId, chapterIds, batchSize)
 
       if (!nextSession) {
-        setNotice('Слів у цьому наборі більше немає.')
+        setNotice('No more words in this set.')
         return
       }
 
@@ -229,7 +229,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
           <p className="footnote">
             {dictionaryName} · {scopeTitle}
           </p>
-          <h1 className="large-title">Нові слова</h1>
+          <h1 className="large-title">New words</h1>
           <ul className="cards-list">
             {session.words.map((w) => (
               <li key={w.wordPairId} className="cards-row">
@@ -240,7 +240,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
           </ul>
           <div>
             <button type="button" className="btn btn-primary btn-lg" onClick={startQuiz}>
-              Почати квіз <kbd>Enter</kbd>
+              Start quiz <kbd>Enter</kbd>
             </button>
           </div>
         </section>
@@ -253,7 +253,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
             title={scopeTitle}
             sorted={next.answered}
             total={next.total}
-            counts={`Питання ${next.answered + 1} з ${next.total}`}
+            counts={`Question ${next.answered + 1} of ${next.total}`}
           />
 
           {notice && <p className="footnote quiz-notice">{notice}</p>}
@@ -287,7 +287,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
             {answer ? (
               <>
                 <p className={`quiz-result${answer.isCorrect ? ' is-correct' : ' is-wrong'}`} aria-live="polite">
-                  {answer.isCorrect ? 'Правильно' : `${answer.word} — ${answer.translation}`}
+                  {answer.isCorrect ? 'Correct' : `${answer.word} — ${answer.translation}`}
                 </p>
                 <div className="quiz-actions">
                   <button
@@ -297,14 +297,14 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
                     disabled={busy}
                     onClick={goNext}
                   >
-                    Далі <kbd>Enter</kbd>
+                    Next <kbd>Enter</kbd>
                   </button>
                 </div>
               </>
             ) : (
               <div className="quiz-actions">
                 <button type="button" className="btn btn-quiet" disabled={busy} onClick={markKnown}>
-                  Знаю
+                  Know
                 </button>
               </div>
             )}
@@ -312,7 +312,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
         </>
       )}
 
-      {phase === 'quiz' && !next?.question && !error && <p className="footnote">Завантажую…</p>}
+      {phase === 'quiz' && !next?.question && !error && <p className="footnote">Loading…</p>}
 
       {phase === 'summary' && summary && (
         <section className="summary">
@@ -321,14 +321,14 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
           </p>
 
           {summary.total === 0 ? (
-            <h1 className="large-title">Жодного питання не лишилось</h1>
+            <h1 className="large-title">No questions left</h1>
           ) : (
             <>
               <h1 className="large-title summary-score num">
-                {summary.correct} з {summary.total} · {percentOf(summary.correct, summary.total)}%
+                {summary.correct} of {summary.total} · {percentOf(summary.correct, summary.total)}%
               </h1>
               <p className={`summary-badge${summary.passed ? ' pass' : ' fail'}`}>
-                {summary.passed ? 'Пройдено' : 'Не пройдено'}
+                {summary.passed ? 'Passed' : 'Not passed'}
               </p>
 
               <ul className="summary-table">
@@ -343,7 +343,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
                       <span className="summary-word">{w.word}</span>
                       <span className="summary-translation">{w.translation}</span>
                       <span className="summary-score-cell num">{w.correct === w.total ? '' : `${w.correct}/${w.total}`}</span>
-                      <span className="summary-box num">бокс {w.box}</span>
+                      <span className="summary-box num">box {w.box}</span>
                       <span className="summary-due num">{formatDue(w.dueAt, w.isLearned, new Date())}</span>
                     </li>
                   ))}
@@ -356,16 +356,16 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
           <div className="summary-actions">
             {summary.words.some((w) => w.correct < w.total) && (
               <button type="button" className="btn btn-primary" disabled={busy} onClick={retry}>
-                Повторити помилки
+                Review mistakes
               </button>
             )}
             {batchSize !== null && (
               <button type="button" className="btn btn-secondary" disabled={busy} onClick={anotherBatch}>
-                Ще один батч
+                Another batch
               </button>
             )}
             <button type="button" className="btn btn-quiet" onClick={onBack}>
-              До словника
+              Back to dictionary
             </button>
           </div>
         </section>

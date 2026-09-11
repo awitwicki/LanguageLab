@@ -35,7 +35,8 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Irregular-verbs dictionary, split into 4 groups — the user will share a table; confirm the format/group details with the user before implementing
 - [ ] Top-100/200/500/1000 English word dictionaries, public
 - [ ] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
-- [ ] SPA copy sweep: parts of the UI are still Ukrainian (`Sidebar`, `ImportScreen`, `App` route titles) while newer screens are English
+- [x] SPA copy sweep: parts of the UI are still Ukrainian (`Sidebar`, `ImportScreen`, `App` route titles) while newer screens are English
+- [ ] Comment sweep: code comments are still Ukrainian in ~190 lines across `web/src` (plus `useBatchPreview.test.ts` test names), 36 backend `.cs` files (`Domain` mostly), `Program.cs` and the `Dockerfile` — comments only, no UI copy
 - [ ] Admin user list: pagination and search (`GET /api/admin/users` returns every row)
 - [x] Let a user delete their own account from the account menu (admins can already delete others)
 - [ ] Change a dictionary's visibility after import — `PATCH /api/dictionaries/{id}` exists, no UI entry point yet

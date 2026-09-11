@@ -20,8 +20,8 @@ export function LeitnerScale({ progress, size = 'compact' }: Props) {
   const summary = segments.map((s) => `${s.label} — ${formatInt(s.count)}`).join(', ')
 
   return (
-    <div className={`leitner leitner-${size}`} role="img" aria-label={`Вивчено ${percent}%: ${summary}`}>
-      {size === 'large' && <p className="leitner-percent headline num">{percent}% вивчено</p>}
+    <div className={`leitner leitner-${size}`} role="img" aria-label={`Learned ${percent}%: ${summary}`}>
+      {size === 'large' && <p className="leitner-percent headline num">{percent}% learned</p>}
 
       <div className="leitner-track">
         {segments

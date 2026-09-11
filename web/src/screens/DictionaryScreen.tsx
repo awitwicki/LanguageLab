@@ -47,7 +47,7 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
 
       // 204: між завантаженням екрана й кліком прострочені могли закритись іншою сесією.
       if (!started) {
-        setReviewNotice('На сьогодні повторювати нічого.')
+        setReviewNotice('Nothing to review today.')
         return
       }
 
@@ -64,7 +64,7 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
   }
 
   if (!detail) {
-    return <p className="footnote">Завантажую…</p>
+    return <p className="footnote">Loading…</p>
   }
 
   // Смужка частоти — відносно лідера, щоб топ читався як гістограма, а не як таблиця.
@@ -81,7 +81,7 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
         <ProgressBar sorted={detail.sortedCount} total={detail.wordsCount} />
         {detail.learning.total > 0 && (
           <div className="dict-learning">
-            <span className="footnote">Вивчено</span>
+            <span className="footnote">Learned</span>
             <LeitnerScale progress={detail.learning} />
           </div>
         )}
@@ -89,7 +89,7 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
 
       <div className="dict-actions">
         <button type="button" className="btn btn-primary" onClick={() => onSort(null, WHOLE_BOOK)}>
-          Сортувати всю книжку
+          Sort the whole book
         </button>
         <button
           type="button"
@@ -97,18 +97,18 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
           disabled={detail.learnableCount === 0}
           onClick={() => onTrain(null, WHOLE_BOOK)}
         >
-          Почати вправу
+          Start exercise
         </button>
         {detail.dueCount > 0 && (
           <button type="button" className="btn btn-secondary" disabled={reviewBusy} onClick={startReview}>
-            Повторити ({formatInt(detail.dueCount)})
+            Review ({formatInt(detail.dueCount)})
           </button>
         )}
       </div>
 
       {detail.learnableCount === 0 && (
         <p className="footnote dict-actions-hint">
-          Немає слів до вивчення: познач слова як «не знаю» під час сортування.
+          No words to learn yet: mark words as “don’t know” while sorting.
         </p>
       )}
 
@@ -118,8 +118,8 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
       <div className="dict-columns">
         {detail.chapters.length > 0 ? (
           <section className="section">
-            <h2 className="title">Глави</h2>
-            <p className="footnote">Назва глави — сортувати лише її; «Вправа» — тренувати лише її.</p>
+            <h2 className="title">Chapters</h2>
+            <p className="footnote">Choose a chapter to sort only it; “Exercise” trains only it.</p>
             <ul className="chapter-list">
               {detail.chapters.map((chapter) => {
                 const label = chapterLabel(chapter)
@@ -131,7 +131,7 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
                       <span className="chapter-text">
                         <span className="chapter-title">{label}</span>
                         <span className="chapter-sub num">
-                          {wordsLabel(chapter.wordsCount)} · {formatInt(chapter.learnableCount)} до вивчення
+                          {wordsLabel(chapter.wordsCount)} · {formatInt(chapter.learnableCount)} to learn
                         </span>
                       </span>
                       <span className="chapter-pct num">{percent}%</span>
@@ -143,11 +143,11 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
                       type="button"
                       className="btn btn-quiet chapter-train"
                       disabled={chapter.learnableCount === 0}
-                      title={chapter.learnableCount === 0 ? 'У главі немає слів до вивчення' : undefined}
-                      aria-label={`Вправа: ${label}`}
+                      title={chapter.learnableCount === 0 ? 'No words to learn in this chapter' : undefined}
+                      aria-label={`Exercise: ${label}`}
                       onClick={() => onTrain([chapter.id], label)}
                     >
-                      Вправа
+                      Exercise
                     </button>
                     {/* Третій рядок — поза кнопкою сортування, щоб шкала не засмічувала її accessible name. */}
                     {chapter.learning.total > 0 && (
@@ -161,12 +161,12 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
             </ul>
           </section>
         ) : (
-          <p className="footnote">Це плаский словник без глав — сортується лише цілком.</p>
+          <p className="footnote">This dictionary has no chapters — it can only be sorted as a whole.</p>
         )}
 
         {detail.topWords.length > 0 && (
           <section className="section">
-            <h2 className="title">Найчастіші слова</h2>
+            <h2 className="title">Most frequent words</h2>
             <ol className="top-words">
               {detail.topWords.map((item, index) => (
                 <li key={item.wordPairId} className="top-word">

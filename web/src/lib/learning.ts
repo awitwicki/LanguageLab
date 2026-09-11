@@ -33,12 +33,12 @@ export interface Segment {
 /** Шість сегментів у порядку показу: від «вивчено» до «не почато». Бокс 5 у процесі складено з вивченими — він за одну правильну відповідь від IsLearned. */
 export function learningSegments(p: LearningProgress): Segment[] {
   const counts: [SegmentKey, string, number][] = [
-    ['learned', 'вивчено', p.learned + (p.boxes[4] ?? 0)],
-    ['box4', 'бокс 4', p.boxes[3] ?? 0],
-    ['box3', 'бокс 3', p.boxes[2] ?? 0],
-    ['box2', 'бокс 2', p.boxes[1] ?? 0],
-    ['box1', 'бокс 1', p.boxes[0] ?? 0],
-    ['new', 'не почато', p.notStarted],
+    ['learned', 'learned', p.learned + (p.boxes[4] ?? 0)],
+    ['box4', 'box 4', p.boxes[3] ?? 0],
+    ['box3', 'box 3', p.boxes[2] ?? 0],
+    ['box2', 'box 2', p.boxes[1] ?? 0],
+    ['box1', 'box 1', p.boxes[0] ?? 0],
+    ['new', 'not started', p.notStarted],
   ]
 
   return counts.map(([key, label, count]) => ({ key, label, count, share: p.total > 0 ? count / p.total : 0 }))

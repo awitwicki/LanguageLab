@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import type { RecentWord } from '../api/client'
 import { SortingProgress } from '../components/SortingProgress'
-import { formatInt, pluralUk } from '../lib/format'
+import { formatInt, plural } from '../lib/format'
 import { useSortingQueue } from '../sorting/useSortingQueue'
 import './SortingScreen.css'
 
@@ -48,10 +48,10 @@ export function SortingScreen({ dictionaryId, dictionaryName, chapterIds, scopeT
       {error && <p className="error">{error}</p>}
 
       <div className="sorter">
-        <Column kind="unknown" title="Не знаю" words={unknown} />
+        <Column kind="unknown" title="Don't know" words={unknown} />
 
         <div className="card">
-          {!loaded && <p className="footnote">Завантажую…</p>}
+          {!loaded && <p className="footnote">Loading…</p>}
 
           {loaded && current && (
             <>
@@ -63,8 +63,8 @@ export function SortingScreen({ dictionaryId, dictionaryName, chapterIds, scopeT
                   показати нічого, ніж збрехати «зустрічається 0 разів». */}
               {current.frequency > 0 ? (
                 <p className="frequency num">
-                  зустрічається {formatInt(current.frequency)}{' '}
-                  {pluralUk(current.frequency, ['раз', 'рази', 'разів'])}
+                  occurs {formatInt(current.frequency)}{' '}
+                  {plural(current.frequency, 'time', 'times')}
                 </p>
               ) : (
                 <p className="frequency">&nbsp;</p>
@@ -72,19 +72,19 @@ export function SortingScreen({ dictionaryId, dictionaryName, chapterIds, scopeT
 
               <div className="card-actions">
                 <button type="button" className="btn btn-lg btn-unknown" onClick={() => mark('unknown')}>
-                  Не знаю <kbd>←</kbd>
+                  Don't know <kbd>←</kbd>
                 </button>
                 <button type="button" className="btn btn-lg btn-known" onClick={() => mark('known')}>
-                  Знаю <kbd>→</kbd>
+                  Know <kbd>→</kbd>
                 </button>
               </div>
 
               <div className="card-actions-quiet">
                 <button type="button" className="btn btn-quiet" onClick={undo}>
-                  Скасувати <kbd>↑</kbd>
+                  Undo <kbd>↑</kbd>
                 </button>
                 <button type="button" className="btn btn-quiet" onClick={() => mark('excluded')}>
-                  Виключити <kbd>↓</kbd>
+                  Exclude <kbd>↓</kbd>
                 </button>
               </div>
             </>
@@ -92,16 +92,16 @@ export function SortingScreen({ dictionaryId, dictionaryName, chapterIds, scopeT
 
           {loaded && !current && (
             <div className="card-done">
-              <p className="title">Усе посортовано</p>
-              <p className="footnote">У цьому наборі не лишилось слів.</p>
+              <p className="title">All sorted</p>
+              <p className="footnote">No words left in this set.</p>
               <button type="button" className="btn btn-secondary" onClick={onBack}>
-                До словника
+                Back to dictionary
               </button>
             </div>
           )}
         </div>
 
-        <Column kind="known" title="Знаю" words={known} />
+        <Column kind="known" title="Know" words={known} />
       </div>
     </>
   )

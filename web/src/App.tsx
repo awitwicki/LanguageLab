@@ -29,7 +29,7 @@ type Route =
     }
   | { name: 'admin' }
 
-const REVIEW_TITLE = 'Повторення'
+const REVIEW_TITLE = 'Review'
 
 export default function App() {
   const { state, loginFailed, signOut, deleteAccount, dismissBanned } = useAuth()
@@ -65,7 +65,7 @@ export default function App() {
     void reload()
   }, [reload, routeKey, state.status])
 
-  const activeName = dictionaries?.find((d) => d.id === activeId)?.name ?? 'Словник'
+  const activeName = dictionaries?.find((d) => d.id === activeId)?.name ?? 'Dictionary'
 
   const openDictionary = (id: number) => setRoute({ name: 'dictionary', id })
 

@@ -13,16 +13,16 @@ const chapter = (order: number, title: string): ChapterView => ({
 })
 
 describe('chapterLabel', () => {
-  it('назва глави — як є', () => {
+  it('keeps a chapter title as is', () => {
     expect(chapterLabel(chapter(0, 'Holston'))).toBe('Holston')
   })
 
-  it('без назви — «Глава N», де N рахується з 1', () => {
-    expect(chapterLabel(chapter(0, ''))).toBe('Глава 1')
-    expect(chapterLabel(chapter(11, '   '))).toBe('Глава 12')
+  it('falls back to "Chapter N", counted from 1, when untitled', () => {
+    expect(chapterLabel(chapter(0, ''))).toBe('Chapter 1')
+    expect(chapterLabel(chapter(11, '   '))).toBe('Chapter 12')
   })
 
-  it('заголовок для всієї книжки', () => {
-    expect(WHOLE_BOOK).toBe('Уся книжка')
+  it('names the whole-book scope', () => {
+    expect(WHOLE_BOOK).toBe('Whole book')
   })
 })

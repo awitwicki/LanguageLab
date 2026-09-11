@@ -3,7 +3,7 @@ import { render } from '../test/render'
 import { SortingProgress } from './SortingProgress'
 
 describe('SortingProgress', () => {
-  it('показує відсоток, кількість і залишок', async () => {
+  it('shows the percent, the count and what is left', async () => {
     const { container } = await render(
       <SortingProgress scope="Wool" title="Holston" sorted={500} total={2000} />,
     )
@@ -11,23 +11,23 @@ describe('SortingProgress', () => {
     expect(container.querySelector('.scope')?.textContent).toBe('Wool')
     expect(container.querySelector('h1')?.textContent).toBe('Holston')
     expect(container.querySelector('.percent')?.textContent).toBe('25%')
-    expect(container.querySelector('.counts')?.textContent).toBe('500 з 2 000 слів, залишилось 1 500')
+    expect(container.querySelector('.counts')?.textContent).toBe('500 of 2 000 words, 1 500 left')
     expect(container.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('25')
   })
 
-  it('коли все посортовано — 100% і «залишилось 0»', async () => {
-    const { container } = await render(<SortingProgress scope="Wool" title="Уся книжка" sorted={7} total={7} />)
+  it('everything sorted — 100% and "0 left"', async () => {
+    const { container } = await render(<SortingProgress scope="Wool" title="Whole book" sorted={7} total={7} />)
 
     expect(container.querySelector('.percent')?.textContent).toBe('100%')
-    expect(container.querySelector('.counts')?.textContent).toBe('7 з 7 слів, залишилось 0')
+    expect(container.querySelector('.counts')?.textContent).toBe('7 of 7 words, 0 left')
   })
 
-  it('counts замінює стандартний підпис під шкалою', async () => {
+  it('counts replaces the default caption under the bar', async () => {
     const { container } = await render(
-      <SortingProgress scope="Wool" title="Holston" sorted={3} total={10} counts="Питання 4 з 10" />,
+      <SortingProgress scope="Wool" title="Holston" sorted={3} total={10} counts="Question 4 of 10" />,
     )
 
-    expect(container.querySelector('.counts')?.textContent).toBe('Питання 4 з 10')
+    expect(container.querySelector('.counts')?.textContent).toBe('Question 4 of 10')
     expect(container.querySelector('.percent')?.textContent).toBe('30%')
   })
 })

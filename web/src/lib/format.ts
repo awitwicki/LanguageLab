@@ -13,35 +13,20 @@ export function formatInt(n: number): string {
 }
 
 export function formatProgress(sorted: number, total: number): string {
-  return `${formatInt(sorted)} з ${formatInt(total)}`
+  return `${formatInt(sorted)} of ${formatInt(total)}`
 }
 
-/** Українська множина: [1 слово, 2 слова, 5 слів]; 11–19 — завжди третя форма. */
-export function pluralUk(n: number, forms: [string, string, string]): string {
-  const abs = Math.abs(n) % 100
-  const last = abs % 10
-
-  if (abs >= 11 && abs <= 19) {
-    return forms[2]
-  }
-
-  if (last === 1) {
-    return forms[0]
-  }
-
-  if (last >= 2 && last <= 4) {
-    return forms[1]
-  }
-
-  return forms[2]
+/** English plural: exactly 1 takes the singular, everything else (0, 2+, negatives) the plural. */
+export function plural(n: number, one: string, many: string): string {
+  return Math.abs(n) === 1 ? one : many
 }
 
 export function wordsLabel(n: number): string {
-  return `${formatInt(n)} ${pluralUk(n, ['слово', 'слова', 'слів'])}`
+  return `${formatInt(n)} ${plural(n, 'word', 'words')}`
 }
 
 export function chaptersLabel(n: number): string {
-  return `${formatInt(n)} ${pluralUk(n, ['глава', 'глави', 'глав'])}`
+  return `${formatInt(n)} ${plural(n, 'chapter', 'chapters')}`
 }
 
 const DAY_MS = 86_400_000
@@ -52,7 +37,7 @@ const DAY_MS = 86_400_000
  */
 export function formatDue(dueAt: string | null, isLearned: boolean, now: Date): string {
   if (isLearned || dueAt === null) {
-    return 'вивчено'
+    return 'learned'
   }
 
   const due = new Date(dueAt)
@@ -60,11 +45,11 @@ export function formatDue(dueAt: string | null, isLearned: boolean, now: Date): 
   const today = Math.floor(now.getTime() / DAY_MS)
 
   if (dueDay === today) {
-    return 'сьогодні'
+    return 'today'
   }
 
   if (dueDay === today + 1) {
-    return 'завтра'
+    return 'tomorrow'
   }
 
   const dd = String(due.getUTCDate()).padStart(2, '0')

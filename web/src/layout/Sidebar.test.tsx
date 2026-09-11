@@ -9,7 +9,7 @@ const items: DictionaryListItem[] = [
 ]
 
 describe('Sidebar', () => {
-  it('показує словники з відсотком, позначає активний і віддає клік', async () => {
+  it('lists dictionaries with a percent, marks the active one and reports a click', async () => {
     const onSelect = vi.fn()
     const { container } = await render(
       <Sidebar
@@ -35,7 +35,7 @@ describe('Sidebar', () => {
     expect(onSelect).toHaveBeenCalledWith(1)
   })
 
-  it('порожній список — підказка, а не «Завантажую…»', async () => {
+  it('an empty list shows a hint, not "Loading…"', async () => {
     const { container } = await render(
       <Sidebar
         items={[]}
@@ -48,11 +48,11 @@ describe('Sidebar', () => {
       />,
     )
 
-    expect(container.textContent).toContain('Поки жодного словника')
-    expect(container.textContent).not.toContain('Завантажую')
+    expect(container.textContent).toContain('No dictionaries yet')
+    expect(container.textContent).not.toContain('Loading')
   })
 
-  it('кнопка імпорту стає primary, коли відкритий екран імпорту', async () => {
+  it('the import button turns primary while the import screen is open', async () => {
     const onImport = vi.fn()
     const { container } = await render(
       <Sidebar

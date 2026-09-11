@@ -126,7 +126,7 @@ describe('useSortingQueue', () => {
     })
   }
 
-  it('дозаливка не воскрешає слово, чия позначка ще летить', async () => {
+  it('a refill does not resurrect a word whose mark is still in flight', async () => {
     // 21 слово = REFILL_AT + 1: перший же mark тягне дозаливку буфера.
     const result = await arrange(21)
 
@@ -155,7 +155,7 @@ describe('useSortingQueue', () => {
     expect(result.current.error).toBeNull()
   })
 
-  it('невдалий mark відкочує лише своє слово, а не пізнішу позначку', async () => {
+  it('a failed mark rolls back only its own word, not a later one', async () => {
     // 25 слів: жоден із трьох mark не опускає буфер до REFILL_AT, тож дозаливки
     // тут немає й у грі лише відкат.
     const result = await arrange(25)
@@ -172,7 +172,7 @@ describe('useSortingQueue', () => {
     expect(result.current.current?.wordPairId).toBe(1)
     expect(result.current.sorted).toBe(1)
     expect(result.current.known.map((w) => w.wordPairId)).toEqual([2])
-    expect(result.current.error).toContain('Не збереглося')
+    expect(result.current.error).toContain('Could not save')
     expect(apiMock.getQueue).toHaveBeenCalledTimes(1)
 
     // І w2 не повернулося в буфер: після w1 наступна картка — w3.
@@ -181,7 +181,7 @@ describe('useSortingQueue', () => {
     expect(result.current.current?.wordPairId).toBe(3)
   })
 
-  it('loaded стає true після першого завантаження черги, навіть якщо вона порожня', async () => {
+  it('loaded turns true after the first queue load, even an empty one', async () => {
     words = makeWords(0)
     const result = await renderHook(() => useSortingQueue({ dictionaryId: 1, chapterIds: null }))
     await flush()

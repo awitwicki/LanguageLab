@@ -26,7 +26,7 @@ export function SortingProgress({ scope, title, sorted, total, counts }: Props) 
       <p className="percent num">{percent}%</p>
       <ProgressBar sorted={sorted} total={total} showLabel={false} />
       <p className="counts num" aria-live="polite">
-        {counts ?? `${formatProgress(sorted, total)} слів, залишилось ${formatInt(remaining)}`}
+        {counts ?? `${formatProgress(sorted, total)} words, ${formatInt(remaining)} left`}
       </p>
     </section>
   )

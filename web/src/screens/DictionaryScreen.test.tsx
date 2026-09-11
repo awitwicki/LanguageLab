@@ -45,8 +45,8 @@ beforeEach(() => {
   apiMock.startReview.mockResolvedValue(reviewStarted)
 })
 
-describe('DictionaryScreen — глави', () => {
-  it('клік по назві глави сортує лише її; «Вправа» тренує лише її', async () => {
+describe('DictionaryScreen — chapters', () => {
+  it('clicking a chapter title sorts only it; "Exercise" trains only it', async () => {
     const onSort = vi.fn()
     const onTrain = vi.fn()
     const { container } = await render(screen({ onSort, onTrain }))
@@ -55,7 +55,7 @@ describe('DictionaryScreen — глави', () => {
     const rows = [...container.querySelectorAll('.chapter-row')]
     expect(rows).toHaveLength(2)
     expect(rows[0].querySelector('.chapter-title')?.textContent).toBe('Holston')
-    expect(rows[0].querySelector('.chapter-sub')?.textContent).toBe('300 слів · 42 до вивчення')
+    expect(rows[0].querySelector('.chapter-sub')?.textContent).toBe('300 words · 42 to learn')
     expect(rows[0].querySelector('.chapter-pct')?.textContent).toBe('50%')
     expect(container.querySelector('input[type="checkbox"]')).toBeNull()
 
@@ -66,30 +66,30 @@ describe('DictionaryScreen — глави', () => {
     expect(onTrain).toHaveBeenCalledWith([11], 'Holston')
   })
 
-  it('глава без назви підписується номером; без слів до вивчення «Вправа» неактивна', async () => {
+  it('an untitled chapter is numbered; "Exercise" is disabled with nothing to learn', async () => {
     const onSort = vi.fn()
     const { container } = await render(screen({ onSort }))
     await flush()
 
     const rows = [...container.querySelectorAll('.chapter-row')]
-    expect(rows[1].querySelector('.chapter-title')?.textContent).toBe('Глава 2')
+    expect(rows[1].querySelector('.chapter-title')?.textContent).toBe('Chapter 2')
     expect(rows[1].classList.contains('done')).toBe(true)
     expect((rows[1].querySelector('.chapter-train') as HTMLButtonElement).disabled).toBe(true)
 
     await click(rows[1].querySelector('.chapter-main')!)
-    expect(onSort).toHaveBeenCalledWith([12], 'Глава 2')
+    expect(onSort).toHaveBeenCalledWith([12], 'Chapter 2')
   })
 
-  it('плаский словник не має секції глав', async () => {
+  it('a flat dictionary has no chapters section', async () => {
     apiMock.getDictionary.mockResolvedValue({ ...detail, chapters: [] })
     const { container } = await render(screen())
     await flush()
 
     expect(container.querySelector('.chapter-list')).toBeNull()
-    expect(container.textContent).toContain('плаский словник')
+    expect(container.textContent).toContain('has no chapters')
   })
 
-  it('третій рядок глави — шкала Leitner; у главі без слів «не знаю» його немає', async () => {
+  it('a chapter\'s third line is the Leitner scale; absent without "don\'t know" words', async () => {
     const { container } = await render(screen())
     await flush()
 
@@ -102,7 +102,7 @@ describe('DictionaryScreen — глави', () => {
     expect(rows[1].querySelector('.chapter-learning')).toBeNull()
   })
 
-  it('дві колонки: глави ліворуч (перші в DOM), найчастіші слова праворуч', async () => {
+  it('two columns: chapters on the left (first in the DOM), most frequent words on the right', async () => {
     const { container } = await render(screen())
     await flush()
 
@@ -113,65 +113,65 @@ describe('DictionaryScreen — глави', () => {
   })
 })
 
-describe('DictionaryScreen — дії', () => {
-  it('«Сортувати всю книжку» → onSort(null, «Уся книжка»)', async () => {
+describe('DictionaryScreen — actions', () => {
+  it('"Sort the whole book" → onSort(null, "Whole book")', async () => {
     const onSort = vi.fn()
     const { container } = await render(screen({ onSort }))
     await flush()
 
-    await click(buttons(container).find((b) => b.textContent?.includes('Сортувати всю книжку'))!)
+    await click(buttons(container).find((b) => b.textContent?.includes('Sort the whole book'))!)
 
-    expect(onSort).toHaveBeenCalledWith(null, 'Уся книжка')
+    expect(onSort).toHaveBeenCalledWith(null, 'Whole book')
   })
 
-  it('«Почати вправу» → onTrain(null, «Уся книжка»)', async () => {
+  it('"Start exercise" → onTrain(null, "Whole book")', async () => {
     const onTrain = vi.fn()
     const { container } = await render(screen({ onTrain }))
     await flush()
 
-    const start = buttons(container).find((b) => b.textContent?.includes('Почати вправу'))!
+    const start = buttons(container).find((b) => b.textContent?.includes('Start exercise'))!
     expect(start.disabled).toBe(false)
 
     await click(start)
 
-    expect(onTrain).toHaveBeenCalledWith(null, 'Уся книжка')
+    expect(onTrain).toHaveBeenCalledWith(null, 'Whole book')
   })
 
-  it('без слів до вивчення «Почати вправу» неактивна і є підказка', async () => {
+  it('with nothing to learn, "Start exercise" is disabled and a hint is shown', async () => {
     apiMock.getDictionary.mockResolvedValue({ ...detail, learnableCount: 0 })
     const { container } = await render(screen())
     await flush()
 
-    expect(buttons(container).find((b) => b.textContent?.includes('Почати вправу'))!.disabled).toBe(true)
-    expect(container.textContent).toContain('Немає слів до вивчення')
+    expect(buttons(container).find((b) => b.textContent?.includes('Start exercise'))!.disabled).toBe(true)
+    expect(container.textContent).toContain('No words to learn yet')
   })
 
-  it('«Повторити (3)» є при dueCount > 0 і запускає повторення', async () => {
+  it('"Review (3)" appears when dueCount > 0 and starts a review', async () => {
     const onReview = vi.fn()
     const { container } = await render(screen({ onReview }))
     await flush()
 
-    await click(buttons(container).find((b) => b.textContent === 'Повторити (3)')!)
+    await click(buttons(container).find((b) => b.textContent === 'Review (3)')!)
     await flush()
 
     expect(apiMock.startReview).toHaveBeenCalledTimes(1)
     expect(onReview).toHaveBeenCalledWith(reviewStarted)
   })
 
-  it('без прострочених кнопки повторення немає', async () => {
+  it('no review button without due words', async () => {
     apiMock.getDictionary.mockResolvedValue({ ...detail, dueCount: 0 })
     const { container } = await render(screen())
     await flush()
 
-    expect(buttons(container).find((b) => b.textContent?.startsWith('Повторити'))).toBeUndefined()
+    expect(buttons(container).find((b) => b.textContent?.startsWith('Review'))).toBeUndefined()
   })
 
-  it('у хедері — шкала книжки з підписом «Вивчено»; без слів «не знаю» її немає', async () => {
+  it('the header carries the book scale captioned "Learned"; absent without "don\'t know" words', async () => {
     const { container } = await render(screen())
     await flush()
 
     expect(container.querySelector('.dict-header .dict-learning .leitner-percent')?.textContent).toBe('26%')
-    expect(container.querySelector('.dict-learning')?.textContent).toContain('Вивчено')
+    expect(container.querySelector('.dict-learning')?.textContent).toContain('Learned')
 
     apiMock.getDictionary.mockResolvedValue({ ...detail, learning: noLearning })
     const empty = await render(screen())
@@ -180,22 +180,22 @@ describe('DictionaryScreen — дії', () => {
     expect(empty.container.querySelector('.dict-learning')).toBeNull()
   })
 
-  it('повторення без слів (204) → повідомлення, onReview не викликається', async () => {
+  it('a review with no words (204) → a notice, onReview not called', async () => {
     apiMock.startReview.mockResolvedValue(null)
     const onReview = vi.fn()
     const { container } = await render(screen({ onReview }))
     await flush()
 
-    await click(buttons(container).find((b) => b.textContent === 'Повторити (3)')!)
+    await click(buttons(container).find((b) => b.textContent === 'Review (3)')!)
     await flush()
 
     expect(onReview).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('повторювати нічого')
+    expect(container.textContent).toContain('Nothing to review today')
   })
 })
 
-describe('DictionaryScreen — статистика', () => {
-  it('показує топ слів за спаданням частоти з номерами', async () => {
+describe('DictionaryScreen — stats', () => {
+  it('lists the top words by descending frequency, numbered', async () => {
     const { container } = await render(screen())
     await flush()
 
@@ -206,11 +206,11 @@ describe('DictionaryScreen — статистика', () => {
     expect((rows[1].querySelector('.bar') as HTMLElement).style.width).toBe('50%')
   })
 
-  it('заголовок містить назву, кількість слів і глав', async () => {
+  it('the header has the name, the word count and the chapter count', async () => {
     const { container } = await render(screen())
     await flush()
 
     expect(container.querySelector('h1')?.textContent).toBe('Wool')
-    expect(container.querySelector('.dict-meta')?.textContent).toBe('2 000 слів, 2 глави')
+    expect(container.querySelector('.dict-meta')?.textContent).toBe('2 000 words, 2 chapters')
   })
 })

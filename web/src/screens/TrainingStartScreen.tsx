@@ -8,7 +8,7 @@ import './TrainingStartScreen.css'
 const BATCH_SIZES = [5, 10, 20] as const
 export const DEFAULT_BATCH_SIZE = 10
 
-const NO_WORDS = 'У цьому наборі немає слів до вивчення — познач слова як «не знаю» під час сортування.'
+const NO_WORDS = 'No words to learn in this set — mark words as “don’t know” while sorting.'
 
 interface Props {
   dictionaryId: number
@@ -66,19 +66,19 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
       <p className="footnote">
         {dictionaryName} · {scopeTitle}
       </p>
-      <h1 className="large-title">Скільки слів?</h1>
+      <h1 className="large-title">How many words?</h1>
 
       {error && <p className="error">{error}</p>}
-      {!preview && !error && <p className="footnote">Завантажую…</p>}
+      {!preview && !error && <p className="footnote">Loading…</p>}
 
       {preview && (
         <>
           <LeitnerScale progress={preview.learning} size="large" />
-          <p className="training-start-hint num">{wordsLabel(learnableCount)} до вивчення в цьому наборі</p>
+          <p className="training-start-hint num">{wordsLabel(learnableCount)} to learn in this set</p>
         </>
       )}
 
-      <div className="segment" role="radiogroup" aria-label="Розмір батча">
+      <div className="segment" role="radiogroup" aria-label="Batch size">
         {BATCH_SIZES.map((size) => (
           <button
             key={size}
@@ -94,14 +94,14 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
       </div>
 
       {learnableCount > 0 && learnableCount < batchSize && (
-        <p className="footnote">Слів менше, ніж обрано — батч буде з {wordsLabel(learnableCount)}.</p>
+        <p className="footnote">Fewer words than selected — the batch will have {wordsLabel(learnableCount)}.</p>
       )}
 
       {preview && learnableCount === 0 && <p className="footnote training-start-notice">{NO_WORDS}</p>}
 
       {rows.length > 0 && (
         <div className="batch-preview">
-          <p className="footnote">Слова батча · частота {inChapter ? 'в главі' : 'в книжці'}</p>
+          <p className="footnote">Batch words · frequency in the {inChapter ? 'chapter' : 'book'}</p>
           <ol className="batch-preview-list">
             {rows.map((row) => {
               const { wordPairId, word, translation, frequency } = row.candidate
@@ -122,14 +122,14 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
                       disabled={pendingId !== null}
                       onClick={() => bringBack(wordPairId)}
                     >
-                      Повернути
+                      Bring back
                     </button>
                   ) : (
                     <button
                       type="button"
                       className="btn btn-quiet batch-know"
-                      aria-label={`Знаю: ${word}`}
-                      title="Знаю це слово"
+                      aria-label={`Know: ${word}`}
+                      title="I know this word"
                       disabled={pendingId !== null}
                       onClick={() => crossOut(wordPairId)}
                     >
@@ -152,7 +152,7 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
           disabled={busy || preview === null || batchIds.length === 0}
           onClick={start}
         >
-          Почати
+          Start
         </button>
       </div>
     </section>

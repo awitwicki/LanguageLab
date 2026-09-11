@@ -15,12 +15,12 @@ interface Props {
 
 export function Sidebar({ items, error, activeId, importActive, canImport, onSelect, onImport }: Props) {
   return (
-    <nav className="sidebar" aria-label="Словники">
-      <p className="sidebar-heading">Словники</p>
+    <nav className="sidebar" aria-label="Dictionaries">
+      <p className="sidebar-heading">Dictionaries</p>
 
       {error && <p className="sidebar-note error">{error}</p>}
-      {!items && !error && <p className="sidebar-note">Завантажую…</p>}
-      {items?.length === 0 && <p className="sidebar-note">Поки жодного словника</p>}
+      {!items && !error && <p className="sidebar-note">Loading…</p>}
+      {items?.length === 0 && <p className="sidebar-note">No dictionaries yet</p>}
 
       <ul className="sidebar-list">
         {items?.map((item) => (
@@ -46,7 +46,7 @@ export function Sidebar({ items, error, activeId, importActive, canImport, onSel
             className={`btn ${importActive ? 'btn-primary' : 'btn-secondary'}`}
             onClick={onImport}
           >
-            Імпортувати книжку
+            Import a book
           </button>
         </div>
       )}

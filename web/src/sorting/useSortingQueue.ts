@@ -102,7 +102,7 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
           setUnknown((current) => current.filter((w) => w.wordPairId !== word.wordPairId))
         }
 
-        setError(`Не збереглося: ${e}. Онови сторінку.`)
+        setError(`Could not save: ${e}. Reload the page.`)
       })
     },
     [buffer, enqueue, refill],

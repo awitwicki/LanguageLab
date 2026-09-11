@@ -57,15 +57,15 @@ beforeEach(() => {
   apiMock.mark.mockResolvedValue(null)
 })
 
-describe('TrainingStartScreen — превью', () => {
-  it('тягне превью один раз (take 20); шкала, слова з перекладом і частотою; зріз 5/10/20 без нового запиту', async () => {
+describe('TrainingStartScreen — preview', () => {
+  it('fetches the preview once (take 20); scale, words with translation and frequency; 5/10/20 slices without a new request', async () => {
     const { container } = await render(screen())
     await flush()
 
     expect(apiMock.previewBatch).toHaveBeenCalledWith(7, [11], 20)
     expect(container.querySelector('.leitner-large')).not.toBeNull()
-    expect(container.textContent).toContain('42 слова до вивчення')
-    expect(container.textContent).toContain('частота в главі')
+    expect(container.textContent).toContain('42 words to learn')
+    expect(container.textContent).toContain('frequency in the chapter')
 
     expect(rows(container)).toHaveLength(10)
     expect(rows(container)[0].textContent).toContain('word0')
@@ -80,19 +80,19 @@ describe('TrainingStartScreen — превью', () => {
     expect(apiMock.previewBatch).toHaveBeenCalledTimes(1)
   })
 
-  it('«Почати» передає id активних рядків і розмір батча', async () => {
+  it('"Start" passes the active row ids and the batch size', async () => {
     const onStarted = vi.fn()
     const { container } = await render(screen({ onStarted }))
     await flush()
 
-    await click(buttons(container).find((b) => b.textContent === 'Почати')!)
+    await click(buttons(container).find((b) => b.textContent === 'Start')!)
     await flush()
 
     expect(apiMock.startNewBatch).toHaveBeenCalledWith(7, [11], 10, [100, 101, 102, 103, 104, 105, 106, 107, 108, 109])
     expect(onStarted).toHaveBeenCalledWith(started, 10)
   })
 
-  it('× → mark known, рядок викреслений на місці, заміна знизу; «Повернути» → mark unknown', async () => {
+  it('× → mark known, the row is crossed out in place, a replacement appended; "Bring back" → mark unknown', async () => {
     const { container } = await render(screen())
     await flush()
 
@@ -119,7 +119,7 @@ describe('TrainingStartScreen — превью', () => {
     expect(container.querySelector('.is-struck')).toBeNull()
   })
 
-  it('«Почати» після викреслення не містить викресленого id', async () => {
+  it('"Start" after a cross-out omits the crossed-out id', async () => {
     const { container } = await render(screen())
     await flush()
 
@@ -129,62 +129,62 @@ describe('TrainingStartScreen — превью', () => {
     })
     await click(rows(container)[0].querySelector('.batch-know')!)
     await flush()
-    await click(buttons(container).find((b) => b.textContent === 'Почати')!)
+    await click(buttons(container).find((b) => b.textContent === 'Start')!)
     await flush()
 
     expect(apiMock.startNewBatch).toHaveBeenCalledWith(7, [11], 10, [101, 102, 103, 104, 105, 106, 107, 108, 109, 110])
   })
 
-  it('порожнє превью: підказка, таблички немає, «Почати» неактивна', async () => {
+  it('an empty preview: a hint, no table, "Start" disabled', async () => {
     apiMock.previewBatch.mockResolvedValue(emptyPreview)
     const { container } = await render(screen())
     await flush()
 
     expect(container.querySelector('.batch-preview')).toBeNull()
-    expect(container.textContent).toContain('немає слів до вивчення')
-    expect(buttons(container).find((b) => b.textContent === 'Почати')!.disabled).toBe(true)
+    expect(container.textContent).toContain('No words to learn in this set')
+    expect(buttons(container).find((b) => b.textContent === 'Start')!.disabled).toBe(true)
   })
 
-  it('коли слів менше за розмір батча — попередження', async () => {
+  it('fewer words than the batch size — a warning', async () => {
     apiMock.previewBatch.mockResolvedValue({ ...preview, learnableCount: 7, candidates: preview.candidates.slice(0, 7) })
     const { container } = await render(screen())
     await flush()
 
-    expect(container.textContent).toContain('батч буде з 7 слів')
+    expect(container.textContent).toContain('the batch will have 7 words')
   })
 
-  it('уся книжка → частота підписана «в книжці»', async () => {
-    const { container } = await render(screen({ chapterIds: null, scopeTitle: 'Уся книжка' }))
+  it('whole book → frequency captioned "in the book"', async () => {
+    const { container } = await render(screen({ chapterIds: null, scopeTitle: 'Whole book' }))
     await flush()
 
     expect(apiMock.previewBatch).toHaveBeenCalledWith(7, null, 20)
-    expect(container.textContent).toContain('частота в книжці')
+    expect(container.textContent).toContain('frequency in the book')
   })
 })
 
-describe('TrainingStartScreen — старт і навігація', () => {
-  it('204 (null) → пояснення, onStarted не викликається', async () => {
+describe('TrainingStartScreen — start and navigation', () => {
+  it('204 (null) → an explanation, onStarted not called', async () => {
     apiMock.startNewBatch.mockResolvedValue(null)
     const onStarted = vi.fn()
     const { container } = await render(screen({ onStarted }))
     await flush()
 
-    await click(buttons(container).find((b) => b.textContent === 'Почати')!)
+    await click(buttons(container).find((b) => b.textContent === 'Start')!)
     await flush()
 
     expect(onStarted).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('немає слів до вивчення')
+    expect(container.textContent).toContain('No words to learn in this set')
   })
 
-  it('поки превью не приїхало — «Завантажую…», «Почати» неактивна', async () => {
+  it('until the preview arrives — "Loading…", "Start" disabled', async () => {
     apiMock.previewBatch.mockReturnValue(new Promise(() => {}))
     const { container } = await render(screen())
 
-    expect(container.textContent).toContain('Завантажую')
-    expect(buttons(container).find((b) => b.textContent === 'Почати')!.disabled).toBe(true)
+    expect(container.textContent).toContain('Loading')
+    expect(buttons(container).find((b) => b.textContent === 'Start')!.disabled).toBe(true)
   })
 
-  it('«‹ Wool» → onBack; підзаголовок містить скоуп', async () => {
+  it('"‹ Wool" → onBack; the subtitle carries the scope', async () => {
     const onBack = vi.fn()
     const { container } = await render(screen({ onBack }))
     await flush()

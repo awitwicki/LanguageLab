@@ -85,7 +85,7 @@ export function ImportScreen({ onImported }: Props) {
     const response = await ask({ kind: 'aggregate', sections, mode })
 
     if (response.kind !== 'aggregated') {
-      setError(response.kind === 'error' ? response.message : 'Несподівана відповідь воркера.')
+      setError(response.kind === 'error' ? response.message : 'Unexpected response from the worker.')
       setStage('preview')
       return
     }
@@ -112,7 +112,7 @@ export function ImportScreen({ onImported }: Props) {
 
   return (
     <section className="import">
-      <h1 className="large-title">Імпорт книжки</h1>
+      <h1 className="large-title">Import a book</h1>
 
       {error && <p className="error">{error}</p>}
 
@@ -123,43 +123,43 @@ export function ImportScreen({ onImported }: Props) {
             accept=".fb2"
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
           />
-          <strong>Обери файл .fb2</strong>
-          <span>або перетягни його сюди</span>
+          <strong>Choose an .fb2 file</strong>
+          <span>or drop it here</span>
         </label>
       )}
 
-      {stage === 'parsing' && <p className="footnote">Розбираю книжку…</p>}
+      {stage === 'parsing' && <p className="footnote">Reading the book…</p>}
 
       {stage !== 'idle' && stage !== 'parsing' && (
         <>
           <label className="field">
-            Назва словника
+            Dictionary name
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </label>
 
           <label className="field">
-            Рівень глав
+            Chapter level
             <select
               value={String(mode)}
               disabled={stage !== 'preview'}
               onChange={(e) => setMode(e.target.value === 'leaf' ? 'leaf' : Number(e.target.value))}
             >
-              <option value="leaf">Листкові секції</option>
+              <option value="leaf">Leaf sections</option>
               {Array.from({ length: maxDepth }, (_, i) => i + 1).map((depth) => (
                 <option key={depth} value={depth}>
-                  Рівень {depth}
+                  Level {depth}
                 </option>
               ))}
             </select>
           </label>
 
           <p className="footnote">
-            Знайдено глав: <strong className="num">{chapters.length}</strong>
+            Chapters found: <strong className="num">{chapters.length}</strong>
           </p>
 
           <ol className="chapter-preview">
             {chapters.map((chapter, index) => (
-              <li key={index}>{chapter.title || <em>без назви</em>}</li>
+              <li key={index}>{chapter.title || <em>untitled</em>}</li>
             ))}
           </ol>
 
@@ -180,9 +180,9 @@ export function ImportScreen({ onImported }: Props) {
               disabled={stage !== 'preview' || chapters.length === 0}
               onClick={onUpload}
             >
-              {stage === 'aggregating' && 'Розбираю слова…'}
-              {stage === 'uploading' && 'Заливаю…'}
-              {stage === 'preview' && 'Імпортувати'}
+              {stage === 'aggregating' && 'Extracting words…'}
+              {stage === 'uploading' && 'Uploading…'}
+              {stage === 'preview' && 'Import'}
             </button>
           </div>
         </>

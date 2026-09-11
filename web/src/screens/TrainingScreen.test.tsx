@@ -93,23 +93,23 @@ beforeEach(() => {
   apiMock.finish.mockResolvedValue(summary)
 })
 
-describe('TrainingScreen — картки', () => {
-  it('новий батч починається з карток; «Почати квіз» тягне перше питання', async () => {
+describe('TrainingScreen — cards', () => {
+  it('a new batch starts with cards; "Start quiz" fetches the first question', async () => {
     const { container } = await render(screen())
 
-    expect(container.textContent).toContain('Нові слова')
+    expect(container.textContent).toContain('New words')
     expect(container.textContent).toContain('abide')
     expect(container.textContent).toContain('дотримуватися')
     expect(apiMock.nextQuestion).not.toHaveBeenCalled()
 
-    await click(buttons(container).find((b) => b.textContent?.includes('Почати квіз'))!)
+    await click(buttons(container).find((b) => b.textContent?.includes('Start quiz'))!)
     await flush()
 
     expect(apiMock.nextQuestion).toHaveBeenCalledWith(5)
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('abide')
   })
 
-  it('Enter на картках запускає квіз', async () => {
+  it('Enter on the cards starts the quiz', async () => {
     const { container } = await render(screen())
 
     await press('Enter')
@@ -118,33 +118,33 @@ describe('TrainingScreen — картки', () => {
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('abide')
   })
 
-  it('повторення пропускає картки', async () => {
+  it('a review skips the cards', async () => {
     const { container } = await render(screen({ started: { ...started, mode: 'review' }, batchSize: null }))
     await flush()
 
-    expect(container.textContent).not.toContain('Нові слова')
+    expect(container.textContent).not.toContain('New words')
     expect(apiMock.nextQuestion).toHaveBeenCalledWith(5)
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('abide')
   })
 })
 
-describe('TrainingScreen — квіз', () => {
+describe('TrainingScreen — quiz', () => {
   async function openQuiz() {
     const result = await render(screen({ started: { ...started, mode: 'review' }, batchSize: null }))
     await flush()
     return result
   }
 
-  it('варіанти з номерами; лічильник «Питання 1 з 4»', async () => {
+  it('numbered options; the counter reads "Question 1 of 4"', async () => {
     const { container } = await openQuiz()
 
     const options = [...container.querySelectorAll<HTMLButtonElement>('.option')]
     expect(options.map((o) => o.querySelector('kbd')?.textContent)).toEqual(['1', '2', '3'])
     expect(options.map((o) => o.querySelector('.option-label')?.textContent)).toEqual(['силос', 'дотримуватися', 'зненацька'])
-    expect(container.querySelector('.counts')?.textContent).toBe('Питання 1 з 4')
+    expect(container.querySelector('.counts')?.textContent).toBe('Question 1 of 4')
   })
 
-  it('неправильна відповідь: підсвітка, рядок з правильним перекладом, «Далі» тягне наступне', async () => {
+  it('a wrong answer: highlight, a line with the right translation, "Next" fetches the next one', async () => {
     apiMock.nextQuestion.mockResolvedValueOnce(questionOne).mockResolvedValueOnce(questionTwo)
     const { container } = await openQuiz()
 
@@ -158,7 +158,7 @@ describe('TrainingScreen — квіз', () => {
     expect(options.every((o) => o.disabled)).toBe(true)
     expect(container.querySelector('.quiz-result')?.textContent).toBe('abide — дотримуватися')
 
-    await click(buttons(container).find((b) => b.textContent?.includes('Далі'))!)
+    await click(buttons(container).find((b) => b.textContent?.includes('Next'))!)
     await flush()
 
     expect(apiMock.nextQuestion).toHaveBeenCalledTimes(2)
@@ -166,17 +166,17 @@ describe('TrainingScreen — квіз', () => {
     expect(container.querySelector('.quiz-result')).toBeNull()
   })
 
-  it('правильна відповідь показує «Правильно»', async () => {
+  it('a right answer shows "Correct"', async () => {
     apiMock.answer.mockResolvedValue({ isCorrect: true, correctWordPairId: 1, word: 'abide', translation: 'дотримуватися' })
     const { container } = await openQuiz()
 
     await click([...container.querySelectorAll<HTMLButtonElement>('.option')][1])
     await flush()
 
-    expect(container.querySelector('.quiz-result')?.textContent).toBe('Правильно')
+    expect(container.querySelector('.quiz-result')?.textContent).toBe('Correct')
   })
 
-  it('клавіші: 1 обирає перший варіант, Enter — «Далі»; після відповіді цифри ігноруються', async () => {
+  it('keys: 1 picks the first option, Enter is "Next"; digits are ignored after answering', async () => {
     apiMock.nextQuestion.mockResolvedValueOnce(questionOne).mockResolvedValueOnce(questionTwo)
     const { container } = await openQuiz()
 
@@ -193,7 +193,7 @@ describe('TrainingScreen — квіз', () => {
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('silo')
   })
 
-  it('204 на відповідь (повторний клік) — просто наступне питання', async () => {
+  it('204 on an answer (a repeated click) — just the next question', async () => {
     apiMock.answer.mockResolvedValue(null)
     apiMock.nextQuestion.mockResolvedValueOnce(questionOne).mockResolvedValueOnce(questionTwo)
     const { container } = await openQuiz()
@@ -204,29 +204,29 @@ describe('TrainingScreen — квіз', () => {
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('silo')
   })
 
-  it('«Знаю» знімає слово й показує повідомлення на наступному питанні', async () => {
+  it('"Know" drops the word and shows a notice on the next question', async () => {
     apiMock.nextQuestion.mockResolvedValueOnce(questionOne).mockResolvedValueOnce(questionTwo)
     const { container } = await openQuiz()
 
-    await click(buttons(container).find((b) => b.textContent?.includes('Знаю'))!)
+    await click(buttons(container).find((b) => b.textContent?.includes('Know'))!)
     await flush()
 
     expect(apiMock.markKnown).toHaveBeenCalledWith(5, 100)
-    expect(container.textContent).toContain('abide більше не з’явиться')
+    expect(container.textContent).toContain('abide won’t come up again')
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('silo')
   })
 
-  it('порожня черга → finish → підсумок', async () => {
+  it('an empty queue → finish → summary', async () => {
     apiMock.nextQuestion.mockResolvedValue(exhausted)
     const { container } = await openQuiz()
 
     expect(apiMock.finish).toHaveBeenCalledWith(5)
-    expect(container.querySelector('.summary-score')?.textContent).toBe('3 з 4 · 75%')
-    expect(container.querySelector('.summary-badge')?.textContent).toBe('Не пройдено')
+    expect(container.querySelector('.summary-score')?.textContent).toBe('3 of 4 · 75%')
+    expect(container.querySelector('.summary-badge')?.textContent).toBe('Not passed')
   })
 })
 
-describe('TrainingScreen — підсумок', () => {
+describe('TrainingScreen — summary', () => {
   async function openSummary(overrides: Partial<Parameters<typeof TrainingScreen>[0]> = {}) {
     apiMock.nextQuestion.mockResolvedValue(exhausted)
     const result = await render(screen({ started: { ...started, mode: 'review' }, batchSize: null, ...overrides }))
@@ -234,62 +234,62 @@ describe('TrainingScreen — підсумок', () => {
     return result
   }
 
-  it('слова без помилок першими; терміни словами', async () => {
+  it('clean words first; due dates in words', async () => {
     const { container } = await openSummary()
 
     const rows = [...container.querySelectorAll('.summary-row')]
     expect(rows.map((r) => r.querySelector('.summary-word')?.textContent)).toEqual(['silo', 'abide'])
     expect(rows[0].querySelector('.summary-score-cell')?.textContent).toBe('')
     expect(rows[1].querySelector('.summary-score-cell')?.textContent).toBe('1/2')
-    expect(rows.map((r) => r.querySelector('.summary-box')?.textContent)).toEqual(['бокс 2', 'бокс 1'])
+    expect(rows.map((r) => r.querySelector('.summary-box')?.textContent)).toEqual(['box 2', 'box 1'])
     expect(rows.map((r) => r.querySelector('.summary-due')?.textContent)).toEqual([
-      expect.stringMatching(/^\d{2}\.\d{2}$|^завтра$|^сьогодні$/),
-      expect.stringMatching(/^\d{2}\.\d{2}$|^завтра$|^сьогодні$/),
+      expect.stringMatching(/^\d{2}\.\d{2}$|^tomorrow$|^today$/),
+      expect.stringMatching(/^\d{2}\.\d{2}$|^tomorrow$|^today$/),
     ])
   })
 
-  it('«Повторити помилки» → retry → знову картки', async () => {
+  it('"Review mistakes" → retry → cards again', async () => {
     apiMock.retry.mockResolvedValue({ ...started, trainingId: 6 })
     const { container } = await openSummary()
 
-    await click(buttons(container).find((b) => b.textContent?.includes('Повторити помилки'))!)
+    await click(buttons(container).find((b) => b.textContent?.includes('Review mistakes'))!)
     await flush()
 
     expect(apiMock.retry).toHaveBeenCalledWith(5)
-    expect(container.textContent).toContain('Нові слова')
+    expect(container.textContent).toContain('New words')
   })
 
-  it('«Ще один батч» лише для нового батча і з параметрами маршруту', async () => {
+  it('"Another batch" only for a new batch, with the route parameters', async () => {
     apiMock.nextQuestion.mockResolvedValue(exhausted)
     apiMock.startNewBatch.mockResolvedValue({ ...started, trainingId: 7 })
 
     const { container: review } = await openSummary()
-    expect(buttons(review).find((b) => b.textContent?.includes('Ще один батч'))).toBeUndefined()
+    expect(buttons(review).find((b) => b.textContent?.includes('Another batch'))).toBeUndefined()
 
     // Новий батч відкривається на картках — до підсумку треба пройти «Почати квіз».
     const { container } = await render(screen())
-    await click(buttons(container).find((b) => b.textContent?.includes('Почати квіз'))!)
+    await click(buttons(container).find((b) => b.textContent?.includes('Start quiz'))!)
     await flush()
-    await click(buttons(container).find((b) => b.textContent?.includes('Ще один батч'))!)
+    await click(buttons(container).find((b) => b.textContent?.includes('Another batch'))!)
     await flush()
 
     expect(apiMock.startNewBatch).toHaveBeenCalledWith(7, [11], 10)
-    expect(container.textContent).toContain('Нові слова')
+    expect(container.textContent).toContain('New words')
   })
 
-  it('без жодного питання — окремий стан', async () => {
+  it('no questions at all — a separate state', async () => {
     apiMock.finish.mockResolvedValue({ correct: 0, total: 0, ratio: 0, passed: false, words: [] })
     const { container } = await openSummary()
 
-    expect(container.textContent).toContain('Жодного питання не лишилось')
-    expect(buttons(container).find((b) => b.textContent?.includes('Повторити помилки'))).toBeUndefined()
+    expect(container.textContent).toContain('No questions left')
+    expect(buttons(container).find((b) => b.textContent?.includes('Review mistakes'))).toBeUndefined()
   })
 
-  it('«До словника» → onBack', async () => {
+  it('"Back to dictionary" → onBack', async () => {
     const onBack = vi.fn()
     const { container } = await openSummary({ onBack })
 
-    await click(buttons(container).find((b) => b.textContent?.includes('До словника'))!)
+    await click(buttons(container).find((b) => b.textContent?.includes('Back to dictionary'))!)
 
     expect(onBack).toHaveBeenCalledTimes(1)
   })
