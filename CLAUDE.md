@@ -14,7 +14,7 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 
 - `LanguageLab.Domain/` — entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces. No dependencies on infrastructure.
 - `LanguageLab.Infrastructure/` — EF Core `ApplicationDbContext`, PostgreSQL provider, migrations.
-- `LanguageLab.Application/` — services on top of the domain: word selection, training sessions, book import, sorting, per-scope Leitner progress (`LearningProgressService`). Used by the API.
+- `LanguageLab.Application/` — services on top of the domain: word selection, training sessions, book import, sorting, per-scope Leitner progress (`LearningProgressService`); `Seeding/` holds the built-in dictionaries and their startup seeder. Used by the API.
 - `LanguageLab.Api/` — ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. Endpoints: `/api/dictionaries`, `/api/sorting`, `/api/training` (Leitner quiz on top of `TrainingSessionService`; the question queue lives in the DB); `GET /api/training/preview` — scope's progress scale + batch candidates by frequency, `new-batch` accepts explicit `wordPairIds`.
   `POST /api/training/review` takes an optional `{ dictionaryId, chapterIds }` body: without it the review is global, with it only that scope's due words — the chapter row offers this once a chapter has no new words left.
   `Auth/` (claims, session validation, the OIDC event handlers), `/api/auth/*`
@@ -40,7 +40,7 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   Telegram credentials are therefore optional in Development and required everywhere else.
 - Dictionaries have an owner and an `IsPublic` flag: import, delete and visibility changes are
   admin-only, and regular users see public dictionaries plus their own.
-- Migrations run automatically on startup (`dbContext.Database.MigrateAsync()` in [Program.cs:39](LanguageLab.Api/Program.cs#L39)).
+- Migrations run automatically on startup (`dbContext.Database.MigrateAsync()` in [Program.cs:39](LanguageLab.Api/Program.cs#L39)), followed by `SystemDictionarySeeder` (`LanguageLab.Application/Seeding/`): built-in dictionaries with `Owner = null`, public, created once by name and re-created if deleted. Currently "Irregular verbs" — 68 verbs in 4 pattern-group chapters, each stored as the `v1 – v2 – v3` triplet so it has its own `WordPair` (and shelf/progress) separate from the bare verb in books; frequency = table position so batches follow the table order.
 - Training requires a non-empty `WordPair.Translation` (both for batch words and distractors). Translations for the "don't know" shelf were backfilled once on 2026-09-07 (`result/translations.txt`, local); auto-translation is in the README TODO.
 - Batch = the scope's most frequent learnable words (chapter or book frequency), deterministic; the web app shows a preview and passes `wordPairIds` explicitly.
 
