@@ -31,8 +31,12 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 - Auth is Telegram over OpenID Connect → an HttpOnly `ll_session` cookie holding an internal user
   id and role. `ICurrentUser` reads those claims; `ICurrentUserContext` adds the role. The first
   successful login becomes the admin. Bans take effect on the next request via the cookie's
-  `OnValidatePrincipal`. Development uses the same real flow — `http://localhost:5173/...` is a
-  registered Allowed URL in @BotFather.
+  `OnValidatePrincipal`. Development can use the same real flow — `http://localhost:5173/...` is
+  a registered Allowed URL in @BotFather — or `GET /api/auth/dev-login`, a local sign-in as a
+  dedicated account (Telegram id 1) that skips the handshake. It is fenced off from production
+  three times over (`#if DEBUG` + Release publish, `IsDevelopment()`, `import.meta.env.DEV`) —
+  see `LanguageLab.Api/Auth/DevLogin.cs`; weakening any fence is a security change.
+  Telegram credentials are therefore optional in Development and required everywhere else.
 - Dictionaries have an owner and an `IsPublic` flag: import, delete and visibility changes are
   admin-only, and regular users see public dictionaries plus their own.
 - Migrations run automatically on startup (`dbContext.Database.MigrateAsync()` in [Program.cs:39](LanguageLab.Api/Program.cs#L39)).

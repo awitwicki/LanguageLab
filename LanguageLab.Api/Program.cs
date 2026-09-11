@@ -28,19 +28,28 @@ var telegram = new TelegramLoginOptions(
     builder.Configuration["Telegram:ClientId"] ?? string.Empty,
     builder.Configuration["Telegram:ClientSecret"] ?? string.Empty);
 
-// Development signs in through the real provider too, so credentials are required
-// everywhere. Failing at startup beats failing at someone's first login.
-if (string.IsNullOrWhiteSpace(telegram.ClientId) || string.IsNullOrWhiteSpace(telegram.ClientSecret))
+// Outside Development, Telegram is the only way in, so missing credentials are fatal:
+// failing at startup beats failing at someone's first login. Development has DevLogin as a
+// second way in, so there it is a warning — a local run should not need @BotFather secrets.
+if (!telegram.IsConfigured)
 {
-    throw new InvalidOperationException(
-        "Telegram:ClientId and Telegram:ClientSecret must be set (Telegram__ClientId / " +
-        "Telegram__ClientSecret in Docker). Get them from @BotFather → your bot → Login Widget.");
+    const string problem =
+        "Telegram:ClientId and Telegram:ClientSecret are not set (Telegram__ClientId / " +
+        "Telegram__ClientSecret in Docker). Get them from @BotFather → your bot → Login Widget.";
+
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(problem);
+    }
+
+    // The logging pipeline is not built yet at this point in startup.
+    Console.WriteLine($"warn: {problem} Telegram sign-in is disabled; use the local dev sign-in.");
 }
 
 builder.Services.AddSingleton(telegram);
 builder.Services.AddSingleton<ServerSideStateFormat>();
 
-builder.Services
+var authentication = builder.Services
     .AddAuthentication(options =>
     {
         // Only DefaultScheme is set: an unauthenticated request to a RequireAuthorization
@@ -79,8 +88,16 @@ builder.Services
         };
 
         options.Events.OnValidatePrincipal = SessionValidator.ValidateAsync;
-    })
-    .AddOpenIdConnect(TelegramAuth.Scheme, options =>
+    });
+
+// Registering this handler without credentials is not merely useless, it breaks the whole
+// app: AuthenticationMiddleware initialises every remote scheme on every request so that it
+// can claim its callback path, and OpenIdConnectOptions.Validate() throws on an empty
+// ClientId — turning each request into a 500. Absent credentials mean absent handler, and
+// /api/auth/telegram/start answers 503 instead of challenging a scheme that is not there.
+if (telegram.IsConfigured)
+{
+    authentication.AddOpenIdConnect(TelegramAuth.Scheme, options =>
     {
         options.Authority = "https://oauth.telegram.org";
         options.ClientId = telegram.ClientId;
@@ -123,12 +140,13 @@ builder.Services
         options.Events.OnRemoteFailure = TelegramAuth.OnRemoteFailureAsync;
     });
 
-// Telegram rejects a `state` longer than 256 characters, and the handler's default format
-// packs the whole AuthenticationProperties into ~410 — see ServerSideStateFormat. It is wired
-// up out here rather than inside AddOpenIdConnect so the store comes from DI as a singleton:
-// an options reload rebuilds the options object, and that must not drop handshakes in flight.
-builder.Services.AddOptions<OpenIdConnectOptions>(TelegramAuth.Scheme)
-    .Configure<ServerSideStateFormat>((options, state) => options.StateDataFormat = state);
+    // Telegram rejects a `state` longer than 256 characters, and the handler's default format
+    // packs the whole AuthenticationProperties into ~410 — see ServerSideStateFormat. It is wired
+    // up out here rather than inside AddOpenIdConnect so the store comes from DI as a singleton:
+    // an options reload rebuilds the options object, and that must not drop handshakes in flight.
+    builder.Services.AddOptions<OpenIdConnectOptions>(TelegramAuth.Scheme)
+        .Configure<ServerSideStateFormat>((options, state) => options.StateDataFormat = state);
+}
 
 builder.Services.AddAuthorization(options =>
     options.AddPolicy("Admin", policy => policy.RequireClaim(ClaimTypes.Role, nameof(UserRole.Admin))));

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using LanguageLab.Api.Auth;
+using LanguageLab.Api.Endpoints;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication;
@@ -190,5 +191,27 @@ public class SessionValidatorTests
 
         Assert.Same(principal, context.Principal);
         Assert.False(context.ShouldRenew);
+    }
+}
+
+public class TelegramLoginOptionsTests
+{
+    /// <summary>
+    /// Program.cs skips registering the OIDC handler entirely when this is false. That is not
+    /// a tidiness measure: AuthenticationMiddleware initialises every remote scheme on every
+    /// request so it can claim its callback path, and OpenIdConnectOptions.Validate() throws
+    /// on a blank ClientId — a handler registered without credentials turns every request in
+    /// the app into a 500, not just the login one.
+    /// </summary>
+    [Theory]
+    [InlineData("id", "secret", true)]
+    [InlineData("", "secret", false)]
+    [InlineData("id", "", false)]
+    [InlineData("   ", "secret", false)]
+    [InlineData("id", "   ", false)]
+    [InlineData("", "", false)]
+    public void IsConfigured_requires_both_halves(string clientId, string clientSecret, bool expected)
+    {
+        Assert.Equal(expected, new TelegramLoginOptions(clientId, clientSecret).IsConfigured);
     }
 }

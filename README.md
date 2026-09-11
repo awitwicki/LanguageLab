@@ -27,6 +27,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] GET /api/dictionaries/{id}: 3 COUNT queries per chapter (sorted + learnable) — merge into one GROUP BY if this ever becomes slow
 - [ ] Shelf admin panel: list of all words in the DB, list of "know", list of "don't know", list of excluded — with the ability to un-mark (move back between shelves) right there
 - [x] Accounts and registration: currently a single user from `appsettings` (`WebUser:TelegramId`, `LanguageLab.Api/CurrentUser.cs`), no real login yet
+- [x] Local sign-in without Telegram for development (`LanguageLab.Api/Auth/DevLogin.cs`), fenced off from production by `#if DEBUG`, `IsDevelopment()` and `import.meta.env.DEV`
 - [ ] Ability to exclude a word directly from the "Most frequent words" list on the dictionary screen (`web/src/screens/DictionaryScreen.tsx`) — character names and place names leak in there
 - [ ] Caption under the chapter/book progress scale (`web/src/components/LeitnerScale.tsx`): currently unclear that this is specifically word-learning progress, not an arbitrary percentage
 - [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
@@ -65,8 +66,9 @@ Everything in the project — code, comments, docs, UI copy — is English. The 
 
 * `ConnectionStrings:DefaultConnection` - postgres connection string
 * `Telegram:ClientId` / `Telegram:ClientSecret` - OpenID Connect credentials from
-  @BotFather → your bot → **Login Widget**. Required in every environment, including
-  Development; the app refuses to start without them.
+  @BotFather → your bot → **Login Widget**. Required outside Development, where the app
+  refuses to start without them. In Development they are optional: the app starts with a
+  warning and Telegram sign-in fails, but the local dev sign-in below still works.
 
 For a local run, fill in `LanguageLab.Api/appsettings.Development.json` (see the example
 below). In Docker the same values are passed via env vars using the standard
@@ -109,9 +111,29 @@ https://l.kodzuverse.com/api/auth/telegram/callback
 http://localhost:5173/api/auth/telegram/callback
 ```
 
-Development uses the same real flow as production; there is no bypass. The Vite dev server
-proxies `/api` without rewriting `Host`, so the callback URL the app builds is the
-`localhost:5173` one registered above.
+Development can use this same real flow — the Vite dev server proxies `/api` without rewriting
+`Host`, so the callback URL the app builds is the `localhost:5173` one registered above — or it
+can skip it entirely with the local sign-in below.
+
+**Local sign-in (development only).** The login screen shows a second button, **Sign in as
+local dev**, which hits `GET /api/auth/dev-login` and signs you in as a dedicated account
+(Telegram id `1`, "Local Developer") without touching Telegram. On an empty database that
+account is created on the spot and, by the first-login rule, becomes the administrator — so a
+fresh checkout needs neither @BotFather credentials nor a real Telegram account. It is not a
+bypass of authorisation, only of the handshake: the session it issues is an ordinary one, and
+a ban applies to it like any other.
+
+Three independent fences keep it out of production, and each holds on its own:
+
+1. `LanguageLab.Api/Auth/DevLogin.cs` and the endpoint that uses it are inside `#if DEBUG`, and
+   the image publishes `-c Release` — the code is not in the deployed binary, so no
+   environment variable can switch it back on.
+2. The endpoint is mapped only when `IsDevelopment()`, which covers a Debug build pointed at a
+   real database. Containers default to Production; `compose.yaml` sets no `ASPNETCORE_ENVIRONMENT`.
+3. The button sits behind `import.meta.env.DEV`, which Vite folds to a literal `false` in
+   `npm run build`.
+
+Weakening any one of them is a security change, not a cleanup.
 
 **Production.** The app sits behind a TLS-terminating proxy at `l.kodzuverse.com` and reads
 `X-Forwarded-Proto`. Without that it would consider the request plain HTTP, refuse to issue the

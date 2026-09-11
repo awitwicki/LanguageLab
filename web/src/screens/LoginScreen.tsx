@@ -20,6 +20,15 @@ export function LoginScreen({ loginFailed }: Props) {
         <a className="btn btn-primary btn-lg sign-in" href="/api/auth/telegram/start">
           Sign in with Telegram
         </a>
+
+        {/* Not a runtime check: Vite replaces import.meta.env.DEV with a literal false in
+            `npm run build`, so this branch is dropped from the production bundle. The
+            endpoint behind it is fenced off independently — see LanguageLab.Api/Auth/DevLogin.cs. */}
+        {import.meta.env.DEV && (
+          <a className="btn btn-secondary btn-lg sign-in dev-sign-in" href="/api/auth/dev-login">
+            Sign in as local dev
+          </a>
+        )}
       </div>
     </main>
   )
