@@ -234,6 +234,73 @@ public class WordSelectionServiceTests
         Assert.Equal(new[] { 2L, 1L }, due.Select(w => w.Id));
     }
 
+    /// <summary>
+    /// Chapter seed plus progress: word1 (chapter 1) and word4 (chapter 2) are due, word2
+    /// (chapter 1) waits two more days, word5 (chapter 2) is learned.
+    /// </summary>
+    private static async Task<ApplicationDbContext> ArrangeWithDueWordsInChaptersAsync()
+    {
+        var db = await ArrangeWithChaptersAsync();
+        db.WordProgresses.AddRange(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 1, DueAt = Now.AddDays(-1), LastSeenAt = Now },
+            new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 2, DueAt = Now.AddDays(2), LastSeenAt = Now },
+            new WordProgress { Id = 3, UserId = UserId, WordPairId = 4, Box = 1, DueAt = Now.AddDays(-3), LastSeenAt = Now },
+            new WordProgress { Id = 4, UserId = UserId, WordPairId = 5, Box = 5, DueAt = null, IsLearned = true, LastSeenAt = Now });
+        await db.SaveChangesAsync();
+        return db;
+    }
+
+    [Fact]
+    public async Task DueWords_HonourDictionaryAndChapterScope()
+    {
+        await using var db = await ArrangeWithDueWordsInChaptersAsync();
+        var service = new WordSelectionService(db);
+
+        Assert.Equal(new[] { 4L, 1L }, (await service.GetDueWordsAsync(UserId, Now, 20)).Select(w => w.Id));
+        Assert.Equal(new[] { 4L, 1L }, (await service.GetDueWordsAsync(UserId, Now, 20, DictionaryId)).Select(w => w.Id));
+        Assert.Equal(new[] { 1L }, (await service.GetDueWordsAsync(UserId, Now, 20, DictionaryId, [1])).Select(w => w.Id));
+        Assert.Equal(new[] { 4L }, (await service.GetDueWordsAsync(UserId, Now, 20, DictionaryId, [2])).Select(w => w.Id));
+        Assert.Empty(await service.GetDueWordsAsync(UserId, Now, 20, dictionaryId: 999));
+    }
+
+    [Fact]
+    public async Task CountDue_HonoursScope()
+    {
+        await using var db = await ArrangeWithDueWordsInChaptersAsync();
+        var service = new WordSelectionService(db);
+
+        Assert.Equal(2, await service.CountDueAsync(UserId, Now));
+        Assert.Equal(1, await service.CountDueAsync(UserId, Now, DictionaryId, [1]));
+        Assert.Equal(0, await service.CountDueAsync(UserId, Now, dictionaryId: 999));
+    }
+
+    /// <summary>
+    /// What the chapter row needs to decide between "Review", "next review tomorrow" and
+    /// nothing: how many wait now, and when the next one comes due if none do.
+    /// </summary>
+    [Fact]
+    public async Task ReviewAvailabilityByChapter_CountsDueAndNamesTheNextDueDate()
+    {
+        await using var db = await ArrangeWithDueWordsInChaptersAsync();
+
+        var byChapter = await new WordSelectionService(db).GetReviewAvailabilityByChapterAsync(UserId, DictionaryId, Now);
+
+        Assert.Equal(new ReviewAvailability(1, Now.AddDays(2)), byChapter[1]);
+        Assert.Equal(new ReviewAvailability(1, null), byChapter[2]);
+    }
+
+    /// <summary>A chapter where nothing is in progress simply has no entry — the caller falls back to None.</summary>
+    [Fact]
+    public async Task ReviewAvailabilityByChapter_OmitsChaptersWithoutProgress()
+    {
+        await using var db = await ArrangeWithChaptersAsync();
+
+        var byChapter = await new WordSelectionService(db).GetReviewAvailabilityByChapterAsync(UserId, DictionaryId, Now);
+
+        Assert.Empty(byChapter);
+        Assert.Equal(new ReviewAvailability(0, null), ReviewAvailability.None);
+    }
+
     [Fact]
     public async Task CountDue_IgnoresFutureAndLearnedWords()
     {

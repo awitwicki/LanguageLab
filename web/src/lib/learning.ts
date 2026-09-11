@@ -1,4 +1,4 @@
-import type { LearningProgress } from '../api/client'
+import type { ChapterView, LearningProgress } from '../api/client'
 
 export const BOX_COUNT = 5
 
@@ -42,4 +42,30 @@ export function learningSegments(p: LearningProgress): Segment[] {
   ]
 
   return counts.map(([key, label, count]) => ({ key, label, count, share: p.total > 0 ? count / p.total : 0 }))
+}
+
+/**
+ * What a chapter row can offer. New words always win — that is the batch the preview is
+ * built around; a review is the fallback once a chapter has been started through. `wait`
+ * is the honest Leitner answer: something is in progress, but nothing is due yet.
+ */
+export type ChapterAction =
+  | { kind: 'exercise'; learnable: number }
+  | { kind: 'review'; due: number }
+  | { kind: 'wait'; inProgress: number; nextDueAt: string | null }
+  | { kind: 'none' }
+
+export function chapterAction(chapter: ChapterView): ChapterAction {
+  if (chapter.learnableCount > 0) {
+    return { kind: 'exercise', learnable: chapter.learnableCount }
+  }
+
+  if (chapter.dueCount > 0) {
+    return { kind: 'review', due: chapter.dueCount }
+  }
+
+  // Boxes hold unlearned words only, so their sum is exactly "in progress".
+  const inProgress = chapter.learning.boxes.reduce((sum, n) => sum + n, 0)
+
+  return inProgress > 0 ? { kind: 'wait', inProgress, nextDueAt: chapter.nextDueAt } : { kind: 'none' }
 }

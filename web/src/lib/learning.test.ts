@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { LearningProgress } from '../api/client'
-import { learningPercent, learningSegments } from './learning'
+import { chapterAction, learningPercent, learningSegments } from './learning'
 
 const progress: LearningProgress = { notStarted: 49, boxes: [9, 5, 0, 3, 0], learned: 12, total: 78 }
 const empty: LearningProgress = { notStarted: 0, boxes: [0, 0, 0, 0, 0], learned: 0, total: 0 }
@@ -42,5 +42,36 @@ describe('learningSegments', () => {
 
   it('total 0 → every share is 0', () => {
     expect(learningSegments(empty).every((s) => s.share === 0)).toBe(true)
+  })
+})
+
+describe('chapterAction', () => {
+  const base = { id: 1, order: 0, title: 'One', wordsCount: 100, sortedCount: 100 }
+  const boxes = (...b: number[]) => ({ notStarted: 0, boxes: b, learned: 0, total: b.reduce((a, c) => a + c, 0) })
+
+  it('new words left → exercise, whatever else is going on', () => {
+    expect(chapterAction({ ...base, learnableCount: 4, learning: boxes(3, 0, 0, 0, 0), dueCount: 2, nextDueAt: null })).toEqual({
+      kind: 'exercise',
+      learnable: 4,
+    })
+  })
+
+  it('no new words but some due → review', () => {
+    expect(chapterAction({ ...base, learnableCount: 0, learning: boxes(3, 2, 0, 0, 0), dueCount: 2, nextDueAt: null })).toEqual({
+      kind: 'review',
+      due: 2,
+    })
+  })
+
+  it('nothing due yet but words in progress → wait, with the count and the next due date', () => {
+    expect(
+      chapterAction({ ...base, learnableCount: 0, learning: boxes(3, 2, 1, 0, 0), dueCount: 0, nextDueAt: '2026-09-12T00:00:00Z' }),
+    ).toEqual({ kind: 'wait', inProgress: 6, nextDueAt: '2026-09-12T00:00:00Z' })
+  })
+
+  it('nothing in progress at all → none', () => {
+    expect(chapterAction({ ...base, learnableCount: 0, learning: boxes(0, 0, 0, 0, 0), dueCount: 0, nextDueAt: null })).toEqual({
+      kind: 'none',
+    })
   })
 })

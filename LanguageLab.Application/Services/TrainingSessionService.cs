@@ -107,19 +107,26 @@ public class TrainingSessionService
             userId, dictionaryId, TrainingMode.NewBatch, words, NewBatchRepeats, pool, DirectionPolicy.EnToUa, nowUtc);
     }
 
-    public async Task<Training?> StartReviewAsync(long userId, DateTime nowUtc)
+    /// <summary>
+    /// Without a scope: everything due, across all books. With one: only that chapter's (or
+    /// book's) due words, and the session remembers the book — distractors then come from
+    /// it too, as they do for a new batch, instead of from every word there is.
+    /// </summary>
+    public async Task<Training?> StartReviewAsync(
+        long userId, DateTime nowUtc, long? dictionaryId = null, IReadOnlyList<long>? chapterIds = null)
     {
-        var words = await _selection.GetDueWordsAsync(userId, nowUtc, WordSelectionService.ReviewSessionSize);
+        var words = await _selection.GetDueWordsAsync(
+            userId, nowUtc, WordSelectionService.ReviewSessionSize, dictionaryId, chapterIds);
 
         if (words.Count == 0)
         {
             return null;
         }
 
-        var pool = await _selection.GetDistractorPoolAsync(null, WordSelectionService.DistractorPoolSize, _rng);
+        var pool = await _selection.GetDistractorPoolAsync(dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
-            userId, null, TrainingMode.Review, words, ReviewRepeats, pool, DirectionPolicy.Random, nowUtc);
+            userId, dictionaryId, TrainingMode.Review, words, ReviewRepeats, pool, DirectionPolicy.Random, nowUtc);
     }
 
     public async Task<Training?> StartRetryAsync(long userId, long previousTrainingId, DateTime nowUtc)

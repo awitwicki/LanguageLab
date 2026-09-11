@@ -7,7 +7,15 @@ namespace LanguageLab.Api.Endpoints;
 public sealed record DictionaryListItem(long Id, string Name, int WordsCount, bool HasChapters, int SortedCount);
 
 public sealed record ChapterView(
-    long Id, int Order, string Title, int WordsCount, int SortedCount, int LearnableCount, LearningProgress Learning);
+    long Id,
+    int Order,
+    string Title,
+    int WordsCount,
+    int SortedCount,
+    int LearnableCount,
+    LearningProgress Learning,
+    int DueCount,
+    DateTime? NextDueAt);
 
 public sealed record DictionaryDetail(
     long Id,
@@ -94,16 +102,24 @@ public static class DictionaryEndpoints
             var learning = await learningProgress.GetAsync(userId, id);
             var chapterLearning = await learningProgress.GetByChapterAsync(userId, id);
 
+            // Once a chapter has no new words left, its row offers a review of what is due
+            // there instead — or says when the next word comes due. One query for all chapters.
+            var chapterReview = await selection.GetReviewAvailabilityByChapterAsync(userId, id, now);
+
             var chapterViews = new List<ChapterView>(chapters.Count);
 
             foreach (var c in chapters)
             {
                 var chapterLearnable = await selection.CountLearnableAsync(userId, id, [c.Id]);
+                var review = chapterReview.TryGetValue(c.Id, out var r) ? r : ReviewAvailability.None;
+
                 chapterViews.Add(new ChapterView(
                     c.Id, c.Order, c.Title, c.WordsCount,
                     progress.TryGetValue(c.Id, out var p) ? p.Sorted : 0,
                     chapterLearnable,
-                    chapterLearning.TryGetValue(c.Id, out var l) ? l : LearningProgress.Empty));
+                    chapterLearning.TryGetValue(c.Id, out var l) ? l : LearningProgress.Empty,
+                    review.DueCount,
+                    review.NextDueAt));
             }
 
             return Results.Ok(new DictionaryDetail(

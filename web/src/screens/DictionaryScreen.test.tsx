@@ -10,6 +10,10 @@ vi.mock('../api/client', () => ({ api: apiMock }))
 const noLearning: LearningProgress = { notStarted: 0, boxes: [0, 0, 0, 0, 0], learned: 0, total: 0 }
 // notStarted == learnableCount (42) — так само, як на сервері. (9 + 10 + 12 + 60) / (5 · 71) → 26%.
 const holstonLearning: LearningProgress = { notStarted: 42, boxes: [9, 5, 0, 3, 0], learned: 12, total: 71 }
+const dueLearning: LearningProgress = { notStarted: 0, boxes: [5, 4, 0, 0, 0], learned: 1, total: 10 }
+const waitingLearning: LearningProgress = { notStarted: 0, boxes: [2, 6, 0, 0, 0], learned: 0, total: 8 }
+// formatDue compares UTC days, so "now + 24h" always lands on tomorrow.
+const tomorrow = new Date(Date.now() + 86_400_000).toISOString()
 
 const detail: DictionaryDetail = {
   id: 7,
@@ -20,8 +24,12 @@ const detail: DictionaryDetail = {
   dueCount: 3,
   learning: holstonLearning,
   chapters: [
-    { id: 11, order: 0, title: 'Holston', wordsCount: 300, sortedCount: 150, learnableCount: 42, learning: holstonLearning },
-    { id: 12, order: 1, title: '', wordsCount: 100, sortedCount: 100, learnableCount: 0, learning: noLearning },
+    { id: 11, order: 0, title: 'Holston', wordsCount: 300, sortedCount: 150, learnableCount: 42, learning: holstonLearning, dueCount: 0, nextDueAt: null },
+    { id: 12, order: 1, title: '', wordsCount: 100, sortedCount: 100, learnableCount: 0, learning: noLearning, dueCount: 0, nextDueAt: null },
+    // Every word started, five of them due: the row offers a review instead of an exercise.
+    { id: 13, order: 2, title: 'Juliette', wordsCount: 80, sortedCount: 80, learnableCount: 0, learning: dueLearning, dueCount: 5, nextDueAt: null },
+    // Every word started, none due until tomorrow: the row says so and waits.
+    { id: 14, order: 3, title: 'Lukas', wordsCount: 60, sortedCount: 60, learnableCount: 0, learning: waitingLearning, dueCount: 0, nextDueAt: tomorrow },
   ],
   topWords: [
     { wordPairId: 1, word: 'silo', frequency: 1500 },
@@ -53,7 +61,7 @@ describe('DictionaryScreen — chapters', () => {
     await flush()
 
     const rows = [...container.querySelectorAll('.chapter-row')]
-    expect(rows).toHaveLength(2)
+    expect(rows).toHaveLength(4)
     expect(rows[0].querySelector('.chapter-title')?.textContent).toBe('Holston')
     expect(rows[0].querySelector('.chapter-sub')?.textContent).toBe('300 words · 42 to learn')
     expect(rows[0].querySelector('.chapter-pct')?.textContent).toBe('50%')
@@ -113,6 +121,59 @@ describe('DictionaryScreen — chapters', () => {
   })
 })
 
+describe('DictionaryScreen — chapter review', () => {
+  const row = (container: HTMLElement, index: number) => container.querySelectorAll('.chapter-row')[index]
+
+  it('a chapter with due words says so and its button becomes "Review"', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    const juliette = row(container, 2)
+    expect(juliette.querySelector('.chapter-sub')?.textContent).toBe('80 words · 5 to review')
+
+    const button = juliette.querySelector<HTMLButtonElement>('.chapter-train')!
+    expect(button.textContent).toBe('Review')
+    expect(button.disabled).toBe(false)
+  })
+
+  it('"Review" on a chapter starts a review scoped to it and hands back the chapter as the scope', async () => {
+    const onReview = vi.fn()
+    const { container } = await render(screen({ onReview }))
+    await flush()
+
+    await click(row(container, 2).querySelector('.chapter-train')!)
+    await flush()
+
+    expect(apiMock.startReview).toHaveBeenCalledWith({ dictionaryId: 7, chapterIds: [13] })
+    expect(onReview).toHaveBeenCalledWith(reviewStarted, 'Juliette')
+  })
+
+  // The hint is in the sub-line, not a tooltip: on a phone a title attribute never shows.
+  it('a chapter with nothing due yet says how many are in progress and when the next one is due', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    const lukas = row(container, 3)
+    expect(lukas.querySelector('.chapter-sub')?.textContent).toBe('60 words · 8 in progress · next review tomorrow')
+
+    const button = lukas.querySelector<HTMLButtonElement>('.chapter-train')!
+    expect(button.textContent).toBe('Exercise')
+    expect(button.disabled).toBe(true)
+  })
+
+  it('a chapter with new words keeps "Exercise" even when some of its words are due', async () => {
+    apiMock.getDictionary.mockResolvedValue({
+      ...detail,
+      chapters: [{ ...detail.chapters[0], dueCount: 3 }],
+    })
+    const { container } = await render(screen())
+    await flush()
+
+    expect(row(container, 0).querySelector('.chapter-sub')?.textContent).toBe('300 words · 42 to learn')
+    expect(row(container, 0).querySelector('.chapter-train')?.textContent).toBe('Exercise')
+  })
+})
+
 describe('DictionaryScreen — actions', () => {
   it('"Sort the whole book" → onSort(null, "Whole book")', async () => {
     const onSort = vi.fn()
@@ -155,15 +216,17 @@ describe('DictionaryScreen — actions', () => {
     await flush()
 
     expect(apiMock.startReview).toHaveBeenCalledTimes(1)
-    expect(onReview).toHaveBeenCalledWith(reviewStarted)
+    expect(onReview).toHaveBeenCalledWith(reviewStarted, undefined)
   })
 
-  it('no review button without due words', async () => {
+  // The header's button is the global review; a chapter row may still offer its own.
+  it('no header review button without due words', async () => {
     apiMock.getDictionary.mockResolvedValue({ ...detail, dueCount: 0 })
     const { container } = await render(screen())
     await flush()
 
-    expect(buttons(container).find((b) => b.textContent?.startsWith('Review'))).toBeUndefined()
+    const header = [...container.querySelectorAll<HTMLButtonElement>('.dict-actions button')]
+    expect(header.find((b) => b.textContent?.startsWith('Review'))).toBeUndefined()
   })
 
   it('the header carries the book scale captioned "Learned"; absent without "don\'t know" words', async () => {
@@ -211,6 +274,6 @@ describe('DictionaryScreen — stats', () => {
     await flush()
 
     expect(container.querySelector('h1')?.textContent).toBe('Wool')
-    expect(container.querySelector('.dict-meta')?.textContent).toBe('2 000 words, 2 chapters')
+    expect(container.querySelector('.dict-meta')?.textContent).toBe('2 000 words, 4 chapters')
   })
 })

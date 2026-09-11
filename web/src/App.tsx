@@ -120,11 +120,11 @@ export default function App() {
           onTrain={(chapterIds, scopeTitle) =>
             setRoute({ name: 'training-start', dictionaryId: route.id, chapterIds, scopeTitle })
           }
-          onReview={(started) =>
+          onReview={(started, scopeTitle) =>
             setRoute({
               name: 'training',
               dictionaryId: route.id,
-              scopeTitle: REVIEW_TITLE,
+              scopeTitle: scopeTitle ? `${REVIEW_TITLE} · ${scopeTitle}` : REVIEW_TITLE,
               chapterIds: null,
               batchSize: null,
               started,

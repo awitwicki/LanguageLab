@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
-import { api, type DictionaryDetail, type TrainingStarted } from '../api/client'
+import { api, type ChapterView, type DictionaryDetail, type TrainingStarted } from '../api/client'
 import { LeitnerScale } from '../components/LeitnerScale'
 import { ProgressBar } from '../components/ProgressBar'
-import { chaptersLabel, formatInt, percentOf, wordsLabel } from '../lib/format'
+import { chaptersLabel, formatDue, formatInt, percentOf, wordsLabel } from '../lib/format'
 import { WHOLE_BOOK, chapterLabel } from '../lib/labels'
+import { chapterAction } from '../lib/learning'
 import './DictionaryScreen.css'
 
 interface Props {
   id: number
   onSort: (chapterIds: number[] | null, scopeTitle: string) => void
   onTrain: (chapterIds: number[] | null, scopeTitle: string) => void
-  onReview: (started: TrainingStarted) => void
+  /** scopeTitle is the chapter for a chapter review; absent for the global one. */
+  onReview: (started: TrainingStarted, scopeTitle?: string) => void
 }
 
 export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
@@ -38,12 +40,14 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
     }
   }, [id])
 
-  const startReview = async () => {
+  // One path for both the header's global review and a chapter's own: the scope is the
+  // only difference, and a chapter's 204 is the same race as the global one.
+  const startReview = async (chapter?: ChapterView) => {
     setReviewBusy(true)
     setReviewNotice(null)
 
     try {
-      const started = await api.startReview()
+      const started = await api.startReview(chapter ? { dictionaryId: id, chapterIds: [chapter.id] } : undefined)
 
       // 204: між завантаженням екрана й кліком прострочені могли закритись іншою сесією.
       if (!started) {
@@ -51,7 +55,7 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
         return
       }
 
-      onReview(started)
+      onReview(started, chapter ? chapterLabel(chapter) : undefined)
     } catch (e) {
       setReviewNotice(String(e))
     } finally {
@@ -100,7 +104,7 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
           Start exercise
         </button>
         {detail.dueCount > 0 && (
-          <button type="button" className="btn btn-secondary" disabled={reviewBusy} onClick={startReview}>
+          <button type="button" className="btn btn-secondary" disabled={reviewBusy} onClick={() => void startReview()}>
             Review ({formatInt(detail.dueCount)})
           </button>
         )}
@@ -124,6 +128,7 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
               {detail.chapters.map((chapter) => {
                 const label = chapterLabel(chapter)
                 const percent = percentOf(chapter.sortedCount, chapter.wordsCount)
+                const action = chapterAction(chapter)
 
                 return (
                   <li key={chapter.id} className={`chapter-row${percent === 100 ? ' done' : ''}`}>
@@ -131,7 +136,7 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
                       <span className="chapter-text">
                         <span className="chapter-title">{label}</span>
                         <span className="chapter-sub num">
-                          {wordsLabel(chapter.wordsCount)} · {formatInt(chapter.learnableCount)} to learn
+                          {wordsLabel(chapter.wordsCount)} · {chapterSubLine(action)}
                         </span>
                       </span>
                       <span className="chapter-pct num">{percent}%</span>
@@ -139,16 +144,32 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
                         ›
                       </span>
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn-quiet chapter-train"
-                      disabled={chapter.learnableCount === 0}
-                      title={chapter.learnableCount === 0 ? 'No words to learn in this chapter' : undefined}
-                      aria-label={`Exercise: ${label}`}
-                      onClick={() => onTrain([chapter.id], label)}
-                    >
-                      Exercise
-                    </button>
+                    {action.kind === 'review' ? (
+                      <button
+                        type="button"
+                        className="btn btn-quiet chapter-train"
+                        disabled={reviewBusy}
+                        aria-label={`Review: ${label}`}
+                        onClick={() => void startReview(chapter)}
+                      >
+                        Review
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-quiet chapter-train"
+                        disabled={action.kind !== 'exercise'}
+                        title={
+                          action.kind === 'wait' ? 'Nothing due yet in this chapter'
+                          : action.kind === 'none' ? 'No words to learn in this chapter'
+                          : undefined
+                        }
+                        aria-label={`Exercise: ${label}`}
+                        onClick={() => onTrain([chapter.id], label)}
+                      >
+                        Exercise
+                      </button>
+                    )}
                     {/* Третій рядок — поза кнопкою сортування, щоб шкала не засмічувала її accessible name. */}
                     {chapter.learning.total > 0 && (
                       <div className="chapter-learning">
@@ -187,4 +208,20 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
       </div>
     </>
   )
+}
+
+/** The second half of a chapter's sub-line: what the row's button is about to offer, or why it can't. */
+function chapterSubLine(action: ReturnType<typeof chapterAction>): string {
+  switch (action.kind) {
+    case 'exercise':
+      return `${formatInt(action.learnable)} to learn`
+    case 'review':
+      return `${formatInt(action.due)} to review`
+    case 'wait':
+      return action.nextDueAt
+        ? `${formatInt(action.inProgress)} in progress · next review ${formatDue(action.nextDueAt, false, new Date())}`
+        : `${formatInt(action.inProgress)} in progress`
+    case 'none':
+      return '0 to learn'
+  }
 }

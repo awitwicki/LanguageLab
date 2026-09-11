@@ -8,6 +8,15 @@ namespace LanguageLab.Application.Services;
 public sealed record Candidate(long WordPairId, string Word, string Translation, int Frequency);
 
 /// <summary>
+/// Whether a scope can be reviewed right now: how many words wait, and — when none do —
+/// when the next one comes due. Drives the chapter row's "Review" / "next review tomorrow".
+/// </summary>
+public sealed record ReviewAvailability(int DueCount, DateTime? NextDueAt)
+{
+    public static ReviewAvailability None => new(0, null);
+}
+
+/// <summary>
 /// Вирішує, які слова показувати. Тут живе правило «не вчити те, що вже знаю»:
 /// слово потрапляє в новий батч, тільки якщо воно є в цьому словнику, має переклад,
 /// позначене юзером як «хочу вчити», не позначене як відоме, не виключене юзером і ще жодного разу не тренувалося.
@@ -107,10 +116,16 @@ public class WordSelectionService
             .ToList();
     }
 
-    public async Task<IReadOnlyList<WordPair>> GetDueWordsAsync(long userId, DateTime nowUtc, int size)
+    /// <summary>
+    /// Overdue, unlearned words, earliest due first. Without a scope this is the global
+    /// review; with one it is a chapter's (or a book's) own review — the same words, just
+    /// filtered, so the Leitner schedule is honoured either way.
+    /// </summary>
+    public async Task<IReadOnlyList<WordPair>> GetDueWordsAsync(
+        long userId, DateTime nowUtc, int size, long? dictionaryId = null, IReadOnlyList<long>? chapterIds = null)
     {
-        var dueIds = await _dbContext.WordProgresses
-            .Where(p => p.UserId == userId && !p.IsLearned && p.DueAt != null && p.DueAt <= nowUtc)
+        var dueIds = await InProgressQuery(userId, dictionaryId, chapterIds)
+            .Where(p => p.DueAt <= nowUtc)
             .OrderBy(p => p.DueAt)
             .Take(size)
             .Select(p => p.WordPairId)
@@ -160,9 +175,65 @@ public class WordSelectionService
     public Task<int> CountLearnableAsync(long userId, long dictionaryId, IReadOnlyList<long>? chapterIds = null) =>
         LearnableQuery(userId, dictionaryId, chapterIds).CountAsync();
 
-    public Task<int> CountDueAsync(long userId, DateTime nowUtc) =>
-        _dbContext.WordProgresses
-            .CountAsync(p => p.UserId == userId && !p.IsLearned && p.DueAt != null && p.DueAt <= nowUtc);
+    public Task<int> CountDueAsync(
+        long userId, DateTime nowUtc, long? dictionaryId = null, IReadOnlyList<long>? chapterIds = null) =>
+        InProgressQuery(userId, dictionaryId, chapterIds).CountAsync(p => p.DueAt <= nowUtc);
+
+    /// <summary>
+    /// All chapters of a dictionary in one grouped query rather than a COUNT per chapter. A
+    /// chapter with nothing in progress has no entry; a word in two chapters counts in each.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, ReviewAvailability>> GetReviewAvailabilityByChapterAsync(
+        long userId, long dictionaryId, DateTime nowUtc)
+    {
+        var rows = await InProgressQuery(userId, dictionaryId, chapterIds: null)
+            .Join(
+                _dbContext.ChapterWords.Where(cw => cw.Chapter.DictionaryId == dictionaryId),
+                p => p.WordPairId,
+                cw => cw.WordPairId,
+                (p, cw) => new { cw.ChapterId, p.DueAt })
+            .GroupBy(x => x.ChapterId)
+            .Select(g => new
+            {
+                ChapterId = g.Key,
+                DueCount = g.Count(x => x.DueAt <= nowUtc),
+                NextDueAt = g.Where(x => x.DueAt > nowUtc).Min(x => x.DueAt),
+            })
+            .ToListAsync();
+
+        return rows.ToDictionary(r => r.ChapterId, r => new ReviewAvailability(r.DueCount, r.NextDueAt));
+    }
+
+    /// <summary>
+    /// Unlearned progress rows with a due date, optionally narrowed to a dictionary and to
+    /// chapters. The chapter filter is the same one LearnableQuery uses: an empty list means
+    /// the whole book.
+    /// </summary>
+    private IQueryable<WordProgress> InProgressQuery(long userId, long? dictionaryId, IReadOnlyList<long>? chapterIds)
+    {
+        var query = _dbContext.WordProgresses
+            .Where(p => p.UserId == userId && !p.IsLearned && p.DueAt != null);
+
+        if (dictionaryId.HasValue)
+        {
+            var inDictionary = _dbContext.Words
+                .Where(w => w.Dictionaries.Any(d => d.Id == dictionaryId.Value))
+                .Select(w => w.Id);
+
+            query = query.Where(p => inDictionary.Contains(p.WordPairId));
+        }
+
+        if (chapterIds is { Count: > 0 })
+        {
+            var inChapters = _dbContext.ChapterWords
+                .Where(cw => chapterIds.Contains(cw.ChapterId))
+                .Select(cw => cw.WordPairId);
+
+            query = query.Where(p => inChapters.Contains(p.WordPairId));
+        }
+
+        return query;
+    }
 
     private IQueryable<WordPair> LearnableQuery(long userId, long dictionaryId, IReadOnlyList<long>? chapterIds)
     {

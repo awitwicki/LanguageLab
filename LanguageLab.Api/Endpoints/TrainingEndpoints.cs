@@ -11,6 +11,9 @@ public sealed record NewBatchRequest(
 
 public sealed record BatchPreview(LearningProgress Learning, int LearnableCount, IReadOnlyList<Candidate> Candidates);
 
+/// <summary>Optional: without a body the review spans every book; with one it is that book's, or those chapters'.</summary>
+public sealed record ReviewRequest(long DictionaryId, IReadOnlyList<long>? ChapterIds);
+
 public sealed record BatchWord(long WordPairId, string Word, string Translation);
 
 public sealed record TrainingStarted(long TrainingId, TrainingMode Mode, IReadOnlyList<BatchWord> Words, int TotalQuestions);
@@ -92,10 +95,21 @@ public static class TrainingEndpoints
         });
 
         group.MapPost("/review", async (
-            TrainingSessionService sessions, ApplicationDbContext db, ICurrentUser currentUser) =>
+            ReviewRequest? request,
+            TrainingSessionService sessions,
+            ApplicationDbContext db,
+            DictionaryAccessService access,
+            ICurrentUserContext currentUser) =>
         {
-            var userId = await currentUser.GetIdAsync();
-            var training = await sessions.StartReviewAsync(userId, DateTime.UtcNow);
+            var (userId, role) = currentUser.Require();
+
+            if (request != null && !await access.IsVisibleAsync(request.DictionaryId, userId, role))
+            {
+                return Results.NotFound();
+            }
+
+            var training = await sessions.StartReviewAsync(
+                userId, DateTime.UtcNow, request?.DictionaryId, request?.ChapterIds);
 
             return training == null
                 ? Results.NoContent()

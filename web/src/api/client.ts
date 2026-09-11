@@ -39,6 +39,10 @@ export interface ChapterView {
   sortedCount: number
   learnableCount: number
   learning: LearningProgress
+  /** Words in progress whose Leitner due date has passed — what a chapter "Review" would take. */
+  dueCount: number
+  /** When the next in-progress word comes due, or null when none is waiting. ISO 8601. */
+  nextDueAt: string | null
 }
 
 export interface TopWord {
@@ -294,7 +298,12 @@ export const api = {
     return request<BatchPreview>(`/api/training/preview?${params}`) as Promise<BatchPreview>
   },
 
-  startReview: () => request<TrainingStarted>('/api/training/review', { method: 'POST' }),
+  /** Without a scope reviews everything due across all books; with one, only that book or those chapters. */
+  startReview: (scope?: { dictionaryId: number; chapterIds: number[] | null }) =>
+    request<TrainingStarted>('/api/training/review', {
+      method: 'POST',
+      body: scope ? JSON.stringify(scope) : undefined,
+    }),
 
   retry: (trainingId: number) =>
     request<TrainingStarted>(`/api/training/${trainingId}/retry`, { method: 'POST' }),

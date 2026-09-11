@@ -278,6 +278,48 @@ public class TrainingSessionServiceTests
         Assert.Equal(new[] { 1L, 2L }, questions.Select(q => q.WordPairId).OrderBy(id => id));
     }
 
+    /// <summary>
+    /// A chapter's "Review" must not drag in due words from elsewhere, and the session
+    /// remembers the book so the summary can lead back to it.
+    /// </summary>
+    [Fact]
+    public async Task Review_WithChapterScope_TakesOnlyThatChaptersDueWords_AndRecordsTheDictionary()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.Add(new Chapter { Id = 1, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 2 });
+        db.ChapterWords.AddRange(
+            new ChapterWord { ChapterId = 1, WordPairId = 1, Count = 1 },
+            new ChapterWord { ChapterId = 1, WordPairId = 2, Count = 1 });
+        db.WordProgresses.AddRange(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now },
+            new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 3, DueAt = Now.AddDays(5), LastSeenAt = Now },
+            new WordProgress { Id = 3, UserId = UserId, WordPairId = 3, Box = 2, DueAt = Now.AddDays(-2), LastSeenAt = Now });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartReviewAsync(UserId, Now, DictionaryId, [1]);
+
+        Assert.NotNull(training);
+        Assert.Equal(TrainingMode.Review, training.Mode);
+        Assert.Equal(DictionaryId, training.DictionaryId);
+
+        var asked = await db.TrainingQuestions.Where(q => q.TrainingId == training.Id).Select(q => q.WordPairId).ToListAsync();
+        Assert.Equal(new[] { 1L }, asked);
+    }
+
+    [Fact]
+    public async Task Review_WithChapterScope_IsNullWhenNothingThereIsDue()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.Add(new Chapter { Id = 1, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 1 });
+        db.ChapterWords.Add(new ChapterWord { ChapterId = 1, WordPairId = 1, Count = 1 });
+        db.WordProgresses.AddRange(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 2, DueAt = Now.AddDays(3), LastSeenAt = Now },
+            new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now });
+        await db.SaveChangesAsync();
+
+        Assert.Null(await Service(db).StartReviewAsync(UserId, Now, DictionaryId, [1]));
+    }
+
     [Fact]
     public async Task Retry_RebuildsSessionFromFailedWordsOnly()
     {
