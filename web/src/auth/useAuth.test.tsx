@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flush, render } from '../test/render'
+import { click, flush, render } from '../test/render'
 import type { AuthState } from './useAuth'
 
 const user = {
@@ -107,6 +107,84 @@ describe('useAuth', () => {
     await flush()
 
     expect(container.textContent).toBe('anonymous')
+  })
+
+  // `respond` keys on the path alone, and DELETE /api/auth/me shares its path with the boot
+  // probe — so these two stub fetch by method as well.
+  function respondByMethod(onDelete: { status: number; body?: unknown }) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((path: string, init?: RequestInit) => {
+        const route =
+          path !== '/api/auth/me' ? { status: 404 }
+          : init?.method === 'DELETE' ? onDelete
+          : { status: 200, body: user }
+
+        return Promise.resolve({
+          ok: route.status >= 200 && route.status < 300,
+          status: route.status,
+          json: () => Promise.resolve(route.body),
+        } as Response)
+      }),
+    )
+  }
+
+  it('ends the session once the account is deleted', async () => {
+    const { useAuth } = await import('./useAuth')
+    respondByMethod({ status: 204 })
+
+    function Probe() {
+      const { state, deleteAccount } = useAuth()
+      return (
+        <button type="button" onClick={() => void deleteAccount()}>
+          {state.status}
+        </button>
+      )
+    }
+
+    const { container } = await render(<Probe />)
+    await flush()
+    expect(container.textContent).toBe('signed-in')
+
+    await click(container.querySelector('button')!)
+    await flush()
+
+    expect(container.textContent).toBe('anonymous')
+  })
+
+  // A refusal must surface its reason to the caller and leave the session exactly as it was.
+  it('keeps the session and rethrows when the deletion is refused', async () => {
+    const { useAuth } = await import('./useAuth')
+    respondByMethod({
+      status: 409,
+      body: { message: 'This is the last administrator — promote someone else first.' },
+    })
+    const outcome: { error: Error | null } = { error: null }
+
+    function Probe() {
+      const { state, deleteAccount } = useAuth()
+      return (
+        <button
+          type="button"
+          onClick={() =>
+            void deleteAccount().catch((e: Error) => {
+              outcome.error = e
+            })
+          }
+        >
+          {state.status}
+        </button>
+      )
+    }
+
+    const { container } = await render(<Probe />)
+    await flush()
+
+    await click(container.querySelector('button')!)
+    await flush()
+
+    expect(outcome.error?.message).toBe('This is the last administrator — promote someone else first.')
+    expect(container.textContent).toBe('signed-in')
   })
 
   // The OIDC callback is a redirect, so a refused login arrives in the URL, not a response body.

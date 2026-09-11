@@ -9,14 +9,21 @@ interface Props {
   onHome: () => void
   onAdmin: () => void
   onSignOut: () => void
+  onDeleteAccount: () => Promise<void>
   children: ReactNode
 }
 
-export function AppShell({ sidebar, user, onHome, onAdmin, onSignOut, children }: Props) {
+export function AppShell({ sidebar, user, onHome, onAdmin, onSignOut, onDeleteAccount, children }: Props) {
   return (
     <div className="shell">
       <div className="shell-topbar">
-        <TopBar user={user} onHome={onHome} onAdmin={onAdmin} onSignOut={onSignOut} />
+        <TopBar
+          user={user}
+          onHome={onHome}
+          onAdmin={onAdmin}
+          onSignOut={onSignOut}
+          onDeleteAccount={onDeleteAccount}
+        />
       </div>
       <div className="shell-sidebar">{sidebar}</div>
       <main className="shell-content">

@@ -159,6 +159,7 @@ builder.Services.AddScoped<DictionaryStatsService>();
 builder.Services.AddScoped<LearningProgressService>();
 builder.Services.AddScoped<DictionaryAccessService>();
 builder.Services.AddScoped<AdminUserService>();
+builder.Services.AddScoped<AccountService>();
 
 builder.Services.AddRequestDecompression();
 

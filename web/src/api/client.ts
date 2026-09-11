@@ -335,6 +335,9 @@ export const api = {
 
   logout: () => request<null>('/api/auth/logout', { method: 'POST' }),
 
+  /** Answers 409 { message } when refused — the last-admin rule. */
+  deleteMe: () => request<null>('/api/auth/me', { method: 'DELETE' }),
+
   listUsers: () => request<AdminUser[]>('/api/admin/users') as Promise<AdminUser[]>,
 
   banUser: (id: number) => request<null>(`/api/admin/users/${id}/ban`, { method: 'POST' }),

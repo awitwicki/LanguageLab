@@ -53,6 +53,30 @@ public static class AuthEndpoints
             return Results.NoContent();
         }).RequireAuthorization();
 
+        // Self-deletion. The admin endpoints refuse to act on the caller, so this is its own
+        // path; the last-admin rule still applies, and answers the same way they do.
+        group.MapDelete("/me", async (
+            HttpContext http, ICurrentUserContext currentUser, AccountService accounts) =>
+        {
+            var result = await accounts.DeleteOwnAsync(currentUser.Require().Id);
+
+            switch (result)
+            {
+                case AccountDeleteResult.NotFound:
+                    return Results.Unauthorized();
+
+                case AccountDeleteResult.LastAdmin:
+                    return Results.Json(
+                        new AdminError("This is the last administrator — promote someone else first."),
+                        statusCode: StatusCodes.Status409Conflict);
+            }
+
+            // The row is gone, so SessionValidator would reject the next request anyway —
+            // but the cookie should not outlive the account.
+            await http.SignOutAsync(PrincipalFactory.Scheme);
+            return Results.NoContent();
+        }).RequireAuthorization();
+
 #if DEBUG
         // Sign in locally without Telegram. Compiled out of Release builds and, on top of
         // that, only mapped in Development — see DevLogin for why both fences are there.

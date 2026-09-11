@@ -73,8 +73,17 @@ export function useAuth() {
     }
   }, [])
 
+  /**
+   * Unlike signOut, a refusal here leaves the session as it was and rethrows: the server's
+   * reason is meant for the user, and the menu shows it.
+   */
+  const deleteAccount = useCallback(async () => {
+    await api.deleteMe()
+    setState({ status: 'anonymous' })
+  }, [])
+
   /** The banned screen's way back: there is no session to end, only a message to leave. */
   const dismissBanned = useCallback(() => setState({ status: 'anonymous' }), [])
 
-  return { state, loginFailed, signOut, dismissBanned }
+  return { state, loginFailed, signOut, deleteAccount, dismissBanned }
 }

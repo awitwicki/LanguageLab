@@ -7,9 +7,10 @@ interface Props {
   onHome: () => void
   onAdmin: () => void
   onSignOut: () => void
+  onDeleteAccount: () => Promise<void>
 }
 
-export function TopBar({ user, onHome, onAdmin, onSignOut }: Props) {
+export function TopBar({ user, onHome, onAdmin, onSignOut, onDeleteAccount }: Props) {
   return (
     <header className="topbar">
       <button type="button" className="brand" onClick={onHome}>
@@ -17,7 +18,7 @@ export function TopBar({ user, onHome, onAdmin, onSignOut }: Props) {
         LanguageLab
       </button>
 
-      <AccountMenu user={user} onAdmin={onAdmin} onSignOut={onSignOut} />
+      <AccountMenu user={user} onAdmin={onAdmin} onSignOut={onSignOut} onDeleteAccount={onDeleteAccount} />
     </header>
   )
 }

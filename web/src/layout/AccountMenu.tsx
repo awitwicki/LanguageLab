@@ -6,9 +6,11 @@ interface Props {
   user: CurrentUser
   onAdmin: () => void
   onSignOut: () => void
+  /** Rejects with the server's reason when refused — the last-admin rule, in practice. */
+  onDeleteAccount: () => Promise<void>
 }
 
-export function AccountMenu({ user, onAdmin, onSignOut }: Props) {
+export function AccountMenu({ user, onAdmin, onSignOut, onDeleteAccount }: Props) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
 
@@ -66,24 +68,76 @@ export function AccountMenu({ user, onAdmin, onSignOut }: Props) {
       </button>
 
       {open && (
-        <div className="account-panel" role="menu">
-          <div className="account-identity">
-            <p className="account-name headline">{user.displayName}</p>
-            {user.username && <p className="caption">@{user.username}</p>}
-            {user.role === 'admin' && <span className="role-badge caption">Admin</span>}
-          </div>
-
-          {user.role === 'admin' && (
-            <button type="button" role="menuitem" className="account-action to-admin" onClick={() => run(onAdmin)}>
-              Admin panel
-            </button>
-          )}
-
-          <button type="button" role="menuitem" className="account-action sign-out" onClick={() => run(onSignOut)}>
-            Sign out
-          </button>
-        </div>
+        <AccountPanel
+          user={user}
+          onAdmin={() => run(onAdmin)}
+          onSignOut={() => run(onSignOut)}
+          onDeleteAccount={onDeleteAccount}
+        />
       )}
+    </div>
+  )
+}
+
+/**
+ * The open panel is its own component so that its state — an armed delete, a refusal
+ * message — lives exactly as long as the panel is on screen. Closing the menu by any route
+ * unmounts it, and the next open starts clean without any reset bookkeeping.
+ */
+function AccountPanel({ user, onAdmin, onSignOut, onDeleteAccount }: Props) {
+  const [confirming, setConfirming] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  // Irreversible, so one click only arms the second. The panel deliberately does not close
+  // on either: on success the session ends and the shell unmounts the whole menu; on a
+  // refusal the reason has to stay readable.
+  const remove = async () => {
+    if (!confirming) {
+      setConfirming(true)
+      return
+    }
+
+    setConfirming(false)
+    setError(null)
+
+    try {
+      await onDeleteAccount()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  return (
+    <div className="account-panel" role="menu">
+      <div className="account-identity">
+        <p className="account-name headline">{user.displayName}</p>
+        {user.username && <p className="caption">@{user.username}</p>}
+        {user.role === 'admin' && <span className="role-badge caption">Admin</span>}
+      </div>
+
+      {user.role === 'admin' && (
+        <button type="button" role="menuitem" className="account-action to-admin" onClick={onAdmin}>
+          Admin panel
+        </button>
+      )}
+
+      <button type="button" role="menuitem" className="account-action sign-out" onClick={onSignOut}>
+        Sign out
+      </button>
+
+      <button
+        type="button"
+        role="menuitem"
+        className="account-action delete-account"
+        onClick={() => void remove()}
+      >
+        {confirming ? 'Confirm deletion' : 'Delete account'}
+      </button>
+
+      {confirming && (
+        <p className="delete-warning caption">This removes your progress and cannot be undone.</p>
+      )}
+      {error && <p className="error caption">{error}</p>}
     </div>
   )
 }

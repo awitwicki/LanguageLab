@@ -49,3 +49,17 @@
 .account-action:hover {
   background: var(--surface-2);
 }
+
+/* Destructive, and set apart from the everyday items above it. */
+.delete-account {
+  margin-top: 8px;
+  color: var(--danger);
+  border-top: 1px solid var(--hairline);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+
+.delete-warning,
+.account-panel .error {
+  max-width: 24ch;
+  padding: 4px 10px 6px;
+}

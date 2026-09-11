@@ -32,7 +32,7 @@ type Route =
 const REVIEW_TITLE = 'Повторення'
 
 export default function App() {
-  const { state, loginFailed, signOut, dismissBanned } = useAuth()
+  const { state, loginFailed, signOut, deleteAccount, dismissBanned } = useAuth()
 
   const [route, setRoute] = useState<Route>({ name: 'home' })
   const [dictionaries, setDictionaries] = useState<DictionaryListItem[] | null>(null)
@@ -89,6 +89,7 @@ export default function App() {
       onHome={() => setRoute({ name: 'home' })}
       onAdmin={() => setRoute({ name: 'admin' })}
       onSignOut={() => void signOut()}
+      onDeleteAccount={deleteAccount}
       sidebar={
         <Sidebar
           items={dictionaries}

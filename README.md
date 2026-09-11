@@ -37,7 +37,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
 - [ ] SPA copy sweep: parts of the UI are still Ukrainian (`Sidebar`, `ImportScreen`, `App` route titles) while newer screens are English
 - [ ] Admin user list: pagination and search (`GET /api/admin/users` returns every row)
-- [ ] Let a user delete their own account from the account menu (admins can already delete others)
+- [x] Let a user delete their own account from the account menu (admins can already delete others)
 - [ ] Change a dictionary's visibility after import — `PATCH /api/dictionaries/{id}` exists, no UI entry point yet
 - [ ] Telegram scopes `phone` and `telegram:bot_access` are not requested; revisit if the bot ever needs to message web users
 - [x] .fb2 words extractor in the browser (book import with chapters)
@@ -87,7 +87,10 @@ The first person to sign in successfully becomes the administrator; everyone aft
 regular user. Regular users can use the dictionaries an admin made public but cannot import,
 delete or re-publish one. Admins additionally get **Users** in the account menu, where they can
 promote, ban and delete accounts. A ban takes effect on the banned user's next request, not at
-their next login.
+their next login. Anyone can delete their own account from the account menu
+(`DELETE /api/auth/me`) — a hard delete that takes their shelves and progress with it, while
+dictionaries they imported stay behind without an owner. The one exception is the last
+administrator, who is refused until someone else has been promoted.
 
 **First deploy.** The migration leaves every existing account at the regular role, so right
 after a fresh deploy the instance has zero admins — the first person to sign in becomes one.

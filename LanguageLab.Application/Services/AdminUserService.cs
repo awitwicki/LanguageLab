@@ -90,7 +90,7 @@ public class AdminUserService
             return AdminActionResult.NotFound;
         }
 
-        if (role != UserRole.Admin && await IsLastAdminAsync(user))
+        if (role != UserRole.Admin && await UserRules.IsLastAdminAsync(_dbContext, user))
         {
             return AdminActionResult.LastAdmin;
         }
@@ -119,7 +119,7 @@ public class AdminUserService
             return AdminActionResult.NotFound;
         }
 
-        if (await IsLastAdminAsync(user))
+        if (await UserRules.IsLastAdminAsync(_dbContext, user))
         {
             return AdminActionResult.LastAdmin;
         }
@@ -129,7 +129,4 @@ public class AdminUserService
 
         return AdminActionResult.Ok;
     }
-
-    private async Task<bool> IsLastAdminAsync(TelegramUser user) =>
-        user.Role == UserRole.Admin && await _dbContext.Users.CountAsync(u => u.Role == UserRole.Admin) <= 1;
 }
