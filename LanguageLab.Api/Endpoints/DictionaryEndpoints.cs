@@ -26,7 +26,8 @@ public sealed record DictionaryDetail(
     int DueCount,
     LearningProgress Learning,
     IReadOnlyList<ChapterView> Chapters,
-    IReadOnlyList<TopWord> TopWords);
+    IReadOnlyList<TopWord> TopWords,
+    bool IsPublic);
 
 public sealed record VisibilityRequest(bool IsPublic);
 
@@ -72,7 +73,7 @@ public static class DictionaryEndpoints
 
             var dictionary = await access.Visible(userId, role)
                 .Where(d => d.Id == id)
-                .Select(d => new { d.Id, d.Name, d.WordsCount })
+                .Select(d => new { d.Id, d.Name, d.WordsCount, d.IsPublic })
                 .FirstOrDefaultAsync();
 
             if (dictionary == null)
@@ -131,7 +132,8 @@ public static class DictionaryEndpoints
                 due,
                 learning,
                 chapterViews,
-                topWords));
+                topWords,
+                dictionary.IsPublic));
         });
 
         group.MapPost("/import", async (

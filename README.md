@@ -45,7 +45,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Comment sweep: code comments are still Ukrainian in ~190 lines across `web/src` (plus `useBatchPreview.test.ts` test names), 36 backend `.cs` files (`Domain` mostly), `Program.cs` and the `Dockerfile` — comments only, no UI copy
 - [ ] Admin user list: pagination and search (`GET /api/admin/users` returns every row)
 - [x] Let a user delete their own account from the account menu (admins can already delete others)
-- [ ] Change a dictionary's visibility after import — `PATCH /api/dictionaries/{id}` exists, no UI entry point yet
+- [x] Change a dictionary's visibility after import — `PATCH /api/dictionaries/{id}` exists, no UI entry point yet
 - [ ] Telegram scopes `phone` and `telegram:bot_access` are not requested; revisit if the bot ever needs to message web users
 - [x] .fb2 words extractor in the browser (book import with chapters)
 - [x] Docker compose, DB migrations

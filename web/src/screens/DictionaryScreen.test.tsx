@@ -3,7 +3,7 @@ import type { DictionaryDetail, LearningProgress, TrainingStarted } from '../api
 import { click, flush, render } from '../test/render'
 import { DictionaryScreen } from './DictionaryScreen'
 
-const apiMock = vi.hoisted(() => ({ getDictionary: vi.fn(), startReview: vi.fn() }))
+const apiMock = vi.hoisted(() => ({ getDictionary: vi.fn(), startReview: vi.fn(), setDictionaryVisibility: vi.fn() }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
 
@@ -35,12 +35,13 @@ const detail: DictionaryDetail = {
     { wordPairId: 1, word: 'silo', frequency: 1500 },
     { wordPairId: 2, word: 'abide', frequency: 750 },
   ],
+  isPublic: true,
 }
 
 const reviewStarted: TrainingStarted = { trainingId: 9, mode: 'review', words: [], totalQuestions: 12 }
 
 function screen(overrides: Partial<Parameters<typeof DictionaryScreen>[0]> = {}) {
-  return <DictionaryScreen id={7} onSort={() => {}} onTrain={() => {}} onReview={() => {}} {...overrides} />
+  return <DictionaryScreen id={7} role="user" onSort={() => {}} onTrain={() => {}} onReview={() => {}} {...overrides} />
 }
 
 function buttons(container: HTMLElement) {
@@ -51,6 +52,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   apiMock.getDictionary.mockResolvedValue(detail)
   apiMock.startReview.mockResolvedValue(reviewStarted)
+  apiMock.setDictionaryVisibility.mockResolvedValue(null)
 })
 
 describe('DictionaryScreen — chapters', () => {
@@ -275,5 +277,41 @@ describe('DictionaryScreen — stats', () => {
 
     expect(container.querySelector('h1')?.textContent).toBe('Wool')
     expect(container.querySelector('.dict-meta')?.textContent).toBe('2 000 words, 4 chapters')
+  })
+})
+
+describe('DictionaryScreen — visibility', () => {
+  it('a regular user sees no visibility toggle', async () => {
+    const { container } = await render(screen({ role: 'user' }))
+    await flush()
+
+    expect(container.querySelector('.dict-visibility')).toBeNull()
+  })
+
+  it('an admin sees the current visibility and can toggle it', async () => {
+    const { container } = await render(screen({ role: 'admin' }))
+    await flush()
+
+    const toggle = container.querySelector<HTMLInputElement>('.dict-visibility input[type="checkbox"]')!
+    expect(toggle.checked).toBe(true)
+
+    await click(toggle)
+    await flush()
+
+    expect(apiMock.setDictionaryVisibility).toHaveBeenCalledWith(7, false)
+    expect(toggle.checked).toBe(false)
+  })
+
+  it('reverts the toggle and shows an error when the request fails', async () => {
+    apiMock.setDictionaryVisibility.mockRejectedValue(new Error('network error'))
+    const { container } = await render(screen({ role: 'admin' }))
+    await flush()
+
+    const toggle = container.querySelector<HTMLInputElement>('.dict-visibility input[type="checkbox"]')!
+    await click(toggle)
+    await flush()
+
+    expect(toggle.checked).toBe(true)
+    expect(container.textContent).toContain('network error')
   })
 })

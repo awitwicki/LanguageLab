@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, type ChapterView, type DictionaryDetail, type TrainingStarted } from '../api/client'
+import { api, type ChapterView, type DictionaryDetail, type TrainingStarted, type UserRole } from '../api/client'
 import { LeitnerScale } from '../components/LeitnerScale'
 import { ProgressBar } from '../components/ProgressBar'
 import { chaptersLabel, formatDue, formatInt, percentOf, wordsLabel } from '../lib/format'
@@ -9,17 +9,20 @@ import './DictionaryScreen.css'
 
 interface Props {
   id: number
+  role: UserRole
   onSort: (chapterIds: number[] | null, scopeTitle: string) => void
   onTrain: (chapterIds: number[] | null, scopeTitle: string) => void
   /** scopeTitle is the chapter for a chapter review; absent for the global one. */
   onReview: (started: TrainingStarted, scopeTitle?: string) => void
 }
 
-export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
+export function DictionaryScreen({ id, role, onSort, onTrain, onReview }: Props) {
   const [detail, setDetail] = useState<DictionaryDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
+  const [visibilityBusy, setVisibilityBusy] = useState(false)
+  const [visibilityError, setVisibilityError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -63,6 +66,23 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
     }
   }
 
+  const toggleVisibility = async (isPublic: boolean) => {
+    if (!detail) return
+    const previous = detail.isPublic
+    setVisibilityBusy(true)
+    setVisibilityError(null)
+    setDetail({ ...detail, isPublic })
+
+    try {
+      await api.setDictionaryVisibility(id, isPublic)
+    } catch (e) {
+      setDetail((d) => (d ? { ...d, isPublic: previous } : d))
+      setVisibilityError(String(e))
+    } finally {
+      setVisibilityBusy(false)
+    }
+  }
+
   if (error) {
     return <p className="error">{error}</p>
   }
@@ -82,6 +102,18 @@ export function DictionaryScreen({ id, onSort, onTrain, onReview }: Props) {
           {wordsLabel(detail.wordsCount)}
           {detail.chapters.length > 0 && `, ${chaptersLabel(detail.chapters.length)}`}
         </p>
+        {role === 'admin' && (
+          <label className="dict-visibility">
+            <input
+              type="checkbox"
+              checked={detail.isPublic}
+              disabled={visibilityBusy}
+              onChange={(e) => void toggleVisibility(e.target.checked)}
+            />
+            Public
+          </label>
+        )}
+        {visibilityError && <p className="footnote error">{visibilityError}</p>}
         <ProgressBar sorted={detail.sortedCount} total={detail.wordsCount} />
         {detail.learning.total > 0 && (
           <div className="dict-learning">

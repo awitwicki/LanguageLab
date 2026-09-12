@@ -135,6 +135,7 @@ export default function App() {
       {route.name === 'dictionary' && (
         <DictionaryScreen
           id={route.id}
+          role={state.user.role}
           onSort={(chapterIds, scopeTitle) =>
             setRoute({ name: 'sorting', id: route.id, chapterIds, scopeTitle })
           }

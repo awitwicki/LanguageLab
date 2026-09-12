@@ -61,6 +61,7 @@ export interface DictionaryDetail {
   learning: LearningProgress
   chapters: ChapterView[]
   topWords: TopWord[]
+  isPublic: boolean
 }
 
 export interface ImportWord {
