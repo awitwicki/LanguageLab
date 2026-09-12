@@ -11,30 +11,16 @@ Web app for learning new words from books
 Backlog of short topics. When something gets deferred (a stub, an inactive button, "we'll do it later") —
 add one line here **in the same set of changes**. Done items are marked `[x]`.
 
-- [x] Account menu in the top bar: currently an inactive button (profile, sign out)
-- [x] "Start exercise" on the dictionary screen: Leitner quiz in the web app per chapter or book, batch of 5/10/20 (`/api/training`)
-- [x] Delete dictionary from the UI (`DELETE /api/dictionaries/{id}` already exists)
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
-- [x] Show translation on the sorting card (now available for translated words)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
-- [x] Leitner stats: box histogram, learned / due today (`TrainingSessionService.GetStatsAsync` already exists)
-- [x] Start a global review from the home screen's "Due today" tile: `TrainingScreen` (`web/src/screens/TrainingScreen.tsx`) is tied to a `dictionaryId` (back navigation, next batch) and needs a dictionary-less mode; until then a review starts from a dictionary page
-- [x] Book-level "Review (N)" button shows the book's own `dueCount` but starts a global review across every book (`DictionaryScreen.tsx`'s `startReview()` with no chapter passes `undefined` scope to `api.startReview`) — either scope the call to the book or label the button as global
 - [ ] User stats: total known / learning / excluded counts
 - [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
-- [x] Focus management on route change: announce the new screen for screen readers (focus currently falls back to `<body>`)
 - [ ] Spacing tokens in the design system: `web/src/index.css` tokenizes color/typography/radii, but not spacing
-- [x] Keyboard navigation for the batch-size segment control: role="radio" without arrow keys (ARIA APG for radiogroup) — currently only Tab+Space
 - [ ] Move a word back from "know" to "don't know" outside the exercise-start screen: the cross-out in the batch preview (`web/src/training/useBatchPreview.ts`) — "bring back" only works within the current visit; after that the word can only be reached via `POST /api/sorting/mark`
 - [ ] GET /api/dictionaries/{id}: 3 COUNT queries per chapter (sorted + learnable) — merge into one GROUP BY if this ever becomes slow
 - [ ] Shelf admin panel: list of all words in the DB, list of "know", list of "don't know", list of excluded — with the ability to un-mark (move back between shelves) right there
-- [x] Accounts and registration: currently a single user from `appsettings` (`WebUser:TelegramId`, `LanguageLab.Api/CurrentUser.cs`), no real login yet
-- [x] Local sign-in without Telegram for development (`LanguageLab.Api/Auth/DevLogin.cs`), fenced off from production by `#if DEBUG`, `IsDevelopment()` and `import.meta.env.DEV`
 - [ ] Ability to exclude a word directly from the "Most frequent words" list on the dictionary screen (`web/src/screens/DictionaryScreen.tsx`) — character names and place names leak in there
-- [x] Caption under the chapter/book progress scale (`web/src/components/LeitnerScale.tsx`): currently unclear that this is specifically word-learning progress, not an arbitrary percentage
 - [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
-- [x] Dictionary visibility: a toggle at import time / in settings — public (visible to all users) or private (only the creator); `Dictionary` (`LanguageLab.Domain/Entities/Dictionary.cs`) currently has no owner or visibility field
-- [x] Irregular-verbs trainer: a guided learning path over the 68 verbs — 4 groups split into 15 families learned one at a time, one exercise per screen (card, gap-fill choice, odd-one-out, match, form-pick, typed gap-fill, all-three-forms typing) with typical-mistake distractors and server-checked answers, a mistake returns later in the same session, and a "Forgot" button; sessions are stored in the DB so a reload resumes them (`LanguageLab.Domain/IrregularVerbs/`, `/api/irregular-verbs`, `web/src/verbs/`) — not a dictionary, no `WordPair`; replaces the per-form three-card exercise via the `IrregularVerbTrainer` migration
 - [ ] Irregular-verbs review ("tonus") mode: SM-2-style scheduling (ease, interval, next-review date), the `Mastered` state, and the priority score for picking which due verbs to show (`VerbProgress.Ease`/`IntervalDays`/`NextReviewAt` are already stored, not read yet)
 - [ ] Irregular-verbs final exam: one-time 40-question mixed session after all groups are learned, 85% to pass, failing verbs become `Forgotten`
 - [ ] Irregular-verbs RAPID and SENTENCE_BUILD exercise types (not in the Phase 1 exercise catalog)
@@ -43,15 +29,9 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Irregular-verbs response-time signal: `VerbAttempt.ResponseMs` is logged but not used by the (future) review scheduling
 - [ ] Top-100/200/500/1000 English word dictionaries, public
 - [ ] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
-- [x] SPA copy sweep: parts of the UI are still Ukrainian (`Sidebar`, `ImportScreen`, `App` route titles) while newer screens are English
 - [ ] Comment sweep: code comments are still Ukrainian in ~190 lines across `web/src` (plus `useBatchPreview.test.ts` test names), 36 backend `.cs` files (`Domain` mostly), `Program.cs` and the `Dockerfile` — comments only, no UI copy
 - [ ] Admin user list: pagination and search (`GET /api/admin/users` returns every row)
-- [x] Let a user delete their own account from the account menu (admins can already delete others)
-- [x] Change a dictionary's visibility after import — `PATCH /api/dictionaries/{id}` exists, no UI entry point yet
 - [ ] Telegram scopes `phone` and `telegram:bot_access` are not requested; revisit if the bot ever needs to message web users
-- [x] .fb2 words extractor in the browser (book import with chapters)
-- [x] Docker compose, DB migrations
-- [x] Sorting words "know / don't know / exclude" per book or chapter
 
 ## Development
 
