@@ -321,10 +321,9 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(DictionaryId, size: 60, new Random(1));
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, DictionaryId, size: 60, new Random(1));
 
         Assert.DoesNotContain(pool, w => w.Translation.Length == 0);
-        Assert.All(pool, w => Assert.NotEqual(6L, w.Id));
     }
 
     [Fact]
@@ -332,9 +331,55 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(dictionaryId: null, size: 60, new Random(1));
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, dictionaryId: null, size: 60, new Random(1));
 
         Assert.Contains(pool, w => w.Id == 6);
+    }
+
+    /// <summary>
+    /// silo1 has six translated words; a pool of 60 cannot come from it alone, so the shared
+    /// vocabulary fills the rest — but the dictionary's own words come first, so a real book
+    /// still gets natural distractors.
+    /// </summary>
+    [Fact]
+    public async Task DistractorPool_TopsUpFromSharedWords_WhenTheDictionaryIsSmall()
+    {
+        await using var db = await ArrangeAsync();
+
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, DictionaryId, size: 60, new Random(1));
+
+        var siloIds = new long[] { 1, 2, 3, 4, 7, 8 };
+        Assert.Equal(7, pool.Count);
+        Assert.All(pool.Take(6), w => Assert.Contains(w.Id, siloIds));
+        Assert.Equal(6, pool[6].Id);
+    }
+
+    [Fact]
+    public async Task DistractorPool_DoesNotTopUp_WhenTheDictionaryFillsIt()
+    {
+        await using var db = await ArrangeAsync();
+
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, DictionaryId, size: 3, new Random(1));
+
+        Assert.Equal(3, pool.Count);
+        Assert.DoesNotContain(pool, w => w.Id == 6);
+    }
+
+    /// <summary>Another user's personal words are their private notes: never a distractor for me. My own are fine.</summary>
+    [Fact]
+    public async Task DistractorPool_NeverShowsAnotherUsersOwnedWords()
+    {
+        await using var db = await ArrangeAsync();
+        db.Users.Add(new TelegramUser { Id = 2, TelegramUserId = 2222 });
+        db.Words.AddRange(
+            new WordPair { Id = 20, Word = "theirs", Translation = "їхнє", OwnerId = 2 },
+            new WordPair { Id = 21, Word = "mine", Translation = "моє", OwnerId = UserId });
+        await db.SaveChangesAsync();
+
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, dictionaryId: null, size: 60, new Random(1));
+
+        Assert.DoesNotContain(pool, w => w.Id == 20);
+        Assert.Contains(pool, w => w.Id == 21);
     }
 
     /// <summary>

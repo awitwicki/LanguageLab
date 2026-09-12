@@ -4,7 +4,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Api.Endpoints;
 
-public sealed record DictionaryListItem(long Id, string Name, int WordsCount, bool HasChapters, int SortedCount);
+public sealed record DictionaryListItem(long Id, string Name, int WordsCount, bool HasChapters, int SortedCount, bool IsPersonal);
+
+public sealed record AddPersonalWordRequest(string? Word, string? Translation);
+
+/// <summary>A refusal written for the user; the client shows Message instead of the status code.</summary>
+public sealed record DictionaryError(string Message);
 
 public sealed record ChapterView(
     long Id,
@@ -38,13 +43,21 @@ public static class DictionaryEndpoints
         var group = app.MapGroup("/api/dictionaries").RequireAuthorization();
 
         group.MapGet("/", async (
-            WordSortingService sorting, DictionaryAccessService access, ICurrentUserContext currentUser) =>
+            WordSortingService sorting,
+            DictionaryAccessService access,
+            PersonalDictionaryService personal,
+            ICurrentUserContext currentUser) =>
         {
             var (userId, role) = currentUser.Require();
 
+            // A GET that creates, deliberately: idempotent and invisible, and it means the SPA
+            // always finds "My words" in this list without a bootstrap step — creating it at
+            // login would miss everyone already signed in on a 30-day cookie.
+            await personal.GetOrCreateAsync(userId);
+
             var dictionaries = await access.Visible(userId, role)
                 .OrderBy(d => d.Name)
-                .Select(d => new { d.Id, d.Name, d.WordsCount, HasChapters = d.Chapters.Any() })
+                .Select(d => new { d.Id, d.Name, d.WordsCount, HasChapters = d.Chapters.Any(), d.IsPersonal })
                 .ToListAsync();
 
             var items = new List<DictionaryListItem>(dictionaries.Count);
@@ -52,11 +65,43 @@ public static class DictionaryEndpoints
             foreach (var d in dictionaries)
             {
                 var queue = await sorting.GetQueueAsync(userId, d.Id, chapterIds: null, take: 1);
-                items.Add(new DictionaryListItem(d.Id, d.Name, d.WordsCount, d.HasChapters, queue.Sorted));
+                items.Add(new DictionaryListItem(d.Id, d.Name, d.WordsCount, d.HasChapters, queue.Sorted, d.IsPersonal));
             }
 
             return Results.Ok(items);
         });
+
+        // The caller's own word list — its own screen, so its own shape: no chapters, no
+        // sorting, the words themselves instead of a top-frequency list.
+        group.MapGet("/personal", async (PersonalDictionaryService personal, ICurrentUser currentUser) =>
+            Results.Ok(await personal.GetAsync(await currentUser.GetIdAsync(), DateTime.UtcNow)));
+
+        group.MapPost("/personal/words", async (
+            AddPersonalWordRequest request, PersonalDictionaryService personal, ICurrentUser currentUser) =>
+        {
+            var userId = await currentUser.GetIdAsync();
+            PersonalWord? added;
+
+            try
+            {
+                added = await personal.AddAsync(
+                    userId, request.Word ?? string.Empty, request.Translation ?? string.Empty, DateTime.UtcNow);
+            }
+            catch (ArgumentException e)
+            {
+                return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            return added == null
+                ? Results.Json(new DictionaryError("Already in your dictionary."), statusCode: StatusCodes.Status409Conflict)
+                : Results.Created($"/api/dictionaries/personal/words/{added.WordPairId}", added);
+        });
+
+        group.MapDelete("/personal/words/{wordPairId:long}", async (
+            long wordPairId, PersonalDictionaryService personal, ICurrentUser currentUser) =>
+            await personal.RemoveAsync(await currentUser.GetIdAsync(), wordPairId)
+                ? Results.NoContent()
+                : Results.NotFound());
 
         group.MapGet("/{id:long}", async (
             long id,
@@ -147,7 +192,10 @@ public static class DictionaryEndpoints
 
         group.MapDelete("/{id:long}", async (long id, ApplicationDbContext db) =>
         {
-            var dictionary = await db.Dictionaries.FirstOrDefaultAsync(d => d.Id == id);
+            // A personal dictionary is invisible to everyone but its owner, even an admin —
+            // same rule as the read paths (DictionaryAccessService.Visible). Excluding it here
+            // makes its id fall through to the ordinary NotFound path, not a 403.
+            var dictionary = await db.Dictionaries.FirstOrDefaultAsync(d => d.Id == id && !d.IsPersonal);
 
             if (dictionary == null)
             {
@@ -164,7 +212,8 @@ public static class DictionaryEndpoints
 
         group.MapPatch("/{id:long}", async (long id, VisibilityRequest request, ApplicationDbContext db) =>
         {
-            var dictionary = await db.Dictionaries.FirstOrDefaultAsync(d => d.Id == id);
+            // Same personal-dictionary exclusion as the DELETE handler above.
+            var dictionary = await db.Dictionaries.FirstOrDefaultAsync(d => d.Id == id && !d.IsPersonal);
 
             if (dictionary == null)
             {

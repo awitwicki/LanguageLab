@@ -19,11 +19,17 @@ public class DictionaryAccessService
         _dbContext = dbContext;
     }
 
-    /// <summary>Public books, system books (no owner) and your own. Admins curate, so they see all.</summary>
+    /// <summary>
+    /// Public books, system books (no owner) and your own; admins curate, so they see all of
+    /// those. A personal dictionary is the exception — it is someone's private word list and
+    /// shows only to its owner, admin or not.
+    /// </summary>
     public IQueryable<Domain.Entities.Dictionary> Visible(long userId, UserRole role) =>
         role == UserRole.Admin
-            ? _dbContext.Dictionaries
-            : _dbContext.Dictionaries.Where(d => d.IsPublic || d.OwnerId == userId);
+            ? _dbContext.Dictionaries.Where(d => !d.IsPersonal || d.OwnerId == userId)
+            : _dbContext.Dictionaries.Where(d => d.IsPersonal
+                ? d.OwnerId == userId
+                : d.IsPublic || d.OwnerId == userId);
 
     public Task<bool> IsVisibleAsync(long dictionaryId, long userId, UserRole role) =>
         Visible(userId, role).AnyAsync(d => d.Id == dictionaryId);

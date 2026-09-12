@@ -12,6 +12,7 @@ import { TrainingScreen } from './screens/TrainingScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { BannedScreen } from './screens/BannedScreen'
 import { AdminScreen } from './screens/AdminScreen'
+import { PersonalDictionaryScreen } from './screens/PersonalDictionaryScreen'
 import { VerbGroupScreen } from './verbs/VerbGroupScreen'
 import { VerbSessionScreen } from './verbs/VerbSessionScreen'
 import { VerbsScreen } from './verbs/VerbsScreen'
@@ -20,6 +21,7 @@ type Route =
   | { name: 'home' }
   | { name: 'import' }
   | { name: 'dictionary'; id: number }
+  | { name: 'personal' }
   | { name: 'sorting'; id: number; chapterIds: number[] | null; scopeTitle: string }
   | { name: 'training-start'; dictionaryId: number; chapterIds: number[] | null; scopeTitle: string }
   | {
@@ -37,6 +39,7 @@ type Route =
   | { name: 'admin' }
 
 const REVIEW_TITLE = 'Review'
+const ALL_WORDS = 'All words'
 const ALL_DICTIONARIES = 'All dictionaries'
 
 export default function App() {
@@ -85,7 +88,10 @@ export default function App() {
   const activeName = dictionaries?.find((d) => d.id === activeId)?.name ?? 'Dictionary'
   const verbsActive = route.name === 'verbs' || route.name === 'verbs-group' || route.name === 'verbs-session'
 
-  const openDictionary = (id: number) => setRoute({ name: 'dictionary', id })
+  // The personal dictionary has its own screen: coming back from its exercises must land
+  // there, not on the book screen.
+  const openDictionary = (id: number) =>
+    setRoute(dictionaries?.find((d) => d.id === id)?.isPersonal ? { name: 'personal' } : { name: 'dictionary', id })
 
   const startVerbSession = (started: SessionStarted) => setRoute({ name: 'verbs-session', sessionId: started.id })
 
@@ -123,12 +129,14 @@ export default function App() {
           verbsLearnedPercent={verbsLearnedPercent}
           verbsActive={verbsActive}
           onOpenVerbs={() => setRoute({ name: 'verbs' })}
+          personalActive={route.name === 'personal'}
+          onOpenPersonal={() => setRoute({ name: 'personal' })}
         />
       }
     >
       {route.name === 'home' && (
         <HomeScreen
-          hasDictionaries={(dictionaries?.length ?? 0) > 0}
+          hasDictionaries={(dictionaries?.filter((d) => !d.isPersonal).length ?? 0) > 0}
           onImport={() => setRoute({ name: 'import' })}
           onReview={(started) =>
             setRoute({
@@ -144,6 +152,25 @@ export default function App() {
       )}
 
       {route.name === 'import' && <ImportScreen onImported={openDictionary} />}
+
+      {route.name === 'personal' && (
+        <PersonalDictionaryScreen
+          onTrain={(dictionaryId) =>
+            setRoute({ name: 'training-start', dictionaryId, chapterIds: null, scopeTitle: ALL_WORDS })
+          }
+          onReview={(started, dictionaryId) =>
+            setRoute({
+              name: 'training',
+              dictionaryId,
+              scopeTitle: REVIEW_TITLE,
+              chapterIds: null,
+              batchSize: null,
+              started,
+            })
+          }
+          onChanged={() => void reload()}
+        />
+      )}
 
       {route.name === 'dictionary' && (
         <DictionaryScreen

@@ -203,4 +203,68 @@ public class SchemaTests
 
         Assert.True(index.IsUnique);
     }
+
+    /// <summary>A personal word may spell the same as a shared one: (Word, OwnerId) is the identity, not Word alone.</summary>
+    [Fact]
+    public async Task A_shared_and_an_owned_word_may_share_their_spelling()
+    {
+        await using var db = NewContext();
+
+        db.Users.Add(new TelegramUser { Id = 5, TelegramUserId = 555 });
+        db.Words.AddRange(
+            new WordPair { Id = 1, Word = "run", Translation = "бігти" },
+            new WordPair { Id = 2, Word = "run", Translation = "запускати", OwnerId = 5 });
+        await db.SaveChangesAsync();
+
+        var shared = await db.Words.SingleAsync(w => w.Word == "run" && w.OwnerId == null);
+        var owned = await db.Words.SingleAsync(w => w.Word == "run" && w.OwnerId == 5);
+
+        Assert.Equal("бігти", shared.Translation);
+        Assert.Equal("запускати", owned.Translation);
+    }
+
+    /// <summary>
+    /// The InMemory provider enforces no index, so the model itself is the evidence: unique over
+    /// (Word, OwnerId) with NULLS NOT DISTINCT keeps shared words unique among themselves.
+    /// </summary>
+    [Fact]
+    public void Words_are_unique_per_owner_with_nulls_not_distinct()
+    {
+        using var db = NewContext();
+
+        var index = db.Model.FindEntityType(typeof(WordPair))!.GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(new[] { "Word", "OwnerId" }));
+
+        Assert.True(index.IsUnique);
+        Assert.False(index.GetAreNullsDistinct());
+        Assert.DoesNotContain(
+            db.Model.FindEntityType(typeof(WordPair))!.GetIndexes(),
+            i => i.Properties.Count == 1 && i.Properties[0].Name == "Word");
+    }
+
+    /// <summary>One personal dictionary per user, enforced by a filtered unique index on the owner.</summary>
+    [Fact]
+    public void A_user_has_at_most_one_personal_dictionary()
+    {
+        using var db = NewContext();
+
+        var index = db.Model.FindEntityType(typeof(Domain.Entities.Dictionary))!.GetIndexes()
+            .Single(i => i.GetDatabaseName() == "IX_Dictionaries_OwnerId_Personal");
+
+        Assert.True(index.IsUnique);
+        Assert.Equal("\"IsPersonal\"", index.GetFilter());
+        Assert.Equal(new[] { "OwnerId" }, index.Properties.Select(p => p.Name));
+    }
+
+    /// <summary>A personal word has no life outside its owner: the FK cascades.</summary>
+    [Fact]
+    public void An_owned_word_goes_with_its_owner()
+    {
+        using var db = NewContext();
+
+        var fk = db.Model.FindEntityType(typeof(WordPair))!.GetForeignKeys()
+            .Single(f => f.PrincipalEntityType.ClrType == typeof(TelegramUser));
+
+        Assert.Equal(DeleteBehavior.Cascade, fk.DeleteBehavior);
+    }
 }

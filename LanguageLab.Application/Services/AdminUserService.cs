@@ -137,7 +137,8 @@ public class AdminUserService
 
     /// <summary>
     /// Hard delete. The user's shelves, Leitner progress and trainings go with them by
-    /// cascade; dictionaries they imported survive with a null owner.
+    /// cascade; dictionaries they imported survive with a null owner. The personal dictionary
+    /// goes too.
     /// </summary>
     public async Task<AdminActionResult> DeleteAsync(long actorId, long targetId)
     {
@@ -158,6 +159,7 @@ public class AdminUserService
             return AdminActionResult.LastAdmin;
         }
 
+        UserRules.RemovePersonalDictionary(_dbContext, targetId);
         _dbContext.Users.Remove(user);
         await _dbContext.SaveChangesAsync();
 

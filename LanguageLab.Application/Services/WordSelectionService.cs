@@ -146,29 +146,50 @@ public class WordSelectionService
             .ToList();
     }
 
-    public async Task<IReadOnlyList<WordPair>> GetDistractorPoolAsync(long? dictionaryId, int size, Random rng)
+    /// <summary>
+    /// Random translated words to serve as wrong options. The dictionary's own words first —
+    /// natural distractors for a book — topped up from the rest of the vocabulary when the
+    /// dictionary is smaller than the pool, so a three-word personal dictionary (or a top-100
+    /// list) still fills every question. Other users' personal words never appear.
+    /// </summary>
+    public async Task<IReadOnlyList<WordPair>> GetDistractorPoolAsync(long userId, long? dictionaryId, int size, Random rng)
     {
-        var query = _dbContext.Words.Where(w => w.Translation != "");
+        var visible = _dbContext.Words
+            .Where(w => w.Translation != "")
+            .Where(w => w.OwnerId == null || w.OwnerId == userId);
+
+        var picked = new List<long>(size);
 
         if (dictionaryId.HasValue)
         {
-            query = query.Where(w => w.Dictionaries.Any(d => d.Id == dictionaryId.Value));
+            var inDictionary = await visible
+                .Where(w => w.Dictionaries.Any(d => d.Id == dictionaryId.Value))
+                .Select(w => w.Id)
+                .ToListAsync();
+
+            picked.AddRange(PickRandom(inDictionary, size, rng));
         }
 
-        var ids = await query.Select(w => w.Id).ToListAsync();
+        if (picked.Count < size)
+        {
+            var rest = await visible
+                .Where(w => !picked.Contains(w.Id))
+                .Select(w => w.Id)
+                .ToListAsync();
 
-        if (ids.Count == 0)
+            picked.AddRange(PickRandom(rest, size - picked.Count, rng));
+        }
+
+        if (picked.Count == 0)
         {
             return [];
         }
-
-        var picked = PickRandom(ids, size, rng);
 
         var words = await _dbContext.Words
             .Where(w => picked.Contains(w.Id))
             .ToListAsync();
 
-        // Завантаження за набором id не зберігає порядок — відновлюємо перемішаний.
+        // Loading by a set of ids loses the order — restore the shuffled one.
         return picked.Select(id => words.First(w => w.Id == id)).ToList();
     }
 

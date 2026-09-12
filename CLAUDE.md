@@ -14,13 +14,14 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 
 - `LanguageLab.Domain/` — entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces. No dependencies on infrastructure.
 - `LanguageLab.Infrastructure/` — EF Core `ApplicationDbContext`, PostgreSQL provider, migrations.
-- `LanguageLab.Application/` — services on top of the domain: word selection, training sessions, book import, sorting, per-scope Leitner progress (`LearningProgressService`), the irregular-verbs trainer (`VerbProgressService`, `VerbSessionService`). Used by the API.
+- `LanguageLab.Application/` — services on top of the domain: word selection, training sessions, book import, sorting, per-scope Leitner progress (`LearningProgressService`), the irregular-verbs trainer (`VerbProgressService`, `VerbSessionService`); `PersonalDictionaryService` (the user's own word list) and `Translation/` (`ITranslator` → `MyMemoryTranslator`, `TranslationService` — shared vocabulary first, provider after). Used by the API.
 - `LanguageLab.Api/` — ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. Endpoints: `/api/dictionaries`, `/api/sorting`, `/api/training` (Leitner quiz on top of `TrainingSessionService`; the question queue lives in the DB); `GET /api/training/preview` — scope's progress scale + batch candidates by frequency, `new-batch` accepts explicit `wordPairIds`.
   `POST /api/training/review` takes an optional `{ dictionaryId, chapterIds }` body: without it the review is global (started from the home screen's "Due today" tile), with it only that scope's due words — the book header reviews the book, a chapter row its chapter once it has no new words left.
   `GET /api/training/stats` — the user's global Leitner standing (per-box counts, learned, due), rendered on the home screen.
   `Auth/` (claims, session validation, the OIDC event handlers), `/api/auth/*`
   (telegram/start, the handler-owned telegram/callback, me, logout), `/api/admin/users*`
-  (list, ban, unban, role, delete).
+  (list, ban, unban, role, delete);
+  `GET /api/dictionaries/personal`, `POST|DELETE /api/dictionaries/personal/words[/{id}]` — the personal dictionary; `GET /api/translate?word=` — a translation suggestion.
 - `web/` — React + Vite SPA: fb2 import in the browser, dictionary stats, word sorting. `src/layout/` (shell: top bar + sidebar), `src/screens/`, `src/components/`, `src/lib/` (formatters), tests `*.test.ts(x)` next to the code (vitest + jsdom, helper `src/test/render.ts`). Details in [web/README.md](web/README.md).
 - `extract.py` — Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictionaries under `dictionaries/`.
 
@@ -41,6 +42,10 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   Telegram credentials are therefore optional in Development and required everywhere else.
 - Dictionaries have an owner and an `IsPublic` flag: import, delete and visibility changes are
   admin-only, and regular users see public dictionaries plus their own.
+- Personal dictionary: one private `Dictionary` per user (`IsPersonal`, created on first use by
+  `GET /api/dictionaries`), words are `WordPair` rows with `OwnerId` set (unique on `(Word, OwnerId)`,
+  `NULLS NOT DISTINCT`), shelved "don't know" on add. Shared vocabulary = `OwnerId IS NULL`; any
+  lookup by word text must filter on it. `Translation:MyMemoryEmail` is optional config.
 - Migrations run automatically on startup (`dbContext.Database.MigrateAsync()` in [Program.cs:39](LanguageLab.Api/Program.cs#L39)).
 - The irregular-verbs trainer is a separate domain from dictionaries: the 68 verbs and their examples live in code (`LanguageLab.Domain/IrregularVerbs/IrregularVerbCatalog`), grouped into 4 pattern groups split into 15 families learned one at a time (`LearningPath` decides locked/available/done). A user's standing on a verb (`VerbProgress`: `New → Learning1 → Learning2 → Learning3 → Learned`, or `Forgotten` via the Forgot button) drives `SessionPlanner`/`ExerciseFactory`, which build a stored queue of tasks (`VerbSession`/`VerbTask`) — seven exercise types (card, gap-fill choice, odd-one-out, match, form-pick, typed gap-fill, all-three-forms typing) with typical-mistake distractors (`DistractorGenerator`). `AnswerChecker` grades server-side and names the mistake (`ErrorKind`); every attempt is logged append-only (`VerbAttempt`). A mistake reinserts the verb 2 and 5 tasks later in the same session. `/api/irregular-verbs` (`GET /progress`, `POST /sessions`, `GET /sessions/{id}/next`, `POST /sessions/{id}/answer`, `POST /sessions/{id}/finish`, `POST /verbs/{v1}/forgot`). No `WordPair`, no dictionary, no seeding — the earlier per-form trainer's table was dropped and replaced by the `IrregularVerbTrainer` migration.
 - Training requires a non-empty `WordPair.Translation` (both for batch words and distractors). Translations for the "don't know" shelf were backfilled once on 2026-09-07 (`result/translations.txt`, local); auto-translation is in the README TODO.

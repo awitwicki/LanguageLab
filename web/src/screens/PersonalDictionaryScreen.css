@@ -1,0 +1,94 @@
+.personal-header {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.personal-meta {
+  color: var(--text-2);
+}
+
+.personal-learning {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+/* Word · Translate · Translation · Add on one row; the hint and notes span underneath. */
+.add-word {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.add-word .field input {
+  width: 100%;
+}
+
+.add-word input[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.add-word-hint,
+.add-word-note {
+  grid-column: 1 / -1;
+}
+
+.add-word-hint {
+  color: var(--text-3);
+}
+
+.personal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+
+.personal-words {
+  display: grid;
+  gap: 2px;
+}
+
+.personal-word {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+}
+
+.personal-word:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.personal-word .word {
+  font-weight: 500;
+}
+
+.personal-word .translation {
+  color: var(--text-2);
+}
+
+.personal-word .state {
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+@media (max-width: 800px) {
+  .add-word {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .personal-word {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .personal-word .translation {
+    grid-column: 1 / -1;
+  }
+}

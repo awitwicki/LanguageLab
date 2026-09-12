@@ -89,9 +89,24 @@ public class WordSortingService
     /// не формальність: унікальні індекси стоять на кожній полиці окремо, тож
     /// без цього слово могло б опинитись і в KnownWords, і в UnknownWords —
     /// і тихо випасти з навчання назавжди.
+    ///
+    /// False for an unknown id or someone else's personal word — the two collapse into the
+    /// same refusal so the endpoint can answer 404 either way, the same as
+    /// PersonalDictionaryService.RemoveAsync, instead of letting a caller probe which ids
+    /// exist by telling ownership and "no such word" apart.
     /// </summary>
-    public async Task MarkAsync(long userId, long wordPairId, SortStatus status, DateTime nowUtc)
+    public async Task<bool> MarkAsync(long userId, long wordPairId, SortStatus status, DateTime nowUtc)
     {
+        var word = await _dbContext.Words
+            .Where(w => w.Id == wordPairId)
+            .Select(w => new { w.OwnerId })
+            .FirstOrDefaultAsync();
+
+        if (word == null || (word.OwnerId != null && word.OwnerId != userId))
+        {
+            return false;
+        }
+
         var known = await _dbContext.KnownWords
             .FirstOrDefaultAsync(k => k.UserId == userId && k.WordPairId == wordPairId);
         var unknown = await _dbContext.UnknownWords
@@ -111,7 +126,7 @@ public class WordSortingService
         // колонки «останні 10» без жодної причини.
         if (alreadyThere)
         {
-            return;
+            return true;
         }
 
         if (known != null)
@@ -154,6 +169,7 @@ public class WordSortingService
         }
 
         await _dbContext.SaveChangesAsync();
+        return true;
     }
 
     /// <summary>

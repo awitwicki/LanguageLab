@@ -29,6 +29,8 @@ export interface DictionaryListItem {
   wordsCount: number
   hasChapters: boolean
   sortedCount: number
+  /** The user's own "My words" list — pinned in the sidebar, never among the books. */
+  isPersonal: boolean
 }
 
 /** Розклад слів скоупу по боксах Leitner. boxes: індекс 0 = бокс 1, лише не вивчені; вивчені — learned. */
@@ -70,6 +72,33 @@ export interface DictionaryDetail {
   chapters: ChapterView[]
   topWords: TopWord[]
   isPublic: boolean
+}
+
+export type TranslationSource = 'dictionary' | 'myMemory' | 'none'
+
+export interface TranslationLookup {
+  word: string
+  translation: string | null
+  source: TranslationSource
+}
+
+/** box is null until the word's first exercise; 1..5 while learning; isLearned once graduated. */
+export interface PersonalWord {
+  wordPairId: number
+  word: string
+  translation: string
+  box: number | null
+  isLearned: boolean
+}
+
+export interface PersonalDictionary {
+  id: number
+  name: string
+  wordsCount: number
+  learnableCount: number
+  dueCount: number
+  learning: LearningProgress
+  words: PersonalWord[]
 }
 
 export interface ImportWord {
@@ -445,6 +474,22 @@ export const api = {
     request<DictionaryDetail>(`/api/dictionaries/${id}`) as Promise<DictionaryDetail>,
 
   deleteDictionary: (id: number) => request<null>(`/api/dictionaries/${id}`, { method: 'DELETE' }),
+
+  translate: (word: string) =>
+    request<TranslationLookup>(`/api/translate?${new URLSearchParams({ word })}`) as Promise<TranslationLookup>,
+
+  getPersonalDictionary: () =>
+    request<PersonalDictionary>('/api/dictionaries/personal') as Promise<PersonalDictionary>,
+
+  // 409 (already there) and 400 (unusable input) carry { message }; request() surfaces it as the Error text.
+  addPersonalWord: (word: string, translation: string) =>
+    request<PersonalWord>('/api/dictionaries/personal/words', {
+      method: 'POST',
+      body: JSON.stringify({ word, translation }),
+    }) as Promise<PersonalWord>,
+
+  removePersonalWord: (wordPairId: number) =>
+    request<null>(`/api/dictionaries/personal/words/${wordPairId}`, { method: 'DELETE' }),
 
   importDictionary: (payload: {
     name: string

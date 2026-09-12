@@ -20,6 +20,12 @@ public class Dictionary : BaseEntity
     /// <summary>Public dictionaries are visible to every signed-in user; private ones only to their owner and admins.</summary>
     public bool IsPublic { get; set; } = true;
 
+    /// <summary>
+    /// The user's own word list ("My words"): one per user, private, no chapters, words typed
+    /// in by hand rather than imported. Visible to its owner only — admins included.
+    /// </summary>
+    public bool IsPersonal { get; set; }
+
     public IList<WordPair> Words { get; set; } = new List<WordPair>();
 
     public IList<Chapter> Chapters { get; set; } = new List<Chapter>();

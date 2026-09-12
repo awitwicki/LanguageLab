@@ -187,9 +187,43 @@ public class WordSortingServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSortingService(db);
 
-        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now);
+        var marked = await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now);
 
+        Assert.True(marked);
         Assert.True(await db.KnownWords.AnyAsync(k => k.UserId == UserId && k.WordPairId == 1));
+    }
+
+    /// <summary>
+    /// A personal word belongs to its owner alone — this is what stops one user from
+    /// enumerating WordPair ids, marking a stranger's private word, and reading its text
+    /// back out through their own GetRecentAsync/UndoAsync.
+    /// </summary>
+    [Fact]
+    public async Task Mark_refuses_a_word_pair_owned_by_someone_else()
+    {
+        await using var db = await ArrangeAsync();
+        db.Users.Add(new TelegramUser { Id = 2, TelegramUserId = 2222222222 });
+        db.Words.Add(new WordPair { Id = 6, Word = "secret", Translation = "таємниця", OwnerId = 2 });
+        await db.SaveChangesAsync();
+
+        var service = new WordSortingService(db);
+
+        var marked = await service.MarkAsync(UserId, wordPairId: 6, SortStatus.Known, Now);
+
+        Assert.False(marked);
+        Assert.False(await db.KnownWords.AnyAsync(k => k.WordPairId == 6));
+    }
+
+    /// <summary>An id that doesn't exist at all is refused the same way — no distinction visible to the caller.</summary>
+    [Fact]
+    public async Task Mark_refuses_an_unknown_word_pair_id()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+
+        var marked = await service.MarkAsync(UserId, wordPairId: 999, SortStatus.Known, Now);
+
+        Assert.False(marked);
     }
 
     /// <summary>

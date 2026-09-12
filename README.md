@@ -11,7 +11,7 @@ Web app for learning new words from books
 Backlog of short topics. When something gets deferred (a stub, an inactive button, "we'll do it later") —
 add one line here **in the same set of changes**. Done items are marked `[x]`.
 
-- [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
+- [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService` (`LanguageLab.Application/Translation`) now exists for single words; wire it into `BookImportService` / `WordSortingService.MarkAsync` (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
 - [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
 - [ ] Spacing tokens in the design system: `web/src/index.css` tokenizes color/typography/radii, but not spacing
@@ -28,6 +28,8 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Top-100/200/500/1000 English word dictionaries, public
 - [ ] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
 - [ ] Comment sweep: code comments are still Ukrainian in ~190 lines across `web/src` (plus `useBatchPreview.test.ts` test names), 36 backend `.cs` files (`Domain` mostly), `Program.cs` and the `Dockerfile` — comments only, no UI copy
+- [ ] Edit a personal word's translation after it was added (`web/src/screens/PersonalDictionaryScreen.tsx`, `PersonalDictionaryService`)
+- [ ] Cache provider translations into shared `WordPair` rows so the same word is not looked up twice (`TranslationService.LookupAsync`)
 
 ## Development
 
@@ -41,6 +43,8 @@ Everything in the project — code, comments, docs, UI copy — is English. The 
 
 * `POSTGRES_PASSWORD={password}` - Postgres password, referenced by `compose.yaml` for both the database container and the API's connection string
 * `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` - OpenID Connect credentials, passed through to `Telegram:ClientId` / `Telegram:ClientSecret` (see Accounts, below)
+* `Translation__MyMemoryEmail` - optional; any contact email raises MyMemory's free
+  translation quota from 5 000 to 50 000 characters a day per server IP (see Translation, below)
 
 **Docker compose:** create `.env` file and fill it with those variables.
 
@@ -54,6 +58,9 @@ Everything in the project — code, comments, docs, UI copy — is English. The 
   @BotFather → your bot → **Login Widget**. Required outside Development, where the app
   refuses to start without them. In Development they are optional: the app starts with a
   warning and Telegram sign-in fails, but the local dev sign-in below still works.
+* `Translation:MyMemoryEmail` - optional. Auto-translation for the personal dictionary uses
+  MyMemory (api.mymemory.translated.net), which needs no key; the email only raises the daily
+  quota. Leave it empty to run anonymously.
 
 For a local run, fill in `LanguageLab.Api/appsettings.Development.json` (see the example
 below). In Docker the same values are passed via env vars using the standard
@@ -146,6 +153,15 @@ before the consent screen ever renders. The OIDC handler's default format protec
 `ServerSideStateFormat` (`LanguageLab.Api/Auth/`) keeps them in process memory and sends only a
 43-character handle. That store is per-process: restarting the API mid-login costs the user a
 retry.
+
+### Personal dictionary and translation
+
+Every user has a private "My words" dictionary (created on first use, `IsPersonal`). Words are
+typed in by hand; `GET /api/translate?word=` suggests a Ukrainian translation — the shared
+vocabulary first, MyMemory after — and the user edits it before adding. Added words are
+`WordPair` rows owned by the user (`OwnerId`), so a personal translation never overwrites the
+shared one, and they are shelved "don't know" at once so the usual exercise and review flows
+train them like any book. Provider results are not cached (see TODO).
 
 ## Run
 

@@ -4,8 +4,9 @@ import { click, render } from '../test/render'
 import { Sidebar } from './Sidebar'
 
 const items: DictionaryListItem[] = [
-  { id: 1, name: 'Wool', wordsCount: 2000, sortedCount: 500, hasChapters: true },
-  { id: 2, name: 'Dune', wordsCount: 100, sortedCount: 100, hasChapters: false },
+  { id: 1, name: 'Wool', wordsCount: 2000, sortedCount: 500, hasChapters: true, isPersonal: false },
+  { id: 2, name: 'Dune', wordsCount: 100, sortedCount: 100, hasChapters: false, isPersonal: false },
+  { id: 3, name: 'My words', wordsCount: 12, sortedCount: 12, hasChapters: false, isPersonal: true },
 ]
 
 describe('Sidebar', () => {
@@ -23,10 +24,12 @@ describe('Sidebar', () => {
         verbsLearnedPercent={0}
         verbsActive={false}
         onOpenVerbs={() => {}}
+        personalActive={false}
+        onOpenPersonal={() => {}}
       />,
     )
 
-    const rows = [...container.querySelectorAll<HTMLButtonElement>('.sidebar-item:not(.program-item)')]
+    const rows = [...container.querySelectorAll<HTMLButtonElement>('.sidebar-item:not(.program-item):not(.personal-item)')]
 
     expect(rows.map((r) => r.querySelector('.name')?.textContent)).toEqual(['Wool', 'Dune'])
     expect(rows.map((r) => r.querySelector('.pct')?.textContent)).toEqual(['25%', '100%'])
@@ -51,6 +54,8 @@ describe('Sidebar', () => {
         verbsLearnedPercent={0}
         verbsActive={false}
         onOpenVerbs={() => {}}
+        personalActive={false}
+        onOpenPersonal={() => {}}
       />,
     )
 
@@ -72,6 +77,8 @@ describe('Sidebar', () => {
         verbsLearnedPercent={0}
         verbsActive={false}
         onOpenVerbs={() => {}}
+        personalActive={false}
+        onOpenPersonal={() => {}}
       />,
     )
 
@@ -97,10 +104,67 @@ describe('Sidebar', () => {
         verbsLearnedPercent={0}
         verbsActive={false}
         onOpenVerbs={() => {}}
+        personalActive={false}
+        onOpenPersonal={() => {}}
       />,
     )
 
     expect(container.querySelector('.sidebar-footer')).toBeNull()
+  })
+
+  it('pins the personal dictionary in its own section with a word count', async () => {
+    const onOpenPersonal = vi.fn()
+    const { container } = await render(
+      <Sidebar
+        items={items}
+        error={null}
+        activeId={null}
+        importActive={false}
+        canImport={false}
+        onSelect={() => {}}
+        onImport={() => {}}
+        verbsLearnedPercent={0}
+        verbsActive={false}
+        onOpenVerbs={() => {}}
+        personalActive
+        onOpenPersonal={onOpenPersonal}
+      />,
+    )
+
+    const personal = container.querySelector<HTMLButtonElement>('.personal-item')!
+
+    expect(personal.querySelector('.name')?.textContent).toBe('My words')
+    expect(personal.querySelector('.pct')?.textContent).toBe('12 words')
+    expect(personal.getAttribute('aria-current')).toBe('page')
+
+    const books = [...container.querySelectorAll('.sidebar-item:not(.program-item):not(.personal-item) .name')]
+    expect(books.map((b) => b.textContent)).toEqual(['Wool', 'Dune'])
+
+    await click(personal)
+
+    expect(onOpenPersonal).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the personal entry before the list has loaded', async () => {
+    const { container } = await render(
+      <Sidebar
+        items={null}
+        error={null}
+        activeId={null}
+        importActive={false}
+        canImport={false}
+        onSelect={() => {}}
+        onImport={() => {}}
+        verbsLearnedPercent={0}
+        verbsActive={false}
+        onOpenVerbs={() => {}}
+        personalActive={false}
+        onOpenPersonal={() => {}}
+      />,
+    )
+
+    expect(container.querySelector('.personal-item .name')?.textContent).toBe('My words')
+    expect(container.querySelector('.personal-item .pct')?.textContent).toBe('0 words')
   })
 })
 
@@ -118,6 +182,8 @@ describe('the Programs section', () => {
         verbsLearnedPercent={25}
         verbsActive={false}
         onOpenVerbs={() => {}}
+        personalActive={false}
+        onOpenPersonal={() => {}}
       />,
     )
 
@@ -142,6 +208,8 @@ describe('the Programs section', () => {
         verbsLearnedPercent={0}
         verbsActive
         onOpenVerbs={onOpenVerbs}
+        personalActive={false}
+        onOpenPersonal={() => {}}
       />,
     )
 

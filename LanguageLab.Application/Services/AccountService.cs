@@ -29,7 +29,7 @@ public class AccountService
     /// <summary>
     /// Hard delete, with the same consequences as an admin deleting the user: shelves,
     /// Leitner progress and trainings go by cascade; dictionaries they imported survive
-    /// with a null owner.
+    /// with a null owner. The personal dictionary goes too.
     /// </summary>
     public async Task<AccountDeleteResult> DeleteOwnAsync(long userId)
     {
@@ -45,6 +45,7 @@ public class AccountService
             return AccountDeleteResult.LastAdmin;
         }
 
+        UserRules.RemovePersonalDictionary(_dbContext, userId);
         _dbContext.Users.Remove(user);
         await _dbContext.SaveChangesAsync();
 

@@ -103,7 +103,7 @@ public class TrainingSessionService
 
         // Дистрактори — з усієї книжки, а не лише з глави: варіанти природніші,
         // а маленька глава не лишає квіз без валідних дистракторів.
-        var pool = await _selection.GetDistractorPoolAsync(dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
+        var pool = await _selection.GetDistractorPoolAsync(userId, dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
             userId, dictionaryId, TrainingMode.NewBatch, words, NewBatchRepeats, pool, DirectionPolicy.EnToUa, nowUtc);
@@ -125,7 +125,7 @@ public class TrainingSessionService
             return null;
         }
 
-        var pool = await _selection.GetDistractorPoolAsync(dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
+        var pool = await _selection.GetDistractorPoolAsync(userId, dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
             userId, dictionaryId, TrainingMode.Review, words, ReviewRepeats, pool, DirectionPolicy.Random, nowUtc);
@@ -153,7 +153,7 @@ public class TrainingSessionService
 
         var words = await _dbContext.Words.Where(w => failedIds.Contains(w.Id)).ToListAsync();
         var pool = await _selection.GetDistractorPoolAsync(
-            previous.DictionaryId, WordSelectionService.DistractorPoolSize, _rng);
+            userId, previous.DictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
             userId, previous.DictionaryId, TrainingMode.NewBatch, words, NewBatchRepeats, pool, DirectionPolicy.EnToUa, nowUtc);

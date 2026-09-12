@@ -202,4 +202,20 @@ public class AdminUserServiceTests
 
         Assert.Equal(AdminActionResult.NotFound, await new AdminUserService(db).SetBannedAsync(AdminId, 999, true));
     }
+
+    [Fact]
+    public async Task Deleting_a_user_takes_their_personal_dictionary()
+    {
+        await using var db = await SeedAsync();
+        db.Dictionaries.Add(new Domain.Entities.Dictionary
+        {
+            Id = 1, Name = "My words", OwnerId = MemberId, IsPublic = false, IsPersonal = true,
+        });
+        await db.SaveChangesAsync();
+
+        var result = await new AdminUserService(db).DeleteAsync(AdminId, MemberId);
+
+        Assert.Equal(AdminActionResult.Ok, result);
+        Assert.False(await db.Dictionaries.AnyAsync(d => d.IsPersonal && d.OwnerId == MemberId));
+    }
 }

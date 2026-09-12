@@ -29,9 +29,21 @@ public class ApplicationDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
+        // Shared words (OwnerId null) stay unique among themselves and each user's personal
+        // words unique per user: NULLS NOT DISTINCT makes the two-column index behave that
+        // way (Postgres 15+). Without it every null owner would count as distinct and the
+        // shared vocabulary could grow duplicates.
         builder.Entity<WordPair>()
-            .HasIndex(w => w.Word)
-            .IsUnique();
+            .HasIndex(w => new { w.Word, w.OwnerId })
+            .IsUnique()
+            .AreNullsDistinct(false);
+
+        // A personal word has no life outside its owner's dictionary.
+        builder.Entity<WordPair>()
+            .HasOne(w => w.Owner)
+            .WithMany()
+            .HasForeignKey(w => w.OwnerId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Login upserts by TelegramUserId; without the unique index two concurrent
         // first logins could create two accounts for the same Telegram user.
@@ -50,6 +62,13 @@ public class ApplicationDbContext : DbContext
         // Listing dictionaries always filters on visibility.
         builder.Entity<Dictionary>()
             .HasIndex(d => new { d.IsPublic, d.OwnerId });
+
+        // One personal dictionary per user, enforced where the get-or-create race lives.
+        builder.Entity<Dictionary>()
+            .HasIndex(d => d.OwnerId)
+            .IsUnique()
+            .HasFilter("\"IsPersonal\"")
+            .HasDatabaseName("IX_Dictionaries_OwnerId_Personal");
 
         // Join-таблиця тепер сутність із навантаженням (Frequency), але назва й каскади
         // ті самі, що були за конвенцією — міграція лише додає колонку.

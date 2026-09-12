@@ -37,8 +37,11 @@ public static class SortingEndpoints
             MarkRequest request, WordSortingService sorting, ICurrentUser currentUser) =>
         {
             var userId = await currentUser.GetIdAsync();
-            await sorting.MarkAsync(userId, request.WordPairId, request.Status, DateTime.UtcNow);
-            return Results.NoContent();
+            var marked = await sorting.MarkAsync(userId, request.WordPairId, request.Status, DateTime.UtcNow);
+
+            // 404 rather than 403: an unknown id and someone else's private word look the
+            // same from here, so neither is probeable by id.
+            return marked ? Results.NoContent() : Results.NotFound();
         });
 
         group.MapPost("/undo", async (WordSortingService sorting, ICurrentUser currentUser) =>

@@ -5,6 +5,7 @@ using LanguageLab.Api;
 using LanguageLab.Api.Auth;
 using LanguageLab.Api.Endpoints;
 using LanguageLab.Application.Services;
+using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -163,6 +164,16 @@ builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<VerbProgressService>();
 builder.Services.AddScoped<VerbSessionService>();
 
+// MyMemory is keyless; the optional contact email only raises its daily quota.
+builder.Services.Configure<TranslationOptions>(builder.Configuration.GetSection(TranslationOptions.SectionName));
+builder.Services.AddHttpClient<ITranslator, MyMemoryTranslator>(client =>
+{
+    client.BaseAddress = new Uri(MyMemoryTranslator.BaseUrl);
+    client.Timeout = MyMemoryTranslator.Timeout;
+});
+builder.Services.AddScoped<TranslationService>();
+builder.Services.AddScoped<PersonalDictionaryService>();
+
 builder.Services.AddRequestDecompression();
 
 // SortStatus їздить рядком («known»), а не числом: JSON має читатись очима.
@@ -218,6 +229,7 @@ app.MapSortingEndpoints();
 app.MapTrainingEndpoints();
 app.MapAdminEndpoints();
 app.MapIrregularVerbEndpoints();
+app.MapTranslationEndpoints();
 
 // SPA має власний роутинг: усе, що не /api і не файл, віддаємо index.html.
 app.MapFallbackToFile("index.html");

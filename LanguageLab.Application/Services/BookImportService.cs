@@ -62,8 +62,10 @@ public class BookImportService
 
         var allWords = totals.Keys.ToList();
 
+        // Shared rows only: a user's personal "silo" is theirs — a book must neither reuse it
+        // nor trip over it in the dictionary below (Word is unique per owner, not globally).
         var existing = await _dbContext.Words
-            .Where(w => allWords.Contains(w.Word))
+            .Where(w => w.OwnerId == null && allWords.Contains(w.Word))
             .ToDictionaryAsync(w => w.Word, StringComparer.Ordinal);
 
         // Наявні слова не чіпаємо взагалі: книжка приходить із порожніми перекладами

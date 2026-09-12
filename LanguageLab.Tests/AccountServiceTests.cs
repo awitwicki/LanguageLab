@@ -93,4 +93,23 @@ public class AccountServiceTests
 
         Assert.Equal(AccountDeleteResult.NotFound, await new AccountService(db).DeleteOwnAsync(999));
     }
+
+    /// <summary>
+    /// Imported books outlive their importer (the FK is SetNull), but the personal dictionary is
+    /// nothing without its owner and must not linger as an invisible orphan.
+    /// </summary>
+    [Fact]
+    public async Task Deleting_the_account_takes_the_personal_dictionary_but_not_imported_books()
+    {
+        await using var db = await SeedAsync();
+        db.Dictionaries.AddRange(
+            new Domain.Entities.Dictionary { Id = 1, Name = "My words", OwnerId = MemberId, IsPublic = false, IsPersonal = true },
+            new Domain.Entities.Dictionary { Id = 2, Name = "Wool", OwnerId = MemberId, IsPublic = true });
+        await db.SaveChangesAsync();
+
+        await new AccountService(db).DeleteOwnAsync(MemberId);
+
+        Assert.False(await db.Dictionaries.AnyAsync(d => d.Id == 1));
+        Assert.True(await db.Dictionaries.AnyAsync(d => d.Id == 2));
+    }
 }

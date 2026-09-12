@@ -147,4 +147,25 @@ public class BookImportServiceTests
         Assert.Equal(42, dictionary.OwnerId);
         Assert.False(dictionary.IsPublic);
     }
+
+    /// <summary>
+    /// A personal word spelled like a book word is neither reused nor a collision: the book gets
+    /// its own shared row. Without the owner filter the lookup's ToDictionary would throw on it.
+    /// </summary>
+    [Fact]
+    public async Task An_owned_word_with_the_same_spelling_is_ignored_by_import()
+    {
+        await using var db = NewContext();
+        db.Users.Add(new TelegramUser { Id = 5, TelegramUserId = 555 });
+        db.Words.Add(new WordPair { Id = 1, Word = "silo", Translation = "силос", OwnerId = 5 });
+        await db.SaveChangesAsync();
+
+        var result = await new BookImportService(db).ImportAsync(TwoChapterBook(), ownerId: 1, isPublic: true);
+
+        var silos = await db.Words.Where(w => w.Word == "silo").OrderBy(w => w.Id).ToListAsync();
+        Assert.Equal(2, silos.Count);
+        Assert.Null(silos[1].OwnerId);
+        Assert.Equal("", silos[1].Translation);
+        Assert.Equal(3, result.NewWords);
+    }
 }

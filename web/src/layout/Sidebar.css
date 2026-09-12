@@ -63,6 +63,14 @@
   background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
+.personal-item {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.personal-item[aria-current='page'] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
 .sidebar-item .name {
   font-weight: 500;
   overflow: hidden;

@@ -19,7 +19,8 @@ public class DictionaryAccessServiceTests
         db.Dictionaries.AddRange(
             new Domain.Entities.Dictionary { Id = 10, Name = "public", OwnerId = Owner, IsPublic = true },
             new Domain.Entities.Dictionary { Id = 20, Name = "private", OwnerId = Owner, IsPublic = false },
-            new Domain.Entities.Dictionary { Id = 30, Name = "system", OwnerId = null, IsPublic = true });
+            new Domain.Entities.Dictionary { Id = 30, Name = "system", OwnerId = null, IsPublic = true },
+            new Domain.Entities.Dictionary { Id = 40, Name = "My words", OwnerId = Owner, IsPublic = false, IsPersonal = true });
 
         await db.SaveChangesAsync();
 
@@ -51,7 +52,7 @@ public class DictionaryAccessServiceTests
             .OrderBy(id => id)
             .ToListAsync();
 
-        Assert.Equal(new long[] { 10, 20, 30 }, ids);
+        Assert.Equal(new long[] { 10, 20, 30, 40 }, ids);
     }
 
     [Fact]
@@ -72,6 +73,7 @@ public class DictionaryAccessServiceTests
     [InlineData(10, true)]
     [InlineData(20, false)]
     [InlineData(30, true)]
+    [InlineData(40, false)]
     [InlineData(999, false)]
     public async Task IsVisibleAsync_matches_the_query(long dictionaryId, bool expected)
     {
@@ -81,5 +83,18 @@ public class DictionaryAccessServiceTests
             .IsVisibleAsync(dictionaryId, Stranger, UserRole.User);
 
         Assert.Equal(expected, visible);
+    }
+
+    /// <summary>A personal dictionary is someone's private notes: not even an admin browses it.</summary>
+    [Fact]
+    public async Task A_personal_dictionary_is_visible_to_its_owner_only()
+    {
+        await using var db = await SeedAsync();
+        var access = new DictionaryAccessService(db);
+
+        Assert.True(await access.IsVisibleAsync(40, Owner, UserRole.User));
+        Assert.True(await access.IsVisibleAsync(40, Owner, UserRole.Admin));
+        Assert.False(await access.IsVisibleAsync(40, Stranger, UserRole.User));
+        Assert.False(await access.IsVisibleAsync(40, Stranger, UserRole.Admin));
     }
 }
