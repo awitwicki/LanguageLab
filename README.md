@@ -17,6 +17,8 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
 - [ ] Show translation on the sorting card (now available for translated words)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
+- [ ] Resume an irregular-verbs session after a page reload — the card queue is in-memory only (`web/src/verbs/useVerbSession.ts`); grades already posted are not lost, only the position in the queue
+- [ ] Cramming flip cards for irregular verbs: the verb on one side, the three forms on the other, no grading (`web/src/verbs/`)
 - [ ] Leitner stats: box histogram, learned / due today (`TrainingSessionService.GetStatsAsync` already exists)
 - [ ] User stats: total known / learning / excluded counts
 - [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
@@ -32,8 +34,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Caption under the chapter/book progress scale (`web/src/components/LeitnerScale.tsx`): currently unclear that this is specifically word-learning progress, not an arbitrary percentage
 - [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
 - [x] Dictionary visibility: a toggle at import time / in settings — public (visible to all users) or private (only the creator); `Dictionary` (`LanguageLab.Domain/Entities/Dictionary.cs`) currently has no owner or visibility field
-- [x] Irregular-verbs dictionary, split into 4 groups: seeded at startup as a public system dictionary, each verb stored as the `v1 – v2 – v3` triplet (`LanguageLab.Application/Seeding/`)
-- [ ] "Most frequent words" on the dictionary screen shows the synthetic table-order ranks of a seeded dictionary (`SystemDictionarySeeder` sets frequency = table position so batches follow the table) — hide the section or the counts for seeded dictionaries (`web/src/screens/DictionaryScreen.tsx`)
+- [x] Irregular-verbs program: four steps by pattern; each verb is three cards (one open, two to recall and self-grade), grades are kept per form with "learned" after 3 correct in a row, step tables show per-form marks, sessions take up to 10 weakest verbs (`LanguageLab.Domain/IrregularVerbs/`, `/api/irregular-verbs`, `web/src/verbs/`) — not a dictionary, no `WordPair`; the seeded triplet dictionary was removed by the `IrregularVerbProgram` migration
 - [ ] Top-100/200/500/1000 English word dictionaries, public
 - [ ] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
 - [x] SPA copy sweep: parts of the UI are still Ukrainian (`Sidebar`, `ImportScreen`, `App` route titles) while newer screens are English

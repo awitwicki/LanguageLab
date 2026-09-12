@@ -11,9 +11,25 @@ interface Props {
   canImport: boolean
   onSelect: (id: number) => void
   onImport: () => void
+  verbsDoneSteps: number
+  verbsTotalSteps: number
+  verbsActive: boolean
+  onOpenVerbs: () => void
 }
 
-export function Sidebar({ items, error, activeId, importActive, canImport, onSelect, onImport }: Props) {
+export function Sidebar({
+  items,
+  error,
+  activeId,
+  importActive,
+  canImport,
+  onSelect,
+  onImport,
+  verbsDoneSteps,
+  verbsTotalSteps,
+  verbsActive,
+  onOpenVerbs,
+}: Props) {
   return (
     <nav className="sidebar" aria-label="Dictionaries">
       <p className="sidebar-heading">Dictionaries</p>
@@ -37,6 +53,23 @@ export function Sidebar({ items, error, activeId, importActive, canImport, onSel
             </button>
           </li>
         ))}
+      </ul>
+
+      <p className="sidebar-heading">Programs</p>
+      <ul className="sidebar-list">
+        <li>
+          <button
+            type="button"
+            className="sidebar-item program-item"
+            aria-current={verbsActive ? 'page' : undefined}
+            onClick={onOpenVerbs}
+          >
+            <span className="name">Irregular verbs</span>
+            <span className="pct num">
+              {verbsDoneSteps} of {verbsTotalSteps} steps
+            </span>
+          </button>
+        </li>
       </ul>
 
       {canImport && (

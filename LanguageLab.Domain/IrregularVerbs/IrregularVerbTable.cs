@@ -1,41 +1,24 @@
-namespace LanguageLab.Application.Seeding;
-
-/// <summary>
-/// One irregular verb: the three forms and the Ukrainian translation. Group is
-/// the 1-based pattern type from the learner's table (1 — all forms alike … 4 — all differ).
-/// </summary>
-public sealed record IrregularVerb(int Group, string V1, string V2, string V3, string Translation)
-{
-    /// <summary>
-    /// What the learner sees as the "word": all three forms at once. The triplet is
-    /// deliberately not the bare infinitive, so the verb gets its own WordPair with its
-    /// own shelf and Leitner progress instead of sharing them with the same word from a book.
-    /// </summary>
-    public string Word => $"{V1} – {V2} – {V3}";
-}
+namespace LanguageLab.Domain.IrregularVerbs;
 
 /// <summary>
 /// The irregular-verbs table, grouped by pattern rather than alphabetically — that is how
-/// the groups are meant to be learned, and the order within a group keeps the mini-families
+/// the groups are meant to be learned, and the order within a step keeps the mini-families
 /// (bought / thought / caught, begin / drink / swim, know / grow / throw) next to each other.
-/// The seeder turns table position into frequency, so batches follow this order.
+/// The session planner uses this order for verbs it has never seen the user answer.
 /// </summary>
-public static class IrregularVerbs
+public static class IrregularVerbTable
 {
-    public const string DictionaryName = "Irregular verbs";
-
-    /// <summary>Chapter titles, indexed by Group - 1.</summary>
-    public static readonly IReadOnlyList<string> GroupTitles =
+    public static readonly IReadOnlyList<string> StepTitles =
     [
-        "All three forms alike · cut – cut – cut",
-        "First and third alike · come – came – come",
-        "Second and third alike · buy – bought – bought",
-        "All three forms differ · begin – began – begun",
+        "All three forms alike",
+        "First and third alike",
+        "Second and third alike",
+        "All three forms differ",
     ];
 
     public static readonly IReadOnlyList<IrregularVerb> All =
     [
-        // Type 1 — V1 = V2 = V3
+        // Step 1 — V1 = V2 = V3
         new(1, "cut", "cut", "cut", "різати"),
         new(1, "put", "put", "put", "класти"),
         new(1, "let", "let", "let", "дозволяти"),
@@ -46,12 +29,12 @@ public static class IrregularVerbs
         new(1, "hurt", "hurt", "hurt", "боліти / ранити"),
         new(1, "read", "read", "read", "читати"),
 
-        // Type 2 — V1 = V3
+        // Step 2 — V1 = V3
         new(2, "come", "came", "come", "приходити"),
         new(2, "become", "became", "become", "ставати"),
         new(2, "run", "ran", "run", "бігти"),
 
-        // Type 3 — V2 = V3
+        // Step 3 — V2 = V3
         new(3, "buy", "bought", "bought", "купувати"),
         new(3, "bring", "brought", "brought", "приносити"),
         new(3, "think", "thought", "thought", "думати"),
@@ -82,7 +65,7 @@ public static class IrregularVerbs
         new(3, "build", "built", "built", "будувати"),
         new(3, "get", "got", "got", "отримувати"),
 
-        // Type 4 — all three forms differ
+        // Step 4 — all three forms differ
         new(4, "be", "was/were", "been", "бути"),
         new(4, "do", "did", "done", "робити"),
         new(4, "go", "went", "gone", "йти"),
@@ -111,4 +94,16 @@ public static class IrregularVerbs
         new(4, "fly", "flew", "flown", "літати"),
         new(4, "draw", "drew", "drawn", "малювати"),
     ];
+
+    public static readonly IReadOnlyDictionary<int, IReadOnlyList<IrregularVerb>> Steps =
+        All.GroupBy(v => v.Step)
+            .OrderBy(g => g.Key)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<IrregularVerb>)g.ToList());
+
+    private static readonly IReadOnlyDictionary<string, IrregularVerb> ByV1 =
+        All.ToDictionary(v => v.V1, StringComparer.Ordinal);
+
+    public static string TitleOf(int step) => StepTitles[step - 1];
+
+    public static IrregularVerb? Find(string v1) => ByV1.GetValueOrDefault(v1);
 }

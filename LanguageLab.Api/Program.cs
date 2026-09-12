@@ -4,7 +4,6 @@ using System.Text.Json.Serialization;
 using LanguageLab.Api;
 using LanguageLab.Api.Auth;
 using LanguageLab.Api.Endpoints;
-using LanguageLab.Application.Seeding;
 using LanguageLab.Application.Services;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Infrastructure.Database;
@@ -161,7 +160,7 @@ builder.Services.AddScoped<LearningProgressService>();
 builder.Services.AddScoped<DictionaryAccessService>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<AccountService>();
-builder.Services.AddScoped<SystemDictionarySeeder>();
+builder.Services.AddScoped<IrregularVerbService>();
 
 builder.Services.AddRequestDecompression();
 
@@ -183,10 +182,6 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     await dbContext.Database.MigrateAsync();
-
-    // Built-in dictionaries (irregular verbs) follow the schema: idempotent, so a restart
-    // is a no-op and a deleted one comes back.
-    await scope.ServiceProvider.GetRequiredService<SystemDictionarySeeder>().SeedAsync();
 }
 
 // l.kodzuverse.com terminates TLS at a reverse proxy. Without this the app thinks every
@@ -221,6 +216,7 @@ app.MapDictionaryEndpoints();
 app.MapSortingEndpoints();
 app.MapTrainingEndpoints();
 app.MapAdminEndpoints();
+app.MapIrregularVerbEndpoints();
 
 // SPA має власний роутинг: усе, що не /api і не файл, віддаємо index.html.
 app.MapFallbackToFile("index.html");

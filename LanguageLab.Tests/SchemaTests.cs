@@ -1,4 +1,5 @@
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.IrregularVerbs;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -127,6 +128,41 @@ public class SchemaTests
 
         Assert.Null(dictionary.OwnerId);
         Assert.True(dictionary.IsPublic);
+    }
+
+    /// <summary>Verb-form grades are keyed to a user like shelves are: deleting the account deletes them.</summary>
+    [Fact]
+    public async Task Deleting_a_user_removes_their_verb_form_progress()
+    {
+        await using var db = NewContext();
+
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = DateTime.UtcNow });
+        db.IrregularVerbFormProgresses.Add(new IrregularVerbFormProgress
+        {
+            Id = 1, UserId = 1, Verb = "go", Form = VerbForm.V2, Streak = 1, LastAnsweredAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        await db.IrregularVerbFormProgresses.ToListAsync();
+
+        db.Users.Remove(await db.Users.FirstAsync(u => u.Id == 1));
+        await db.SaveChangesAsync();
+
+        Assert.Empty(await db.IrregularVerbFormProgresses.ToListAsync());
+    }
+
+    /// <summary>The grade endpoint upserts on user + verb + form, so that key must be unique.</summary>
+    [Fact]
+    public void A_user_has_one_row_per_verb_form()
+    {
+        using var db = NewContext();
+
+        var index = db.Model
+            .FindEntityType(typeof(IrregularVerbFormProgress))!
+            .GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(["UserId", "Verb", "Form"]));
+
+        Assert.True(index.IsUnique);
     }
 
     /// <summary>Login upserts by TelegramUserId, so the column must not allow a second row with the same id.</summary>

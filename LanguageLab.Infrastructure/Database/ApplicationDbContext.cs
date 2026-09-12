@@ -13,6 +13,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<KnownWord> KnownWords { get; set; }
     public DbSet<UnknownWord> UnknownWords { get; set; }
     public DbSet<WordProgress> WordProgresses { get; set; }
+    public DbSet<IrregularVerbFormProgress> IrregularVerbFormProgresses { get; set; }
     public DbSet<Chapter> Chapters { get; set; }
     public DbSet<ChapterWord> ChapterWords { get; set; }
     public DbSet<DictionaryWord> DictionaryWords { get; set; }
@@ -79,6 +80,11 @@ public class ApplicationDbContext : DbContext
 
         builder.Entity<WordProgress>()
             .HasIndex(p => new { p.UserId, p.WordPairId })
+            .IsUnique();
+
+        // One row per user × verb × form; the grade endpoint upserts on this key.
+        builder.Entity<IrregularVerbFormProgress>()
+            .HasIndex(p => new { p.UserId, p.Verb, p.Form })
             .IsUnique();
 
         // Вибірка закріплення: слова цього юзера, не вивчені, з простроченим DueAt.

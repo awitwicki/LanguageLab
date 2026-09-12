@@ -187,6 +187,67 @@ export interface TrainingSummary {
   words: WordResult[]
 }
 
+export type VerbForm = 'v1' | 'v2' | 'v3'
+
+export type FormState = 'unseen' | 'missed' | 'learning' | 'learned'
+
+export interface FormProgressView {
+  form: VerbForm
+  state: FormState
+  /** Correct grades in a row; 3 makes the form learned. */
+  streak: number
+  correct: number
+  wrong: number
+}
+
+export interface VerbView {
+  v1: string
+  v2: string
+  v3: string
+  translation: string
+  /** All three forms learned. */
+  learned: boolean
+  /** Always three entries, in v1, v2, v3 order. */
+  forms: FormProgressView[]
+}
+
+export interface StepView {
+  step: number
+  title: string
+  totalVerbs: number
+  learnedVerbs: number
+  totalForms: number
+  learnedForms: number
+  verbs: VerbView[]
+}
+
+export interface IrregularVerbsOverview {
+  steps: StepView[]
+}
+
+export interface SessionCardView {
+  v1: string
+  v2: string
+  v3: string
+  translation: string
+  /** The form shown open; the other two are the closed cards the learner grades. */
+  open: VerbForm
+}
+
+export interface IrregularVerbSession {
+  step: number
+  title: string
+  /** True when the step had nothing left to learn, so these are already-learned verbs. */
+  review: boolean
+  cards: SessionCardView[]
+}
+
+export interface GradeResult {
+  verb: string
+  learned: boolean
+  forms: FormProgressView[]
+}
+
 let unauthorizedHandler: () => void = () => {}
 
 /**
@@ -325,6 +386,18 @@ export const api = {
 
   finish: (trainingId: number) =>
     request<TrainingSummary>(`/api/training/${trainingId}/finish`, { method: 'POST' }) as Promise<TrainingSummary>,
+
+  getIrregularVerbs: () => request<IrregularVerbsOverview>('/api/irregular-verbs') as Promise<IrregularVerbsOverview>,
+
+  getVerbSession: (step: number) =>
+    request<IrregularVerbSession>(`/api/irregular-verbs/steps/${step}/session`) as Promise<IrregularVerbSession>,
+
+  /** One self-grade of one closed card; the server upserts the form's row and returns the verb's three forms. */
+  gradeVerbForm: (verb: string, form: VerbForm, correct: boolean) =>
+    request<GradeResult>('/api/irregular-verbs/grades', {
+      method: 'POST',
+      body: JSON.stringify({ verb, form, correct }),
+    }) as Promise<GradeResult>,
 
   // Raw fetch, not request(): 401 here means "not signed in yet", which is an answer, not a
   // dropped session.
