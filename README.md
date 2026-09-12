@@ -13,7 +13,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 
 - [x] Account menu in the top bar: currently an inactive button (profile, sign out)
 - [x] "Start exercise" on the dictionary screen: Leitner quiz in the web app per chapter or book, batch of 5/10/20 (`/api/training`)
-- [ ] Delete dictionary from the UI (`DELETE /api/dictionaries/{id}` already exists)
+- [x] Delete dictionary from the UI (`DELETE /api/dictionaries/{id}` already exists)
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
 - [ ] Show translation on the sorting card (now available for translated words)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)

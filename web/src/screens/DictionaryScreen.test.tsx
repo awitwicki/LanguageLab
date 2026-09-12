@@ -3,7 +3,12 @@ import type { DictionaryDetail, LearningProgress, TrainingStarted } from '../api
 import { click, flush, render } from '../test/render'
 import { DictionaryScreen } from './DictionaryScreen'
 
-const apiMock = vi.hoisted(() => ({ getDictionary: vi.fn(), startReview: vi.fn(), setDictionaryVisibility: vi.fn() }))
+const apiMock = vi.hoisted(() => ({
+  getDictionary: vi.fn(),
+  startReview: vi.fn(),
+  setDictionaryVisibility: vi.fn(),
+  deleteDictionary: vi.fn(),
+}))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
 
@@ -41,7 +46,17 @@ const detail: DictionaryDetail = {
 const reviewStarted: TrainingStarted = { trainingId: 9, mode: 'review', words: [], totalQuestions: 12 }
 
 function screen(overrides: Partial<Parameters<typeof DictionaryScreen>[0]> = {}) {
-  return <DictionaryScreen id={7} role="user" onSort={() => {}} onTrain={() => {}} onReview={() => {}} {...overrides} />
+  return (
+    <DictionaryScreen
+      id={7}
+      role="user"
+      onSort={() => {}}
+      onTrain={() => {}}
+      onReview={() => {}}
+      onDeleted={() => {}}
+      {...overrides}
+    />
+  )
 }
 
 function buttons(container: HTMLElement) {
@@ -53,6 +68,7 @@ beforeEach(() => {
   apiMock.getDictionary.mockResolvedValue(detail)
   apiMock.startReview.mockResolvedValue(reviewStarted)
   apiMock.setDictionaryVisibility.mockResolvedValue(null)
+  apiMock.deleteDictionary.mockResolvedValue(null)
 })
 
 describe('DictionaryScreen — chapters', () => {
@@ -312,6 +328,52 @@ describe('DictionaryScreen — visibility', () => {
     await flush()
 
     expect(toggle.checked).toBe(true)
+    expect(container.textContent).toContain('network error')
+  })
+})
+
+describe('DictionaryScreen — delete', () => {
+  it('a regular user sees no delete button', async () => {
+    const { container } = await render(screen({ role: 'user' }))
+    await flush()
+
+    expect(container.querySelector('.delete-dictionary')).toBeNull()
+  })
+
+  it('an admin deletes after confirming, and the app is told', async () => {
+    const onDeleted = vi.fn()
+    const { container } = await render(screen({ role: 'admin', onDeleted }))
+    await flush()
+
+    const button = container.querySelector<HTMLButtonElement>('.delete-dictionary')!
+    expect(button.textContent).toBe('Delete dictionary')
+    expect(apiMock.deleteDictionary).not.toHaveBeenCalled()
+
+    await click(button)
+    expect(button.textContent).toBe('Confirm deletion')
+    expect(container.querySelector('.delete-warning')).not.toBeNull()
+    expect(apiMock.deleteDictionary).not.toHaveBeenCalled()
+
+    await click(button)
+    await flush()
+
+    expect(apiMock.deleteDictionary).toHaveBeenCalledWith(7)
+    expect(onDeleted).toHaveBeenCalledTimes(1)
+  })
+
+  it('un-arms and shows an error when the delete request fails', async () => {
+    apiMock.deleteDictionary.mockRejectedValue(new Error('network error'))
+    const onDeleted = vi.fn()
+    const { container } = await render(screen({ role: 'admin', onDeleted }))
+    await flush()
+
+    const button = container.querySelector<HTMLButtonElement>('.delete-dictionary')!
+    await click(button)
+    await click(button)
+    await flush()
+
+    expect(onDeleted).not.toHaveBeenCalled()
+    expect(button.textContent).toBe('Delete dictionary')
     expect(container.textContent).toContain('network error')
   })
 })

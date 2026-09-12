@@ -14,15 +14,19 @@ interface Props {
   onTrain: (chapterIds: number[] | null, scopeTitle: string) => void
   /** scopeTitle is the chapter for a chapter review; absent for the global one. */
   onReview: (started: TrainingStarted, scopeTitle?: string) => void
+  onDeleted: () => void
 }
 
-export function DictionaryScreen({ id, role, onSort, onTrain, onReview }: Props) {
+export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDeleted }: Props) {
   const [detail, setDetail] = useState<DictionaryDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
   const [visibilityBusy, setVisibilityBusy] = useState(false)
   const [visibilityError, setVisibilityError] = useState<string | null>(null)
+  const [deleteConfirming, setDeleteConfirming] = useState(false)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -83,6 +87,27 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview }: Props)
     }
   }
 
+  // Irreversible, so one click only arms the second — same pattern as AccountMenu's own-account delete.
+  const removeDictionary = async () => {
+    if (!deleteConfirming) {
+      setDeleteConfirming(true)
+      return
+    }
+
+    setDeleteBusy(true)
+    setDeleteError(null)
+
+    try {
+      await api.deleteDictionary(id)
+      onDeleted()
+    } catch (e) {
+      setDeleteConfirming(false)
+      setDeleteError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
   if (error) {
     return <p className="error">{error}</p>
   }
@@ -114,6 +139,24 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview }: Props)
           </label>
         )}
         {visibilityError && <p className="footnote error">{visibilityError}</p>}
+        {role === 'admin' && (
+          <div className="dict-danger-zone">
+            <button
+              type="button"
+              className="btn btn-quiet delete-dictionary"
+              disabled={deleteBusy}
+              onClick={() => void removeDictionary()}
+            >
+              {deleteConfirming ? 'Confirm deletion' : 'Delete dictionary'}
+            </button>
+            {deleteConfirming && (
+              <p className="footnote delete-warning">
+                This deletes the dictionary and its chapters for everyone. Cannot be undone.
+              </p>
+            )}
+            {deleteError && <p className="footnote error">{deleteError}</p>}
+          </div>
+        )}
         <ProgressBar sorted={detail.sortedCount} total={detail.wordsCount} />
         {detail.learning.total > 0 && (
           <div className="dict-learning">

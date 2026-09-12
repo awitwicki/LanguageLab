@@ -152,6 +152,10 @@ export default function App() {
               started,
             })
           }
+          onDeleted={() => {
+            setRoute({ name: 'home' })
+            void reload()
+          }}
         />
       )}
 

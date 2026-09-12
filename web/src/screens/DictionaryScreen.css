@@ -16,6 +16,20 @@
   color: var(--text-2);
 }
 
+.dict-danger-zone {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.delete-dictionary {
+  color: var(--danger);
+}
+
+.delete-warning {
+  color: var(--text-2);
+}
+
 .dict-learning {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
