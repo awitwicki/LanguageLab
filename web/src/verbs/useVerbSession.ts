@@ -111,6 +111,13 @@ export function useVerbSession(sessionId: number): UseVerbSessionResult {
         return
       }
 
+      // A correct answer needs no explaining — move straight on. A mistake waits for Next
+      // so the learner has time to read why.
+      if (result.outcome === 'correct') {
+        load()
+        return
+      }
+
       setState((s) => ({ ...s, status: 'feedback', feedback: result }))
     },
     [state.status, state.task, sessionId, load],

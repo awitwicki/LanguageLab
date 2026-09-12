@@ -54,6 +54,17 @@ const feedbackCorrect: AnswerFeedback = {
   matched: null,
 }
 
+const feedbackWrong: AnswerFeedback = {
+  outcome: 'wrong',
+  taskComplete: true,
+  correctAnswer: 'cut',
+  triplet: 'cut – cut – cut',
+  explanation: "cut doesn't change: cut – cut – cut.",
+  errorKind: 'other',
+  willReturn: true,
+  matched: null,
+}
+
 const feedbackNeutral: AnswerFeedback = {
   outcome: 'neutral',
   taskComplete: false,
@@ -122,7 +133,23 @@ describe('useVerbSession', () => {
     expect(hook.current.total).toBe(16)
   })
 
-  it('shows feedback after a correct or wrong single answer', async () => {
+  it('shows feedback and waits after a wrong answer', async () => {
+    apiMock.nextVerbTask.mockResolvedValue({ task: cardTask, answered: 0, total: 16 } satisfies NextTask)
+    apiMock.answerVerbTask.mockResolvedValue(feedbackWrong)
+
+    const hook = await renderHook(() => useVerbSession(1))
+    await settle()
+
+    await act(async () => {
+      await hook.current.answer('cat')
+    })
+
+    expect(apiMock.answerVerbTask).toHaveBeenCalledWith(1, 1, 'cat', undefined)
+    expect(hook.current.status).toBe('feedback')
+    expect(hook.current.feedback?.explanation).toContain("doesn't change")
+  })
+
+  it('skips feedback and loads the next task straight away on a correct answer', async () => {
     apiMock.nextVerbTask.mockResolvedValue({ task: cardTask, answered: 0, total: 16 } satisfies NextTask)
     apiMock.answerVerbTask.mockResolvedValue(feedbackCorrect)
 
@@ -132,10 +159,12 @@ describe('useVerbSession', () => {
     await act(async () => {
       await hook.current.answer('seen')
     })
+    await settle()
 
     expect(apiMock.answerVerbTask).toHaveBeenCalledWith(1, 1, 'seen', undefined)
-    expect(hook.current.status).toBe('feedback')
-    expect(hook.current.feedback?.explanation).toContain("doesn't change")
+    expect(apiMock.nextVerbTask).toHaveBeenCalledTimes(2)
+    expect(hook.current.status).toBe('task')
+    expect(hook.current.feedback).toBeNull()
   })
 
   it('stays on the task with a neutral hint on a near-miss spelling', async () => {
@@ -181,10 +210,6 @@ describe('useVerbSession', () => {
 
     await act(async () => {
       await hook.current.answer('seen')
-    })
-
-    await act(async () => {
-      hook.current.next()
     })
     await settle()
 

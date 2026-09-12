@@ -78,13 +78,13 @@ describe('VerbSessionScreen', () => {
 
   it('shows feedback with the explanation and a Next button that advances', async () => {
     const feedback: AnswerFeedback = {
-      outcome: 'correct',
+      outcome: 'wrong',
       taskComplete: true,
       correctAnswer: 'cut',
       triplet: 'cut – cut – cut',
       explanation: "cut doesn't change: cut – cut – cut.",
-      errorKind: null,
-      willReturn: false,
+      errorKind: 'other',
+      willReturn: true,
       matched: null,
     }
     const hook = baseHook({ status: 'feedback', feedback })

@@ -33,10 +33,6 @@
   border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
-.verb-feedback.is-correct {
-  border-color: color-mix(in srgb, var(--known) 40%, transparent);
-}
-
 .verb-feedback-triplet {
   font-size: 28px;
   font-weight: 600;

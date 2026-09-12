@@ -19,8 +19,6 @@ interface Props {
   onRepeatErrors: (started: SessionStarted) => void
 }
 
-const AUTO_ADVANCE_MS = 1200
-
 /** Number-key shortcuts for the choice exercises; null when the key does not apply to this task. */
 function keyAnswer(task: TaskDto, key: string): string | null {
   if (task.type === 'gapChoice' && key >= '1' && key <= '9') {
@@ -86,16 +84,6 @@ export function VerbSessionScreen({ sessionId, onBack, onRepeatErrors }: Props) 
       nextButtonRef.current?.focus()
     }
   }, [status])
-
-  // Correct answers move on by themselves; a mistake waits for the learner to read why.
-  useEffect(() => {
-    if (status !== 'feedback' || feedback?.outcome !== 'correct') {
-      return
-    }
-
-    const timer = window.setTimeout(next, AUTO_ADVANCE_MS)
-    return () => window.clearTimeout(timer)
-  }, [status, feedback, next])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -208,8 +196,6 @@ export function VerbSessionScreen({ sessionId, onBack, onRepeatErrors }: Props) 
   }
 
   if (status === 'feedback' && feedback) {
-    const stateClass = feedback.outcome === 'wrong' ? 'is-wrong' : 'is-correct'
-
     return (
       <>
         <div className="verb-session-nav">
@@ -218,7 +204,7 @@ export function VerbSessionScreen({ sessionId, onBack, onRepeatErrors }: Props) 
           </button>
         </div>
 
-        <div className={`verb-feedback ${stateClass}`}>
+        <div className="verb-feedback is-wrong">
           <p className="verb-feedback-triplet">{feedback.triplet}</p>
           <p className="verb-feedback-explanation">{feedback.explanation}</p>
           <div className="verb-feedback-actions">
