@@ -3,118 +3,51 @@
   color: var(--text-2);
 }
 
-.step-cards {
-  display: grid;
-  gap: 16px;
+.continue-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--hairline));
+  border-radius: var(--r-lg);
 }
 
-.step-card {
+.group-tiles {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  margin-bottom: 24px;
+}
+
+.group-tile {
   padding: 20px;
   background: var(--surface);
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
-.step-card-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
+.group-tile-title {
+  font-weight: 600;
 }
 
-.step-card-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.step-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-footnote);
-}
-
-.step-table th,
-.step-table td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--hairline);
-}
-
-.verb-cell {
-  vertical-align: top;
-}
-
-.verb-cell-form {
-  display: block;
-  font-weight: 500;
-}
-
-.step-table tr.is-learned .verb-cell-form {
-  color: color-mix(in srgb, var(--known) 70%, var(--text));
-}
-
-.verb-cell[data-state='learned'],
-.verb-swatch[data-state='learned'] {
-  background: color-mix(in srgb, var(--known) 14%, transparent);
-}
-
-.verb-cell[data-state='learning'],
-.verb-swatch[data-state='learning'] {
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-}
-
-.verb-cell[data-state='missed'],
-.verb-swatch[data-state='missed'] {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-}
-
-.verb-cell-translation {
+.group-tile-caption {
   color: var(--text-2);
 }
 
-/* Three dots = three correct grades in a row make the form learned. */
-.verb-dots {
-  display: inline-flex;
-  gap: 3px;
-  margin-top: 4px;
-}
-
-.verb-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--text-3) 35%, transparent);
-}
-
-.verb-dot.is-on {
-  background: var(--known);
-}
-
-.verb-legend {
+.session-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
-  color: var(--text-2);
-}
-
-.verb-legend li {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.verb-swatch {
-  width: 12px;
-  height: 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 3px;
+  gap: 12px;
+  margin-bottom: 32px;
 }
 
 .verbs-notes {
-  margin-top: 32px;
   padding-top: 16px;
   border-top: 1px solid var(--hairline);
   color: var(--text-2);

@@ -17,8 +17,6 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
 - [ ] Show translation on the sorting card (now available for translated words)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
-- [ ] Resume an irregular-verbs session after a page reload — the card queue is in-memory only (`web/src/verbs/useVerbSession.ts`); grades already posted are not lost, only the position in the queue
-- [ ] Cramming flip cards for irregular verbs: the verb on one side, the three forms on the other, no grading (`web/src/verbs/`)
 - [ ] Leitner stats: box histogram, learned / due today (`TrainingSessionService.GetStatsAsync` already exists)
 - [ ] User stats: total known / learning / excluded counts
 - [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
@@ -34,7 +32,13 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Caption under the chapter/book progress scale (`web/src/components/LeitnerScale.tsx`): currently unclear that this is specifically word-learning progress, not an arbitrary percentage
 - [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
 - [x] Dictionary visibility: a toggle at import time / in settings — public (visible to all users) or private (only the creator); `Dictionary` (`LanguageLab.Domain/Entities/Dictionary.cs`) currently has no owner or visibility field
-- [x] Irregular-verbs program: four steps by pattern; each verb is three cards (one open, two to recall and self-grade), grades are kept per form with "learned" after 3 correct in a row, step tables show per-form marks, sessions take up to 10 weakest verbs (`LanguageLab.Domain/IrregularVerbs/`, `/api/irregular-verbs`, `web/src/verbs/`) — not a dictionary, no `WordPair`; the seeded triplet dictionary was removed by the `IrregularVerbProgram` migration
+- [x] Irregular-verbs trainer: a guided learning path over the 68 verbs — 4 groups split into 15 families learned one at a time, one exercise per screen (card, gap-fill choice, odd-one-out, match, form-pick, typed gap-fill, all-three-forms typing) with typical-mistake distractors and server-checked answers, a mistake returns later in the same session, and a "Forgot" button; sessions are stored in the DB so a reload resumes them (`LanguageLab.Domain/IrregularVerbs/`, `/api/irregular-verbs`, `web/src/verbs/`) — not a dictionary, no `WordPair`; replaces the per-form three-card exercise via the `IrregularVerbTrainer` migration
+- [ ] Irregular-verbs review ("tonus") mode: SM-2-style scheduling (ease, interval, next-review date), the `Mastered` state, and the priority score for picking which due verbs to show (`VerbProgress.Ease`/`IntervalDays`/`NextReviewAt` are already stored, not read yet)
+- [ ] Irregular-verbs final exam: one-time 40-question mixed session after all groups are learned, 85% to pass, failing verbs become `Forgotten`
+- [ ] Irregular-verbs RAPID and SENTENCE_BUILD exercise types (not in the Phase 1 exercise catalog)
+- [ ] Irregular-verbs "My words" screen: every verb with a state/group filter and a way to un-flag or jump straight to reviewing it
+- [ ] Irregular-verbs statistics screen: mistakes by group, family and `ErrorKind` (`VerbAttempt` already logs everything needed)
+- [ ] Irregular-verbs response-time signal: `VerbAttempt.ResponseMs` is logged but not used by the (future) review scheduling
 - [ ] Top-100/200/500/1000 English word dictionaries, public
 - [ ] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
 - [x] SPA copy sweep: parts of the UI are still Ukrainian (`Sidebar`, `ImportScreen`, `App` route titles) while newer screens are English

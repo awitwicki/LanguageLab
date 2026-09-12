@@ -11,8 +11,7 @@ interface Props {
   canImport: boolean
   onSelect: (id: number) => void
   onImport: () => void
-  verbsDoneSteps: number
-  verbsTotalSteps: number
+  verbsLearnedPercent: number
   verbsActive: boolean
   onOpenVerbs: () => void
 }
@@ -25,8 +24,7 @@ export function Sidebar({
   canImport,
   onSelect,
   onImport,
-  verbsDoneSteps,
-  verbsTotalSteps,
+  verbsLearnedPercent,
   verbsActive,
   onOpenVerbs,
 }: Props) {
@@ -65,9 +63,7 @@ export function Sidebar({
             onClick={onOpenVerbs}
           >
             <span className="name">Irregular verbs</span>
-            <span className="pct num">
-              {verbsDoneSteps} of {verbsTotalSteps} steps
-            </span>
+            <span className="pct num">{verbsLearnedPercent}% learned</span>
           </button>
         </li>
       </ul>

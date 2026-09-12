@@ -1,87 +1,120 @@
-import { useEffect, useRef } from 'react'
-import type { SessionCardView, VerbForm } from '../api/client'
+import { useEffect, useRef, useState } from 'react'
+import { api, type SessionStarted, type TaskDto } from '../api/client'
 import { formatInt } from '../lib/format'
-import { FORMS, useVerbSession, type SessionCard } from './useVerbSession'
+import { triplet } from './format'
+import { CardTask } from './tasks/CardTask'
+import { FormPickTask } from './tasks/FormPickTask'
+import { GapChoiceTask } from './tasks/GapChoiceTask'
+import { GapTypeTask } from './tasks/GapTypeTask'
+import { MatchTask } from './tasks/MatchTask'
+import { OddOneTask } from './tasks/OddOneTask'
+import { TripleTypeTask } from './tasks/TripleTypeTask'
+import { useVerbSession } from './useVerbSession'
 import './VerbSessionScreen.css'
 
 interface Props {
-  step: number
+  sessionId: number
+  /** The nav link mid-session and the summary's Done button both return here — the session stays open either way. */
   onBack: () => void
-  /** Starts a fresh session for the same step — the server re-plans from the grades just posted. */
-  onContinue: () => void
+  onRepeatErrors: (started: SessionStarted) => void
 }
 
-export const FORM_LABELS: Record<VerbForm, string> = {
-  v1: 'V1 · infinitive',
-  v2: 'V2 · past simple',
-  v3: 'V3 · past participle',
-}
+const AUTO_ADVANCE_MS = 1200
 
-type CardState = 'open' | 'closed' | 'revealed' | 'correct' | 'missed'
-
-function cardState(entry: SessionCard, form: VerbForm): CardState {
-  if (form === entry.card.open) {
-    return 'open'
+/** Number-key shortcuts for the choice exercises; null when the key does not apply to this task. */
+function keyAnswer(task: TaskDto, key: string): string | null {
+  if (task.type === 'gapChoice' && key >= '1' && key <= '9') {
+    return task.gapChoice!.options[Number(key) - 1] ?? null
   }
 
-  if (!entry.revealed.includes(form)) {
-    return 'closed'
+  if (task.type === 'oddOne' && key >= '1' && key <= '9') {
+    return task.oddOne!.options[Number(key) - 1] ?? null
   }
 
-  const grade = entry.grades[form]
-  return grade === undefined ? 'revealed' : grade ? 'correct' : 'missed'
+  if (task.type === 'formPick' && (key === '1' || key === '2')) {
+    return key === '1' ? 'v2' : 'v3'
+  }
+
+  return null
 }
 
-function Triplet({ card, missed }: { card: SessionCardView; missed: VerbForm[] }) {
-  return (
-    <span className="verb-retried-forms">
-      {FORMS.map((form, i) => (
-        <span key={form}>
-          {i > 0 && ' – '}
-          <span className={missed.includes(form) ? 'is-missed' : undefined}>{card[form]}</span>
-        </span>
-      ))}
-    </span>
-  )
+function TaskBody({
+  task,
+  disabled,
+  onAnswer,
+  hint,
+}: {
+  task: TaskDto
+  disabled: boolean
+  onAnswer: (answer: string) => void
+  hint: string | null
+}) {
+  switch (task.type) {
+    case 'card':
+      return <CardTask task={task} disabled={disabled} onAnswer={onAnswer} />
+    case 'gapChoice':
+      return <GapChoiceTask task={task} disabled={disabled} onAnswer={onAnswer} />
+    case 'oddOne':
+      return <OddOneTask task={task} disabled={disabled} onAnswer={onAnswer} />
+    case 'match':
+      return <MatchTask task={task} disabled={disabled} onAnswer={onAnswer} />
+    case 'formPick':
+      return <FormPickTask task={task} disabled={disabled} onAnswer={onAnswer} />
+    case 'gapType':
+      return <GapTypeTask task={task} disabled={disabled} onAnswer={onAnswer} hint={hint} />
+    case 'tripleType':
+      return <TripleTypeTask task={task} disabled={disabled} onAnswer={onAnswer} />
+  }
 }
 
-export function VerbSessionScreen({ step, onBack, onContinue }: Props) {
-  const { status, error, session, current, verbNumber, total, toRetryCount, activeForm, isDone, reveal, grade, next, summary } =
-    useVerbSession(step)
+export function VerbSessionScreen({ sessionId, onBack, onRepeatErrors }: Props) {
+  const { status, error, task, answered, total, feedback, neutralHint, summary, answer, next, forgot } =
+    useVerbSession(sessionId)
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [showTranslation, setShowTranslation] = useState(false)
+  const [repeatBusy, setRepeatBusy] = useState(false)
   const nextButtonRef = useRef<HTMLButtonElement>(null)
 
-  const canReveal = current ? current.closed.some((f) => !current.revealed.includes(f)) : false
-
-  // The grade buttons disappear with the second grade, so focus would drop to <body>;
-  // Next is where the next keyboard action goes.
   useEffect(() => {
-    if (isDone) {
+    setShowTranslation(false)
+    setNotice(null)
+  }, [task?.id])
+
+  useEffect(() => {
+    if (status === 'feedback') {
       nextButtonRef.current?.focus()
     }
-  }, [isDone])
+  }, [status])
+
+  // Correct answers move on by themselves; a mistake waits for the learner to read why.
+  useEffect(() => {
+    if (status !== 'feedback' || feedback?.outcome !== 'correct') {
+      return
+    }
+
+    const timer = window.setTimeout(next, AUTO_ADVANCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [status, feedback, next])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      // Space on a focused button must keep activating that button; only a bare Space reveals.
       const onButton = event.target instanceof HTMLButtonElement
+      const onInput = event.target instanceof HTMLInputElement
       let handled = true
 
-      if (status === 'active' && event.key === ' ' && !onButton && canReveal) {
-        reveal()
-      } else if (status === 'active' && activeForm && event.key === '1') {
-        grade(activeForm, true)
-      } else if (status === 'active' && activeForm && event.key === '2') {
-        grade(activeForm, false)
-      } else if (status === 'active' && isDone && event.key === 'Enter') {
+      if (status === 'feedback' && event.key === 'Enter' && !onButton) {
         next()
-      } else if (status === 'summary' && event.key === 'Enter') {
-        onContinue()
+      } else if (status === 'task' && task?.type === 'card' && (event.key === 'Enter' || event.key === ' ') && !onButton) {
+        void submit('seen')
+      } else if (status === 'task' && task && !onInput && !onButton) {
+        const value = keyAnswer(task, event.key)
+        if (value !== null) void submit(value)
+        else handled = false
       } else {
         handled = false
       }
 
-      // preventDefault only when a branch acted: on Enter it also stops the focused button's
-      // own click, so Next runs once, not twice.
       if (handled) {
         event.preventDefault()
       }
@@ -89,7 +122,38 @@ export function VerbSessionScreen({ step, onBack, onContinue }: Props) {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [status, canReveal, isDone, activeForm, reveal, grade, next, onContinue])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, task, next])
+
+  const submit = async (value: string) => {
+    if (busy) {
+      return
+    }
+
+    setBusy(true)
+
+    try {
+      await answer(value)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const doForgot = async (v1: string) => {
+    const message = await forgot(v1)
+    setNotice(message)
+  }
+
+  const repeatErrors = async () => {
+    setRepeatBusy(true)
+
+    try {
+      const started = await api.startVerbSession({ mode: 'errorsOnly', fromSessionId: sessionId })
+      onRepeatErrors(started)
+    } finally {
+      setRepeatBusy(false)
+    }
+  }
 
   if (status === 'loading') {
     return <p className="footnote">Loading…</p>
@@ -99,105 +163,109 @@ export function VerbSessionScreen({ step, onBack, onContinue }: Props) {
     return <p className="error">{error}</p>
   }
 
-  const heading = session ? `Step ${session.step} · ${session.title}${session.review ? ' · Review' : ''}` : ''
-
   if (status === 'summary' && summary) {
     return (
       <section className="verb-summary">
-        <p className="footnote">{heading}</p>
+        <button type="button" className="btn btn-quiet" onClick={onBack}>
+          ‹ Irregular verbs
+        </button>
         <h1 className="large-title num">
-          {formatInt(summary.formsRightFirstTime)} of {formatInt(summary.formsTotal)} forms right first time
+          {formatInt(summary.correct)} of {formatInt(summary.total)}
         </h1>
 
-        {summary.retried.length > 0 && (
-          <ul className="verb-retried">
-            {summary.retried.map((r) => (
-              <li key={r.card.v1} className="verb-retried-row">
-                <Triplet card={r.card} missed={r.missed} />
-                <span className="verb-retried-translation">{r.card.translation}</span>
+        {summary.mistakes.length > 0 && (
+          <ul className="verb-mistakes">
+            {summary.mistakes.map((m) => (
+              <li key={m.v1} className="verb-mistake-row">
+                <span>{triplet(m.v1, m.v2, m.v3)}</span>
+                <span className="verb-mistake-translation">{m.translation}</span>
+                <button type="button" className="btn btn-quiet" onClick={() => void doForgot(m.v1)}>
+                  Forgot
+                </button>
               </li>
             ))}
           </ul>
         )}
 
+        {notice && <p className="footnote verb-notice">{notice}</p>}
+
         <div className="verb-summary-actions">
-          <button type="button" className="btn btn-primary btn-lg" onClick={onContinue}>
-            Continue <kbd>Enter</kbd>
-          </button>
-          <button type="button" className="btn btn-quiet" onClick={onBack}>
-            Back to verbs
+          {summary.mistakes.length > 0 && (
+            <button type="button" className="btn btn-primary repeat-errors-btn" disabled={repeatBusy} onClick={() => void repeatErrors()}>
+              Repeat errors
+            </button>
+          )}
+          <button type="button" className="btn btn-secondary done-btn" onClick={onBack}>
+            Done
           </button>
         </div>
       </section>
     )
   }
 
-  if (!current) {
+  if (!task) {
     return null
+  }
+
+  if (status === 'feedback' && feedback) {
+    const stateClass = feedback.outcome === 'wrong' ? 'is-wrong' : 'is-correct'
+
+    return (
+      <>
+        <div className="verb-session-nav">
+          <button type="button" className="btn btn-quiet" onClick={onBack}>
+            ‹ Irregular verbs
+          </button>
+        </div>
+
+        <div className={`verb-feedback ${stateClass}`}>
+          <p className="verb-feedback-triplet">{feedback.triplet}</p>
+          <p className="verb-feedback-explanation">{feedback.explanation}</p>
+          <div className="verb-feedback-actions">
+            <button type="button" className="btn btn-quiet" onClick={() => void doForgot(task.verb.v1)}>
+              Forgot — repeat
+            </button>
+            <button ref={nextButtonRef} type="button" className="btn btn-primary btn-lg next-btn" onClick={next}>
+              Next <kbd>Enter</kbd>
+            </button>
+          </div>
+        </div>
+
+        {notice && <p className="footnote verb-notice">{notice}</p>}
+      </>
+    )
   }
 
   return (
     <>
-      <div className="verb-nav">
+      <div className="verb-session-nav">
         <button type="button" className="btn btn-quiet" onClick={onBack}>
           ‹ Irregular verbs
+        </button>
+        <button type="button" className="btn btn-quiet forgot-btn" onClick={() => void doForgot(task.verb.v1)}>
+          Forgot
         </button>
       </div>
 
       <p className="footnote verb-progress num">
-        {heading} · Verb {formatInt(verbNumber)} of {formatInt(total)}
-        {toRetryCount > 0 && ` · ${formatInt(toRetryCount)} to retry`}
+        Card {formatInt(answered + 1)} of {formatInt(total)}
       </p>
 
-      <div className="verb-table">
-        <div className="verb-cards">
-          {FORMS.map((form) => {
-            const state = cardState(current, form)
-
-            return (
-              <div key={form} className="verb-card" data-state={state}>
-                {state === 'closed' ? (
-                  <button
-                    type="button"
-                    className="verb-card-face verb-card-closed"
-                    aria-label={`Reveal ${FORM_LABELS[form]}`}
-                    onClick={() => reveal(form)}
-                  >
-                    ?
-                  </button>
-                ) : (
-                  <p className="verb-card-face">{current.card[form]}</p>
-                )}
-                <p className="footnote verb-card-label">{FORM_LABELS[form]}</p>
-                {state === 'revealed' && (
-                  <div className="verb-grade">
-                    <button type="button" className="btn btn-secondary verb-got" onClick={() => grade(form, true)}>
-                      ✓ Got it {activeForm === form && <kbd>1</kbd>}
-                    </button>
-                    <button type="button" className="btn btn-secondary verb-missed" onClick={() => grade(form, false)}>
-                      ✗ Missed {activeForm === form && <kbd>2</kbd>}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        <p className="verb-translation">{current.card.translation}</p>
-
-        <div className="verb-actions">
-          {isDone ? (
-            <button ref={nextButtonRef} type="button" className="btn btn-primary btn-lg verb-next" onClick={next}>
-              Next <kbd>Enter</kbd>
-            </button>
+      {task.type !== 'card' && (
+        <p className="footnote verb-translation-toggle">
+          {showTranslation ? (
+            task.verb.translation
           ) : (
-            <button type="button" className="btn btn-quiet" disabled={!canReveal} onClick={() => reveal()}>
-              Reveal next <kbd>Space</kbd>
+            <button type="button" className="btn btn-quiet" onClick={() => setShowTranslation(true)}>
+              Show translation
             </button>
           )}
-        </div>
-      </div>
+        </p>
+      )}
+
+      <TaskBody task={task} disabled={busy} onAnswer={(value) => void submit(value)} hint={neutralHint} />
+
+      {notice && <p className="footnote verb-notice">{notice}</p>}
     </>
   )
 }

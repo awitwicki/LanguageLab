@@ -160,7 +160,8 @@ builder.Services.AddScoped<LearningProgressService>();
 builder.Services.AddScoped<DictionaryAccessService>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<AccountService>();
-builder.Services.AddScoped<IrregularVerbService>();
+builder.Services.AddScoped<VerbProgressService>();
+builder.Services.AddScoped<VerbSessionService>();
 
 builder.Services.AddRequestDecompression();
 

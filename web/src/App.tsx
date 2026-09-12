@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, type DictionaryListItem, type IrregularVerbsOverview, type TrainingStarted } from './api/client'
+import { api, type DictionaryListItem, type SessionStarted, type TrainingStarted } from './api/client'
 import { useAuth } from './auth/useAuth'
 import { AppShell } from './layout/AppShell'
 import { Sidebar } from './layout/Sidebar'
@@ -12,6 +12,7 @@ import { TrainingScreen } from './screens/TrainingScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { BannedScreen } from './screens/BannedScreen'
 import { AdminScreen } from './screens/AdminScreen'
+import { VerbGroupScreen } from './verbs/VerbGroupScreen'
 import { VerbSessionScreen } from './verbs/VerbSessionScreen'
 import { VerbsScreen } from './verbs/VerbsScreen'
 
@@ -30,7 +31,8 @@ type Route =
       started: TrainingStarted
     }
   | { name: 'verbs' }
-  | { name: 'verbs-session'; step: number; run: number }
+  | { name: 'verbs-group'; group: number }
+  | { name: 'verbs-session'; sessionId: number }
   | { name: 'admin' }
 
 const REVIEW_TITLE = 'Review'
@@ -41,7 +43,7 @@ export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' })
   const [dictionaries, setDictionaries] = useState<DictionaryListItem[] | null>(null)
   const [listError, setListError] = useState<string | null>(null)
-  const [verbsOverview, setVerbsOverview] = useState<IrregularVerbsOverview | null>(null)
+  const [verbsLearnedPercent, setVerbsLearnedPercent] = useState(0)
 
   const reload = useCallback(
     () =>
@@ -55,9 +57,12 @@ export default function App() {
     [],
   )
 
-  // Best-effort: the sidebar caption just falls back to "0 of 4 steps" if this fails,
-  // so a failure here should not surface as the dictionaries list's error banner.
-  const reloadVerbsOverview = useCallback(() => api.getIrregularVerbs().then(setVerbsOverview).catch(() => {}), [])
+  // Best-effort: the sidebar caption just falls back to 0% if this fails, so a
+  // failure here should not surface as the dictionaries list's error banner.
+  const reloadVerbsProgress = useCallback(
+    () => api.getVerbsProgress().then((p) => setVerbsLearnedPercent(p.learnedPercent)).catch(() => {}),
+    [],
+  )
 
   // Словник, до якого належить поточний екран: підсвітка в сайдбарі й «назад».
   const activeId = 'id' in route ? route.id : 'dictionaryId' in route ? route.dictionaryId : null
@@ -72,15 +77,15 @@ export default function App() {
     }
 
     void reload()
-    void reloadVerbsOverview()
-  }, [reload, reloadVerbsOverview, routeKey, state.status])
+    void reloadVerbsProgress()
+  }, [reload, reloadVerbsProgress, routeKey, state.status])
 
   const activeName = dictionaries?.find((d) => d.id === activeId)?.name ?? 'Dictionary'
-  const verbsDoneSteps = verbsOverview?.steps.filter((s) => s.learnedVerbs === s.totalVerbs).length ?? 0
-  const verbsTotalSteps = verbsOverview?.steps.length ?? 4
-  const verbsActive = route.name === 'verbs' || route.name === 'verbs-session'
+  const verbsActive = route.name === 'verbs' || route.name === 'verbs-group' || route.name === 'verbs-session'
 
   const openDictionary = (id: number) => setRoute({ name: 'dictionary', id })
+
+  const startVerbSession = (started: SessionStarted) => setRoute({ name: 'verbs-session', sessionId: started.id })
 
   // The shell only makes sense for someone signed in: the sidebar lists their dictionaries
   // and every API call behind it needs the cookie.
@@ -112,8 +117,7 @@ export default function App() {
           canImport={state.user.role === 'admin'}
           onSelect={openDictionary}
           onImport={() => setRoute({ name: 'import' })}
-          verbsDoneSteps={verbsDoneSteps}
-          verbsTotalSteps={verbsTotalSteps}
+          verbsLearnedPercent={verbsLearnedPercent}
           verbsActive={verbsActive}
           onOpenVerbs={() => setRoute({ name: 'verbs' })}
         />
@@ -196,16 +200,26 @@ export default function App() {
       {route.name === 'admin' && <AdminScreen meId={state.user.id} />}
 
       {route.name === 'verbs' && (
-        <VerbsScreen onStartSession={(step) => setRoute({ name: 'verbs-session', step, run: 0 })} />
+        <VerbsScreen
+          onOpenGroup={(group) => setRoute({ name: 'verbs-group', group })}
+          onStartSession={startVerbSession}
+        />
       )}
 
-      {/* `run` remounts the screen for Continue: a fresh plan from the grades just posted. */}
+      {route.name === 'verbs-group' && (
+        <VerbGroupScreen
+          group={route.group}
+          onBack={() => setRoute({ name: 'verbs' })}
+          onStartSession={startVerbSession}
+        />
+      )}
+
       {route.name === 'verbs-session' && (
         <VerbSessionScreen
-          key={`${route.step}:${route.run}`}
-          step={route.step}
+          key={route.sessionId}
+          sessionId={route.sessionId}
           onBack={() => setRoute({ name: 'verbs' })}
-          onContinue={() => setRoute({ name: 'verbs-session', step: route.step, run: route.run + 1 })}
+          onRepeatErrors={startVerbSession}
         />
       )}
     </AppShell>

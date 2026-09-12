@@ -130,39 +130,64 @@ public class SchemaTests
         Assert.True(dictionary.IsPublic);
     }
 
-    /// <summary>Verb-form grades are keyed to a user like shelves are: deleting the account deletes them.</summary>
+    /// <summary>The trainer's rows hang off the user like shelves do: deleting the account deletes them all.</summary>
     [Fact]
-    public async Task Deleting_a_user_removes_their_verb_form_progress()
+    public async Task Deleting_a_user_removes_their_verb_progress_sessions_tasks_and_attempts()
     {
         await using var db = NewContext();
 
-        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = DateTime.UtcNow });
-        db.IrregularVerbFormProgresses.Add(new IrregularVerbFormProgress
+        var now = DateTime.UtcNow;
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = now });
+        db.VerbProgresses.Add(new VerbProgress { Id = 1, UserId = 1, Verb = "go", State = VerbState.Learning1, LastSeenAt = now });
+        db.VerbSessions.Add(new VerbSession { Id = 1, UserId = 1, Mode = SessionMode.Learn, Group = 4, Family = "core", StartedAt = now });
+        db.VerbTasks.Add(new VerbTask { Id = 1, SessionId = 1, Order = 0, Type = ExerciseType.Card, Verb = "go", FormAsked = FormAsked.Recognition, Level = 1 });
+        db.VerbAttempts.Add(new VerbAttempt
         {
-            Id = 1, UserId = 1, Verb = "go", Form = VerbForm.V2, Streak = 1, LastAnsweredAt = DateTime.UtcNow,
+            Id = 1, UserId = 1, Verb = "go", SessionId = 1, TaskId = 1, Type = ExerciseType.Card,
+            FormAsked = FormAsked.Recognition, AnswerGiven = "seen", Outcome = AttemptOutcome.Correct, CreatedAt = now,
         });
         await db.SaveChangesAsync();
 
-        await db.IrregularVerbFormProgresses.ToListAsync();
+        await db.VerbProgresses.ToListAsync();
+        await db.VerbSessions.ToListAsync();
+        await db.VerbTasks.ToListAsync();
+        await db.VerbAttempts.ToListAsync();
 
         db.Users.Remove(await db.Users.FirstAsync(u => u.Id == 1));
         await db.SaveChangesAsync();
 
-        Assert.Empty(await db.IrregularVerbFormProgresses.ToListAsync());
+        Assert.Empty(await db.VerbProgresses.ToListAsync());
+        Assert.Empty(await db.VerbSessions.ToListAsync());
+        Assert.Empty(await db.VerbTasks.ToListAsync());
+        Assert.Empty(await db.VerbAttempts.ToListAsync());
     }
 
-    /// <summary>The grade endpoint upserts on user + verb + form, so that key must be unique.</summary>
+    /// <summary>The trainer upserts a verb's standing by user + verb, so that key must be unique.</summary>
     [Fact]
-    public void A_user_has_one_row_per_verb_form()
+    public void A_user_has_one_standing_per_verb()
     {
         using var db = NewContext();
 
         var index = db.Model
-            .FindEntityType(typeof(IrregularVerbFormProgress))!
+            .FindEntityType(typeof(VerbProgress))!
             .GetIndexes()
-            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(["UserId", "Verb", "Form"]));
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(["UserId", "Verb"]));
 
         Assert.True(index.IsUnique);
+    }
+
+    /// <summary>A task's payload is JSON on the row; the typed view must survive the round trip.</summary>
+    [Fact]
+    public void Task_payload_round_trips_through_the_column()
+    {
+        var task = new VerbTask { SessionId = 1, Verb = "go", Type = ExerciseType.GapChoice };
+        task.SetPayload(new TaskPayload { Sentence = "They ___ home.", Options = ["went", "goed"], Correct = "went" });
+
+        var payload = task.GetPayload();
+
+        Assert.Equal("They ___ home.", payload.Sentence);
+        Assert.Equal(["went", "goed"], payload.Options);
+        Assert.Equal("went", payload.Correct);
     }
 
     /// <summary>Login upserts by TelegramUserId, so the column must not allow a second row with the same id.</summary>

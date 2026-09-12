@@ -13,7 +13,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<KnownWord> KnownWords { get; set; }
     public DbSet<UnknownWord> UnknownWords { get; set; }
     public DbSet<WordProgress> WordProgresses { get; set; }
-    public DbSet<IrregularVerbFormProgress> IrregularVerbFormProgresses { get; set; }
+    public DbSet<VerbProgress> VerbProgresses { get; set; }
+    public DbSet<VerbSession> VerbSessions { get; set; }
+    public DbSet<VerbTask> VerbTasks { get; set; }
+    public DbSet<VerbAttempt> VerbAttempts { get; set; }
     public DbSet<Chapter> Chapters { get; set; }
     public DbSet<ChapterWord> ChapterWords { get; set; }
     public DbSet<DictionaryWord> DictionaryWords { get; set; }
@@ -82,10 +85,38 @@ public class ApplicationDbContext : DbContext
             .HasIndex(p => new { p.UserId, p.WordPairId })
             .IsUnique();
 
-        // One row per user × verb × form; the grade endpoint upserts on this key.
-        builder.Entity<IrregularVerbFormProgress>()
-            .HasIndex(p => new { p.UserId, p.Verb, p.Form })
+        // The irregular-verbs trainer: one standing per user × verb, sessions with their
+        // task queue, and an append-only attempt log. Everything hangs off the user.
+        builder.Entity<VerbProgress>()
+            .HasIndex(p => new { p.UserId, p.Verb })
             .IsUnique();
+
+        builder.Entity<VerbSession>()
+            .HasIndex(s => new { s.UserId, s.FinishedAt });
+
+        builder.Entity<VerbTask>()
+            .HasIndex(t => new { t.SessionId, t.Order });
+
+        builder.Entity<VerbTask>()
+            .HasOne(t => t.Session)
+            .WithMany(s => s.Tasks)
+            .HasForeignKey(t => t.SessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<VerbAttempt>()
+            .HasIndex(a => new { a.UserId, a.CreatedAt });
+
+        builder.Entity<VerbAttempt>()
+            .HasOne(a => a.Session)
+            .WithMany()
+            .HasForeignKey(a => a.SessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<VerbAttempt>()
+            .HasOne(a => a.Task)
+            .WithMany()
+            .HasForeignKey(a => a.TaskId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Вибірка закріплення: слова цього юзера, не вивчені, з простроченим DueAt.
         builder.Entity<WordProgress>()

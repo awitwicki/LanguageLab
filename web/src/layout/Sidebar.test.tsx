@@ -20,8 +20,7 @@ describe('Sidebar', () => {
         canImport
         onSelect={onSelect}
         onImport={() => {}}
-        verbsDoneSteps={0}
-        verbsTotalSteps={4}
+        verbsLearnedPercent={0}
         verbsActive={false}
         onOpenVerbs={() => {}}
       />,
@@ -49,8 +48,7 @@ describe('Sidebar', () => {
         canImport
         onSelect={() => {}}
         onImport={() => {}}
-        verbsDoneSteps={0}
-        verbsTotalSteps={4}
+        verbsLearnedPercent={0}
         verbsActive={false}
         onOpenVerbs={() => {}}
       />,
@@ -71,8 +69,7 @@ describe('Sidebar', () => {
         canImport
         onSelect={() => {}}
         onImport={onImport}
-        verbsDoneSteps={0}
-        verbsTotalSteps={4}
+        verbsLearnedPercent={0}
         verbsActive={false}
         onOpenVerbs={() => {}}
       />,
@@ -97,8 +94,7 @@ describe('Sidebar', () => {
         canImport={false}
         onSelect={vi.fn()}
         onImport={vi.fn()}
-        verbsDoneSteps={0}
-        verbsTotalSteps={4}
+        verbsLearnedPercent={0}
         verbsActive={false}
         onOpenVerbs={() => {}}
       />,
@@ -119,8 +115,7 @@ describe('the Programs section', () => {
         canImport
         onSelect={() => {}}
         onImport={() => {}}
-        verbsDoneSteps={1}
-        verbsTotalSteps={4}
+        verbsLearnedPercent={25}
         verbsActive={false}
         onOpenVerbs={() => {}}
       />,
@@ -129,7 +124,7 @@ describe('the Programs section', () => {
     const entry = container.querySelector<HTMLButtonElement>('.program-item')!
 
     expect(entry.textContent).toContain('Irregular verbs')
-    expect(entry.textContent).toContain('1 of 4 steps')
+    expect(entry.textContent).toContain('25% learned')
     expect(entry.getAttribute('aria-current')).toBeNull()
   })
 
@@ -144,8 +139,7 @@ describe('the Programs section', () => {
         canImport
         onSelect={() => {}}
         onImport={() => {}}
-        verbsDoneSteps={0}
-        verbsTotalSteps={4}
+        verbsLearnedPercent={0}
         verbsActive
         onOpenVerbs={onOpenVerbs}
       />,

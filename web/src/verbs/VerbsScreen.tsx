@@ -1,57 +1,56 @@
 import { useEffect, useState } from 'react'
-import { api, type FormState, type IrregularVerbsOverview, type StepView } from '../api/client'
+import { api, type SessionStarted, type VerbsProgress } from '../api/client'
 import { ProgressBar } from '../components/ProgressBar'
 import { formatInt } from '../lib/format'
 import './VerbsScreen.css'
 
 interface Props {
-  onStartSession: (step: number) => void
+  onOpenGroup: (group: number) => void
+  onStartSession: (started: SessionStarted) => void
 }
 
-const LEGEND: [FormState, string][] = [
-  ['learned', 'learned'],
-  ['learning', 'learning'],
-  ['missed', 'missed'],
-  ['unseen', 'not seen'],
-]
-
-const DOTS = [0, 1, 2]
-
-/** Start until a single form has a grade; Review once every verb of the step is learned. */
-function actionLabel(step: StepView): 'Start' | 'Continue' | 'Review' {
-  if (step.learnedVerbs === step.totalVerbs) {
-    return 'Review'
-  }
-
-  const started = step.verbs.some((v) => v.forms.some((f) => f.state !== 'unseen'))
-  return started ? 'Continue' : 'Start'
-}
-
-export function VerbsScreen({ onStartSession }: Props) {
-  const [overview, setOverview] = useState<IrregularVerbsOverview | null>(null)
+/// Home screen of the irregular-verbs program: overall progress, one tile per
+/// group, and the two cross-group sessions (errors only, mixed).
+export function VerbsScreen({ onOpenGroup, onStartSession }: Props) {
+  const [progress, setProgress] = useState<VerbsProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     api
-      .getIrregularVerbs()
-      .then(setOverview)
+      .getVerbsProgress()
+      .then(setProgress)
       .catch((e) => setError(String(e)))
   }, [])
 
-  const toggle = (step: number) =>
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(step)) next.delete(step)
-      else next.add(step)
-      return next
-    })
+  const start = async (mode: 'errorsOnly' | 'mixed') => {
+    setBusy(true)
+    setError(null)
+
+    try {
+      const started = await api.startVerbSession({ mode })
+      onStartSession(started)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const continueSession = () => {
+    if (!progress?.activeSession) {
+      return
+    }
+
+    const { id, mode, group, family, total } = progress.activeSession
+    onStartSession({ id, mode, group, family, title: '', total })
+  }
 
   if (error) {
     return <p className="error">{error}</p>
   }
 
-  if (!overview) {
+  if (!progress) {
     return <p className="footnote">Loading…</p>
   }
 
@@ -60,73 +59,55 @@ export function VerbsScreen({ onStartSession }: Props) {
       <h1 className="large-title">Irregular verbs</h1>
       <p className="verbs-intro">Four groups by pattern — learn them as families, not alphabetically.</p>
 
-      <div className="step-cards">
-        {overview.steps.map((step) => (
-          <section key={step.step} className="step-card">
-            <div className="step-card-head">
-              <h2 className="headline">
-                Step {step.step} · {step.title}
-              </h2>
-              <div className="step-card-actions">
-                <button
-                  type="button"
-                  className="btn btn-quiet step-table-toggle"
-                  onClick={() => toggle(step.step)}
-                  aria-expanded={expanded.has(step.step)}
-                >
-                  Table
-                </button>
-                <button type="button" className="btn btn-primary step-action" onClick={() => onStartSession(step.step)}>
-                  {actionLabel(step)}
-                </button>
-              </div>
-            </div>
+      {progress.activeSession && (
+        <div className="continue-banner">
+          <span>
+            Continue where you left off — {formatInt(progress.activeSession.answered)} of{' '}
+            {formatInt(progress.activeSession.total)} done
+          </span>
+          <button type="button" className="btn btn-primary" onClick={continueSession}>
+            Continue
+          </button>
+        </div>
+      )}
 
-            <ProgressBar sorted={step.learnedForms} total={step.totalForms} showLabel={false} />
-            <p className="footnote num step-caption">
-              {formatInt(step.learnedVerbs)} of {formatInt(step.totalVerbs)} verbs learned
+      <div className="group-tiles">
+        {progress.groups.map((group) => (
+          <section key={group.group} className="group-tile">
+            <p className="group-tile-title">{group.title}</p>
+            <ProgressBar sorted={group.learned} total={group.total} showLabel={false} />
+            <p className="footnote num group-tile-caption">
+              {formatInt(group.learned)} of {formatInt(group.total)} learned
             </p>
-
-            {expanded.has(step.step) && (
-              <>
-                <table className="step-table">
-                  <thead>
-                    <tr>
-                      <th>V1</th>
-                      <th>V2</th>
-                      <th>V3</th>
-                      <th>Translation</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {step.verbs.map((verb) => (
-                      <tr key={verb.v1} className={verb.learned ? 'is-learned' : undefined}>
-                        {verb.forms.map((f) => (
-                          <td key={f.form} className="verb-cell" data-state={f.state} title={`${f.streak} in a row`}>
-                            <span className="verb-cell-form">{verb[f.form]}</span>
-                            <span className="verb-dots" aria-hidden="true">
-                              {DOTS.map((i) => (
-                                <span key={i} className={`verb-dot${i < Math.min(f.streak, DOTS.length) ? ' is-on' : ''}`} />
-                              ))}
-                            </span>
-                          </td>
-                        ))}
-                        <td className="verb-cell-translation">{verb.translation}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <ul className="verb-legend footnote">
-                  {LEGEND.map(([state, label]) => (
-                    <li key={state}>
-                      <span className="verb-swatch" data-state={state} /> {label}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!group.unlocked}
+              onClick={() => onOpenGroup(group.group)}
+            >
+              {group.unlocked ? 'Open' : 'Locked'}
+            </button>
           </section>
         ))}
+      </div>
+
+      <div className="session-buttons">
+        <button
+          type="button"
+          className="btn btn-secondary errors-only-btn"
+          disabled={!progress.errorsAvailable || busy}
+          onClick={() => void start('errorsOnly')}
+        >
+          Errors only
+        </button>
+        <button
+          type="button"
+          className="btn btn-secondary mixed-session-btn"
+          disabled={!progress.mixedAvailable || busy}
+          onClick={() => void start('mixed')}
+        >
+          Mixed session
+        </button>
       </div>
 
       <div className="verbs-notes footnote">
@@ -139,8 +120,7 @@ export function VerbsScreen({ onStartSession }: Props) {
           <strong>gotten</strong>.
         </p>
         <p>
-          Some steps hide mini-families worth learning together: -ought / -aught (bought, thought, caught); i → a → u
-          (begin – began – begun, drink – drank – drunk); -ow → -ew → -own (know – knew – known, grow – grew – grown).
+          Each family shares a sound or spelling pattern — learn it as one small group rather than 68 separate words.
         </p>
       </div>
     </>

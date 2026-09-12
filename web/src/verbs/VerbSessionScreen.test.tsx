@@ -1,121 +1,144 @@
 import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GradeResult, IrregularVerbSession, VerbForm } from '../api/client'
+import type { AnswerFeedback, SessionSummary, SessionStarted, TaskDto } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { VerbSessionScreen } from './VerbSessionScreen'
+import { useVerbSession } from './useVerbSession'
 
-const apiMock = vi.hoisted(() => ({ getVerbSession: vi.fn(), gradeVerbForm: vi.fn() }))
+vi.mock('./useVerbSession', () => ({ useVerbSession: vi.fn() }))
+const apiMock = vi.hoisted(() => ({ startVerbSession: vi.fn() }))
 vi.mock('../api/client', () => ({ api: apiMock }))
 
-const session: IrregularVerbSession = {
-  step: 4,
-  title: 'All three forms differ',
-  review: false,
-  cards: [{ v1: 'go', v2: 'went', v3: 'gone', translation: 'йти', open: 'v2' }],
+const useVerbSessionMock = vi.mocked(useVerbSession)
+
+const gapChoiceTask: TaskDto = {
+  id: 1,
+  type: 'gapChoice',
+  formAsked: 'v2',
+  level: 2,
+  isReturn: false,
+  verb: { v1: 'cut', translation: 'різати', group: 1, family: 'same', suffixes: [] },
+  card: null,
+  gapChoice: { sentence: 'Yesterday I ___ my finger.', tense: 'past', options: ['wore', 'cut', 'cat', 'cutted'] },
+  oddOne: null,
+  match: null,
+  formPick: null,
+  gapType: null,
+  tripleType: null,
 }
 
-const gradeResult: GradeResult = {
-  verb: 'go',
-  learned: false,
-  forms: (['v1', 'v2', 'v3'] as VerbForm[]).map((form) => ({ form, state: 'learning', streak: 1, correct: 1, wrong: 0 })),
+function baseHook(overrides: Partial<ReturnType<typeof useVerbSession>> = {}): ReturnType<typeof useVerbSession> {
+  return {
+    status: 'task',
+    error: null,
+    task: gapChoiceTask,
+    answered: 0,
+    total: 16,
+    feedback: null,
+    neutralHint: null,
+    summary: null,
+    answer: vi.fn(),
+    next: vi.fn(),
+    forgot: vi.fn().mockResolvedValue('cut — back to practice'),
+    ...overrides,
+  }
 }
-
-function press(key: string) {
-  return act(async () => {
-    window.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
-  })
-}
-
-const states = (container: HTMLElement) =>
-  [...container.querySelectorAll('.verb-card')].map((c) => c.getAttribute('data-state'))
 
 beforeEach(() => {
-  apiMock.getVerbSession.mockReset()
-  apiMock.gradeVerbForm.mockReset()
-  apiMock.getVerbSession.mockResolvedValue(session)
-  apiMock.gradeVerbForm.mockResolvedValue(gradeResult)
+  useVerbSessionMock.mockReset()
+  apiMock.startVerbSession.mockReset()
 })
 
 describe('VerbSessionScreen', () => {
-  it('shows three labelled cards with the open form showing and the translation underneath', async () => {
-    const { container } = await render(<VerbSessionScreen step={4} onBack={() => {}} onContinue={() => {}} />)
+  it('renders the gap-choice task and answers on a number key', async () => {
+    const hook = baseHook()
+    useVerbSessionMock.mockReturnValue(hook)
+
+    const { container } = await render(<VerbSessionScreen sessionId={1} onBack={() => {}} onRepeatErrors={() => {}} />)
     await flush()
 
-    expect(states(container)).toEqual(['closed', 'open', 'closed'])
-    expect([...container.querySelectorAll('.verb-card-label')].map((l) => l.textContent)).toEqual([
-      'V1 · infinitive',
-      'V2 · past simple',
-      'V3 · past participle',
-    ])
-    expect(container.querySelectorAll('.verb-card')[1].textContent).toContain('went')
-    expect(container.querySelector('.verb-translation')?.textContent).toBe('йти')
-    expect(container.querySelector('.verb-progress')?.textContent).toBe('Step 4 · All three forms differ · Verb 1 of 1')
+    expect(container.textContent).toContain('Yesterday I ___ my finger.')
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', bubbles: true, cancelable: true }))
+    })
+
+    expect(hook.answer).toHaveBeenCalledWith('cut')
   })
 
-  it('reveals a card on click, grades it with the buttons, and offers Next after both', async () => {
-    const { container } = await render(<VerbSessionScreen step={4} onBack={() => {}} onContinue={() => {}} />)
+  it('shows the progress bar counts', async () => {
+    useVerbSessionMock.mockReturnValue(baseHook({ answered: 5, total: 16 }))
+    const { container } = await render(<VerbSessionScreen sessionId={1} onBack={() => {}} onRepeatErrors={() => {}} />)
     await flush()
 
-    await click(container.querySelectorAll('.verb-card')[0].querySelector('.verb-card-closed')!)
-    expect(states(container)).toEqual(['revealed', 'open', 'closed'])
-    expect(container.querySelectorAll('.verb-card')[0].textContent).toContain('go')
-
-    await click(container.querySelector('.verb-got')!)
-    expect(apiMock.gradeVerbForm).toHaveBeenCalledWith('go', 'v1', true)
-    expect(states(container)).toEqual(['correct', 'open', 'closed'])
-    expect(container.querySelector('.verb-next')).toBeNull()
-
-    await click(container.querySelectorAll('.verb-card')[2].querySelector('.verb-card-closed')!)
-    await click(container.querySelector('.verb-missed')!)
-    expect(apiMock.gradeVerbForm).toHaveBeenCalledWith('go', 'v3', false)
-    expect(states(container)).toEqual(['correct', 'open', 'missed'])
-    expect(container.querySelector('.verb-next')).not.toBeNull()
+    // answered=5 means the learner is now on card 6 of 16 (1-based, matching TrainingScreen's convention).
+    expect(container.textContent).toContain('6')
+    expect(container.textContent).toContain('16')
   })
 
-  it('works from the keyboard and re-asks only the missed form before the summary', async () => {
-    const onContinue = vi.fn()
-    const { container } = await render(<VerbSessionScreen step={4} onBack={() => {}} onContinue={onContinue} />)
+  it('shows feedback with the explanation and a Next button that advances', async () => {
+    const feedback: AnswerFeedback = {
+      outcome: 'correct',
+      taskComplete: true,
+      correctAnswer: 'cut',
+      triplet: 'cut – cut – cut',
+      explanation: "cut doesn't change: cut – cut – cut.",
+      errorKind: null,
+      willReturn: false,
+      matched: null,
+    }
+    const hook = baseHook({ status: 'feedback', feedback })
+    useVerbSessionMock.mockReturnValue(hook)
+
+    const { container } = await render(<VerbSessionScreen sessionId={1} onBack={() => {}} onRepeatErrors={() => {}} />)
     await flush()
 
-    await press(' ')
-    expect(states(container)).toEqual(['revealed', 'open', 'closed'])
-    await press('2')
-    expect(states(container)).toEqual(['missed', 'open', 'closed'])
-    await press(' ')
-    await press('1')
-    expect(states(container)).toEqual(['missed', 'open', 'correct'])
-    await press('Enter')
+    expect(container.textContent).toContain("cut doesn't change")
 
-    // Second pass: gone stays showing and green, go is closed again.
-    expect(states(container)).toEqual(['closed', 'open', 'correct'])
-    expect(container.querySelector('.verb-progress')?.textContent).toContain('1 to retry')
-
-    await press(' ')
-    await press('1')
-    expect(apiMock.gradeVerbForm).toHaveBeenCalledTimes(3)
-    await press('Enter')
-
-    expect(container.querySelector('.verb-summary')).not.toBeNull()
-    expect(container.querySelector('h1')?.textContent).toBe('1 of 2 forms right first time')
-    const retried = container.querySelector('.verb-retried-row')!
-    expect(retried.textContent).toContain('go – went – gone')
-    expect(retried.querySelector('.is-missed')?.textContent).toBe('go')
-
-    await press('Enter')
-    expect(onContinue).toHaveBeenCalledTimes(1)
+    await click(container.querySelector('.next-btn')!)
+    expect(hook.next).toHaveBeenCalledTimes(1)
   })
 
-  it('the summary buttons continue or go back', async () => {
+  it('shows the summary with mistakes and lets you repeat errors or finish', async () => {
+    const summary: SessionSummary = {
+      total: 16,
+      correct: 10,
+      mistakes: [{ v1: 'cut', v2: 'cut', v3: 'cut', translation: 'різати', wrongCount: 2 }],
+      learned: [],
+    }
+    useVerbSessionMock.mockReturnValue(baseHook({ status: 'summary', task: null, summary }))
+    const started: SessionStarted = { id: 9, mode: 'errorsOnly', group: null, family: null, title: 'Errors only', total: 2 }
+    apiMock.startVerbSession.mockResolvedValue(started)
     const onBack = vi.fn()
-    const onContinue = vi.fn()
-    apiMock.getVerbSession.mockResolvedValue({ ...session, cards: [] })
-    const { container } = await render(<VerbSessionScreen step={4} onBack={onBack} onContinue={onContinue} />)
+    const onRepeatErrors = vi.fn()
+
+    const { container } = await render(<VerbSessionScreen sessionId={1} onBack={onBack} onRepeatErrors={onRepeatErrors} />)
     await flush()
 
-    await click(container.querySelector('.verb-summary .btn-primary')!)
-    await click(container.querySelector('.verb-summary .btn-quiet')!)
+    expect(container.textContent).toContain('10')
+    expect(container.textContent).toContain('cut – cut – cut')
 
-    expect(onContinue).toHaveBeenCalledTimes(1)
+    await click(container.querySelector('.repeat-errors-btn')!)
+    await flush()
+
+    expect(apiMock.startVerbSession).toHaveBeenCalledWith({ mode: 'errorsOnly', fromSessionId: 1 })
+    expect(onRepeatErrors).toHaveBeenCalledWith(started)
+
+    await click(container.querySelector('.done-btn')!)
     expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  it('flags the current verb as forgotten and shows a notice', async () => {
+    const hook = baseHook()
+    useVerbSessionMock.mockReturnValue(hook)
+
+    const { container } = await render(<VerbSessionScreen sessionId={1} onBack={() => {}} onRepeatErrors={() => {}} />)
+    await flush()
+
+    await click(container.querySelector('.forgot-btn')!)
+    await flush()
+
+    expect(hook.forgot).toHaveBeenCalledWith('cut')
+    expect(container.textContent).toContain('back to practice')
   })
 })

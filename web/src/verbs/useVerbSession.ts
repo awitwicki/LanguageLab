@@ -1,238 +1,146 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, type IrregularVerbSession, type SessionCardView, type VerbForm } from '../api/client'
+import { api, type AnswerFeedback, type SessionSummary, type TaskDto } from '../api/client'
 
-export const FORMS: VerbForm[] = ['v1', 'v2', 'v3']
-
-type Status = 'loading' | 'active' | 'summary' | 'error'
-
-/** One verb on the table: which forms are closed, which are showing, and the grades given so far. */
-export interface SessionCard {
-  card: SessionCardView
-  /** The two forms that are not open, in v1..v3 order. */
-  closed: VerbForm[]
-  /** Closed forms showing their word, in reveal order — pre-filled on a retry with the forms already got right. */
-  revealed: VerbForm[]
-  grades: Partial<Record<VerbForm, boolean>>
-  /** Back at the end of the queue after a miss. */
-  retry: boolean
-}
-
-export interface Retried {
-  card: SessionCardView
-  missed: VerbForm[]
-}
-
-export interface Summary {
-  /** Two closed forms per verb of the initial queue. */
-  formsTotal: number
-  formsRightFirstTime: number
-  retried: Retried[]
-}
+type Status = 'loading' | 'task' | 'feedback' | 'summary' | 'error'
 
 interface State {
   status: Status
   error: string | null
-  session: IrregularVerbSession | null
-  queue: SessionCard[]
+  task: TaskDto | null
+  answered: number
   total: number
-  completed: number
-  /** "verb:form" keys graded at least once — a retry grade is not a first try. */
-  gradedOnce: string[]
-  firstTryRight: number
-  retried: Retried[]
+  feedback: AnswerFeedback | null
+  neutralHint: string | null
+  summary: SessionSummary | null
 }
 
 const initialState: State = {
   status: 'loading',
   error: null,
-  session: null,
-  queue: [],
+  task: null,
+  answered: 0,
   total: 0,
-  completed: 0,
-  gradedOnce: [],
-  firstTryRight: 0,
-  retried: [],
+  feedback: null,
+  neutralHint: null,
+  summary: null,
 }
 
 export interface UseVerbSessionResult {
   status: Status
   error: string | null
-  session: IrregularVerbSession | null
-  current: SessionCard | null
-  /** 1-based position of the verb showing now among the session's verbs. */
-  verbNumber: number
+  task: TaskDto | null
+  answered: number
   total: number
-  /** Verbs waiting for a second pass, the current one included. */
-  toRetryCount: number
-  /** The most recently revealed form without a grade — what the 1 / 2 keys act on. */
-  activeForm: VerbForm | null
-  /** Every closed form of the current verb is graded, so Next is allowed. */
-  isDone: boolean
-  /** Reveals that closed form, or the next closed one left to right; a no-op for the open or an already revealed form. */
-  reveal: (form?: VerbForm) => void
-  /** Grades a revealed, ungraded form and posts it at once. */
-  grade: (form: VerbForm, correct: boolean) => void
+  feedback: AnswerFeedback | null
+  /** Set after a near-miss spelling: the task stays open, this is the inline hint. */
+  neutralHint: string | null
+  summary: SessionSummary | null
+  /** Posts one answer. Correct/wrong shows feedback; neutral or a partial Match keeps the task open. */
+  answer: (text: string, responseMs?: number) => Promise<void>
+  /** Loads the next task, or finishes the session and shows the summary once the queue is empty. */
   next: () => void
-  summary: Summary | null
-}
-
-function fresh(card: SessionCardView): SessionCard {
-  return { card, closed: FORMS.filter((f) => f !== card.open), revealed: [], grades: {}, retry: false }
-}
-
-function isDone(entry: SessionCard): boolean {
-  return entry.closed.every((f) => entry.grades[f] !== undefined)
-}
-
-function activeForm(entry: SessionCard): VerbForm | null {
-  const pending = entry.revealed.filter((f) => entry.grades[f] === undefined)
-  return pending[pending.length - 1] ?? null
-}
-
-function addMiss(retried: Retried[], card: SessionCardView, form: VerbForm): Retried[] {
-  const existing = retried.find((r) => r.card.v1 === card.v1)
-
-  if (!existing) {
-    return [...retried, { card, missed: [form] }]
-  }
-
-  if (existing.missed.includes(form)) {
-    return retried
-  }
-
-  return retried.map((r) => (r === existing ? { ...r, missed: [...r.missed, form] } : r))
+  /** Flags a verb as forgotten (defaults to the task currently showing) and returns a short notice. */
+  forgot: (v1?: string) => Promise<string>
 }
 
 /**
- * Drives one session: loads the planned verbs, reveals closed cards, grades each revealed
- * form (posting immediately), and after Next requeues a verb that had a miss — with the
- * forms it got right already showing, so only the missed ones are asked again. The queue
- * is in memory only: a reload loses the position, not the grades already posted. The
- * screen is remounted per step and per run (its key in App), so state starts fresh there.
+ * Drives one session screen: loads the current task from the server (so a reload just
+ * asks for "next" again), posts each answer, and either shows feedback or keeps the
+ * task open (neutral spelling, or a Match with pairs still unresolved). When the queue
+ * is empty it finishes the session and switches to the summary.
  */
-export function useVerbSession(step: number): UseVerbSessionResult {
+export function useVerbSession(sessionId: number): UseVerbSessionResult {
   const [state, setState] = useState<State>(initialState)
 
-  useEffect(() => {
-    let cancelled = false
+  const load = useCallback(() => {
+    setState((s) => ({ ...s, status: 'loading', feedback: null, neutralHint: null }))
 
     api
-      .getVerbSession(step)
-      .then((session) => {
-        if (cancelled) {
+      .nextVerbTask(sessionId)
+      .then(async (view) => {
+        if (view.task === null) {
+          const summary = await api.finishVerbSession(sessionId)
+          setState((s) => ({ ...s, status: 'summary', summary, task: null, answered: view.answered, total: view.total }))
           return
         }
 
-        setState({
-          ...initialState,
-          status: session.cards.length === 0 ? 'summary' : 'active',
-          session,
-          queue: session.cards.map(fresh),
-          total: session.cards.length,
-        })
+        setState((s) => ({
+          ...s,
+          status: 'task',
+          task: view.task,
+          answered: view.answered,
+          total: view.total,
+          feedback: null,
+          neutralHint: null,
+        }))
       })
-      .catch((e) => {
-        if (!cancelled) {
-          setState((s) => ({ ...s, status: 'error', error: String(e) }))
-        }
-      })
+      .catch((e) => setState((s) => ({ ...s, status: 'error', error: String(e) })))
+  }, [sessionId])
 
-    return () => {
-      cancelled = true
-    }
-  }, [step])
+  useEffect(() => {
+    setState(initialState)
+    load()
+  }, [load])
 
-  const reveal = useCallback((form?: VerbForm) => {
-    setState((s) => {
-      const [current, ...rest] = s.queue
+  const answer = useCallback(
+    async (text: string, responseMs?: number) => {
+      const task = state.task
 
-      if (s.status !== 'active' || !current) {
-        return s
-      }
-
-      const target = form ?? current.closed.find((f) => !current.revealed.includes(f))
-
-      if (!target || !current.closed.includes(target) || current.revealed.includes(target)) {
-        return s
-      }
-
-      return { ...s, queue: [{ ...current, revealed: [...current.revealed, target] }, ...rest] }
-    })
-  }, [])
-
-  // Reads `state` from the closure and posts exactly once, outside any setState updater:
-  // Strict Mode double-invokes updaters, so a side effect inside one would post twice —
-  // the same shape as useSortingQueue's `mark`.
-  const grade = useCallback(
-    (form: VerbForm, correct: boolean) => {
-      const [current, ...rest] = state.queue
-
-      if (state.status !== 'active' || !current) {
+      if (state.status !== 'task' || !task) {
         return
       }
 
-      if (!current.revealed.includes(form) || current.grades[form] !== undefined) {
+      const result = await api.answerVerbTask(sessionId, task.id, text, responseMs)
+
+      // null — the task was already answered (a race); the queue is asked for again.
+      if (!result) {
+        load()
         return
       }
 
-      void api.gradeVerbForm(current.card.v1, form, correct)
+      if (result.outcome === 'neutral') {
+        setState((s) => ({ ...s, neutralHint: result.explanation }))
+        return
+      }
 
-      const key = `${current.card.v1}:${form}`
-      const firstTry = !state.gradedOnce.includes(key)
+      if (!result.taskComplete && result.matched) {
+        setState((s) => ({
+          ...s,
+          task: s.task && s.task.match ? { ...s.task, match: { ...s.task.match, matched: result.matched! } } : s.task,
+        }))
+        return
+      }
 
-      setState({
-        ...state,
-        queue: [{ ...current, grades: { ...current.grades, [form]: correct } }, ...rest],
-        gradedOnce: firstTry ? [...state.gradedOnce, key] : state.gradedOnce,
-        firstTryRight: firstTry && correct ? state.firstTryRight + 1 : state.firstTryRight,
-        retried: correct ? state.retried : addMiss(state.retried, current.card, form),
-      })
+      setState((s) => ({ ...s, status: 'feedback', feedback: result }))
     },
-    [state],
+    [state.status, state.task, sessionId, load],
   )
 
-  const next = useCallback(() => {
-    setState((s) => {
-      const [current, ...rest] = s.queue
+  const forgot = useCallback(
+    async (v1?: string) => {
+      const verb = v1 ?? state.task?.verb.v1
 
-      if (s.status !== 'active' || !current || !isDone(current)) {
-        return s
+      if (!verb) {
+        return ''
       }
 
-      const kept = current.closed.filter((f) => current.grades[f] === true)
-
-      if (kept.length < current.closed.length) {
-        // Second pass: the forms got right stay showing and graded; the missed ones close again.
-        const grades = Object.fromEntries(kept.map((f) => [f, true])) as Partial<Record<VerbForm, boolean>>
-        return { ...s, queue: [...rest, { ...current, revealed: kept, grades, retry: true }] }
-      }
-
-      const completed = s.completed + 1
-
-      return rest.length === 0
-        ? { ...s, queue: rest, completed, status: 'summary' }
-        : { ...s, queue: rest, completed }
-    })
-  }, [])
-
-  const current = state.queue[0] ?? null
+      const result = await api.forgotVerb(verb)
+      return `${result.v1} — back to practice`
+    },
+    [state.task],
+  )
 
   return {
     status: state.status,
     error: state.error,
-    session: state.session,
-    current,
-    verbNumber: Math.min(state.completed + 1, state.total),
+    task: state.task,
+    answered: state.answered,
     total: state.total,
-    toRetryCount: state.queue.filter((e) => e.retry).length,
-    activeForm: current ? activeForm(current) : null,
-    isDone: current ? isDone(current) : false,
-    reveal,
-    grade,
-    next,
-    summary:
-      state.status === 'summary'
-        ? { formsTotal: state.total * 2, formsRightFirstTime: state.firstTryRight, retried: state.retried }
-        : null,
+    feedback: state.feedback,
+    neutralHint: state.neutralHint,
+    summary: state.summary,
+    answer,
+    next: load,
+    forgot,
   }
 }

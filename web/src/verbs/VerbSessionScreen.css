@@ -1,16 +1,27 @@
-.verb-nav {
+.verb-session-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin: -8px 0 12px -10px;
+}
+
+.forgot-btn {
+  color: var(--text-3);
 }
 
 .verb-progress {
   margin: 0 0 16px;
 }
 
-/* The table: same surface as the quiz card, three cards laid out on it. */
-.verb-table {
+.verb-notice {
+  margin: -12px 0 12px;
+}
+
+.verb-feedback {
   display: grid;
-  gap: 24px;
+  gap: 16px;
   justify-items: center;
+  text-align: center;
   padding: 40px 32px 28px;
   background: var(--surface);
   border: 1px solid var(--hairline);
@@ -18,104 +29,27 @@
   box-shadow: var(--shadow-card);
 }
 
-.verb-cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  width: 100%;
-}
-
-.verb-card {
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-  align-content: start;
-  padding: 20px 12px 16px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  background: var(--bg);
-  transition:
-    background-color var(--dur) var(--ease),
-    border-color var(--dur) var(--ease);
-}
-
-.verb-card-face {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 56px;
-  font-size: 32px;
-  line-height: 1.1;
-  font-weight: 600;
-  letter-spacing: -0.5px;
-  text-align: center;
-  color: var(--text);
-  overflow-wrap: anywhere;
-  animation: verb-in var(--dur) var(--ease);
-}
-
-.verb-card-closed {
-  border-radius: var(--r-md);
-  color: var(--text-3);
-  background: var(--surface-2);
-  transition: background-color var(--dur) var(--ease);
-}
-
-.verb-card-closed:hover {
-  background: color-mix(in srgb, var(--surface-2) 85%, var(--text-3));
-}
-
-.verb-card[data-state='open'] {
-  background: var(--surface);
-}
-
-.verb-card[data-state='correct'] {
-  background: color-mix(in srgb, var(--known) 18%, transparent);
-  border-color: color-mix(in srgb, var(--known) 40%, transparent);
-}
-
-.verb-card[data-state='missed'] {
-  background: color-mix(in srgb, var(--danger) 14%, transparent);
+.verb-feedback.is-wrong {
   border-color: color-mix(in srgb, var(--danger) 40%, transparent);
 }
 
-.verb-card-label {
-  color: var(--text-3);
+.verb-feedback.is-correct {
+  border-color: color-mix(in srgb, var(--known) 40%, transparent);
 }
 
-.verb-grade {
-  display: grid;
-  gap: 8px;
-  width: 100%;
+.verb-feedback-triplet {
+  font-size: 28px;
+  font-weight: 600;
 }
 
-.verb-got {
-  color: color-mix(in srgb, var(--known) 65%, var(--text));
-}
-
-.verb-missed {
-  color: color-mix(in srgb, var(--danger) 65%, var(--text));
-}
-
-.verb-translation {
+.verb-feedback-explanation {
   color: var(--text-2);
+  max-width: 480px;
 }
 
-.verb-actions {
+.verb-feedback-actions {
   display: flex;
-  justify-content: center;
-}
-
-@keyframes verb-in {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  gap: 12px;
 }
 
 .verb-summary {
@@ -124,8 +58,7 @@
   justify-items: start;
 }
 
-/* Retried verbs: the same grouped list as the batch cards on the training screen. */
-.verb-retried {
+.verb-mistakes {
   width: 100%;
   max-width: 640px;
   background: var(--surface);
@@ -134,26 +67,19 @@
   overflow: hidden;
 }
 
-.verb-retried-row {
+.verb-mistake-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
   gap: 16px;
   padding: 12px 16px;
 }
 
-.verb-retried-row + .verb-retried-row {
+.verb-mistake-row + .verb-mistake-row {
   border-top: 1px solid var(--hairline);
 }
 
-.verb-retried-forms {
-  font-weight: 600;
-}
-
-.verb-retried-forms .is-missed {
-  color: var(--danger);
-}
-
-.verb-retried-translation {
+.verb-mistake-translation {
   color: var(--text-2);
 }
 
@@ -163,12 +89,6 @@
   gap: 12px;
 }
 
-@media (max-width: 600px) {
-  .verb-table {
-    padding: 24px 16px 20px;
-  }
-
-  .verb-cards {
-    grid-template-columns: 1fr;
-  }
+.verb-translation-toggle {
+  margin: -8px 0 16px;
 }

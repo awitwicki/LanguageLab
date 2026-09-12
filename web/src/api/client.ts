@@ -187,65 +187,183 @@ export interface TrainingSummary {
   words: WordResult[]
 }
 
-export type VerbForm = 'v1' | 'v2' | 'v3'
+export type VerbLearnState = 'new' | 'learning1' | 'learning2' | 'learning3' | 'learned' | 'mastered' | 'forgotten'
 
-export type FormState = 'unseen' | 'missed' | 'learning' | 'learned'
+export type FamilyStatus = 'locked' | 'available' | 'done'
 
-export interface FormProgressView {
-  form: VerbForm
-  state: FormState
-  /** Correct grades in a row; 3 makes the form learned. */
-  streak: number
+export type SessionMode = 'learn' | 'errorsOnly' | 'mixed'
+
+export type ExerciseType = 'card' | 'gapChoice' | 'oddOne' | 'match' | 'formPick' | 'gapType' | 'tripleType'
+
+export type FormAsked = 'v2' | 'v3' | 'both' | 'recognition'
+
+export type Tense = 'present' | 'past' | 'perfect'
+
+export type ErrorKind = 'edSuffix' | 'v2ForV3' | 'v3ForV2' | 'wrongFamily' | 'spelling' | 'other'
+
+export type AttemptOutcome = 'correct' | 'wrong' | 'neutral'
+
+export interface VerbRowView {
+  v1: string
+  v2: string
+  v3: string
+  translation: string
+  state: VerbLearnState
+  flagged: boolean
+}
+
+export interface FamilyView {
+  key: string
+  title: string
+  status: FamilyStatus
+  total: number
+  learned: number
+  verbs: VerbRowView[]
+}
+
+export interface GroupView {
+  group: number
+  title: string
+  total: number
+  learned: number
+  unlocked: boolean
+  families: FamilyView[]
+}
+
+export interface ActiveSessionView {
+  id: number
+  mode: SessionMode
+  group: number | null
+  family: string | null
+  answered: number
+  total: number
+}
+
+export interface VerbsProgress {
+  learnedPercent: number
+  groups: GroupView[]
+  mixedAvailable: boolean
+  errorsAvailable: boolean
+  activeSession: ActiveSessionView | null
+}
+
+export interface SessionStarted {
+  id: number
+  mode: SessionMode
+  group: number | null
+  family: string | null
+  title: string
+  total: number
+}
+
+export interface VerbDto {
+  v1: string
+  translation: string
+  group: number
+  family: string
+  suffixes: string[]
+}
+
+export interface ExampleDto {
+  tense: Tense
+  text: string
+}
+
+export interface CardBlock {
+  v2: string[]
+  v3: string[]
+  examples: ExampleDto[]
+  note: string | null
+}
+
+export interface GapChoiceBlock {
+  sentence: string
+  tense: Tense
+  options: string[]
+}
+
+export interface OddOneBlock {
+  options: string[]
+}
+
+export interface MatchPair {
+  left: string
+  right: string
+}
+
+export interface MatchBlock {
+  form: FormAsked
+  lefts: string[]
+  rights: string[]
+  matched: MatchPair[]
+}
+
+export interface FormPickBlock {
+  sentence: string
+}
+
+export interface GapTypeBlock {
+  sentence: string
+  tense: Tense
+  hint: string
+}
+
+export interface TripleTypeBlock {
+  v1: string
+  autofillV3: boolean
+}
+
+export interface TaskDto {
+  id: number
+  type: ExerciseType
+  formAsked: FormAsked
+  level: number
+  isReturn: boolean
+  verb: VerbDto
+  card: CardBlock | null
+  gapChoice: GapChoiceBlock | null
+  oddOne: OddOneBlock | null
+  match: MatchBlock | null
+  formPick: FormPickBlock | null
+  gapType: GapTypeBlock | null
+  tripleType: TripleTypeBlock | null
+}
+
+export interface NextTask {
+  task: TaskDto | null
+  answered: number
+  total: number
+}
+
+export interface AnswerFeedback {
+  outcome: AttemptOutcome
+  taskComplete: boolean
+  correctAnswer: string
+  triplet: string
+  explanation: string
+  errorKind: ErrorKind | null
+  willReturn: boolean
+  matched: MatchPair[] | null
+}
+
+export interface MistakeView {
+  v1: string
+  v2: string
+  v3: string
+  translation: string
+  wrongCount: number
+}
+
+export interface SessionSummary {
+  total: number
   correct: number
-  wrong: number
+  mistakes: MistakeView[]
+  learned: string[]
 }
 
-export interface VerbView {
+export interface ForgotResult {
   v1: string
-  v2: string
-  v3: string
-  translation: string
-  /** All three forms learned. */
-  learned: boolean
-  /** Always three entries, in v1, v2, v3 order. */
-  forms: FormProgressView[]
-}
-
-export interface StepView {
-  step: number
-  title: string
-  totalVerbs: number
-  learnedVerbs: number
-  totalForms: number
-  learnedForms: number
-  verbs: VerbView[]
-}
-
-export interface IrregularVerbsOverview {
-  steps: StepView[]
-}
-
-export interface SessionCardView {
-  v1: string
-  v2: string
-  v3: string
-  translation: string
-  /** The form shown open; the other two are the closed cards the learner grades. */
-  open: VerbForm
-}
-
-export interface IrregularVerbSession {
-  step: number
-  title: string
-  /** True when the step had nothing left to learn, so these are already-learned verbs. */
-  review: boolean
-  cards: SessionCardView[]
-}
-
-export interface GradeResult {
-  verb: string
-  learned: boolean
-  forms: FormProgressView[]
+  state: VerbLearnState
 }
 
 let unauthorizedHandler: () => void = () => {}
@@ -387,17 +505,30 @@ export const api = {
   finish: (trainingId: number) =>
     request<TrainingSummary>(`/api/training/${trainingId}/finish`, { method: 'POST' }) as Promise<TrainingSummary>,
 
-  getIrregularVerbs: () => request<IrregularVerbsOverview>('/api/irregular-verbs') as Promise<IrregularVerbsOverview>,
+  getVerbsProgress: () => request<VerbsProgress>('/api/irregular-verbs/progress') as Promise<VerbsProgress>,
 
-  getVerbSession: (step: number) =>
-    request<IrregularVerbSession>(`/api/irregular-verbs/steps/${step}/session`) as Promise<IrregularVerbSession>,
-
-  /** One self-grade of one closed card; the server upserts the form's row and returns the verb's three forms. */
-  gradeVerbForm: (verb: string, form: VerbForm, correct: boolean) =>
-    request<GradeResult>('/api/irregular-verbs/grades', {
+  /** 409 (a locked family, or nothing to train) throws with the server's message. */
+  startVerbSession: (body: { mode: SessionMode; family?: string; fromSessionId?: number }) =>
+    request<SessionStarted>('/api/irregular-verbs/sessions', {
       method: 'POST',
-      body: JSON.stringify({ verb, form, correct }),
-    }) as Promise<GradeResult>,
+      body: JSON.stringify(body),
+    }) as Promise<SessionStarted>,
+
+  nextVerbTask: (sessionId: number) =>
+    request<NextTask>(`/api/irregular-verbs/sessions/${sessionId}/next`) as Promise<NextTask>,
+
+  // 204 (the task was already answered, e.g. a double click) comes back as null — a race, not an error.
+  answerVerbTask: (sessionId: number, taskId: number, answer: string, responseMs?: number) =>
+    request<AnswerFeedback>(`/api/irregular-verbs/sessions/${sessionId}/answer`, {
+      method: 'POST',
+      body: JSON.stringify({ taskId, answer, responseMs }),
+    }),
+
+  finishVerbSession: (sessionId: number) =>
+    request<SessionSummary>(`/api/irregular-verbs/sessions/${sessionId}/finish`, { method: 'POST' }) as Promise<SessionSummary>,
+
+  forgotVerb: (v1: string) =>
+    request<ForgotResult>(`/api/irregular-verbs/verbs/${v1}/forgot`, { method: 'POST' }) as Promise<ForgotResult>,
 
   // Raw fetch, not request(): 401 here means "not signed in yet", which is an answer, not a
   // dropped session.

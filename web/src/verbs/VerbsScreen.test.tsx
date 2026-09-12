@@ -1,100 +1,103 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FormProgressView, FormState, IrregularVerbsOverview, VerbView } from '../api/client'
+import type { SessionStarted, VerbsProgress } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { VerbsScreen } from './VerbsScreen'
 
-const apiMock = vi.hoisted(() => ({ getIrregularVerbs: vi.fn() }))
+const apiMock = vi.hoisted(() => ({ getVerbsProgress: vi.fn(), startVerbSession: vi.fn() }))
 vi.mock('../api/client', () => ({ api: apiMock }))
 
-type Marks = [FormState, number][]
-
-function forms(marks: Marks): FormProgressView[] {
-  return (['v1', 'v2', 'v3'] as const).map((form, i) => ({
-    form,
-    state: marks[i][0],
-    streak: marks[i][1],
-    correct: 0,
-    wrong: 0,
-  }))
+function group(overrides: Partial<VerbsProgress['groups'][number]> = {}) {
+  return {
+    group: 1,
+    title: 'All three forms alike',
+    total: 9,
+    learned: 0,
+    unlocked: true,
+    families: [],
+    ...overrides,
+  }
 }
 
-function verb(v1: string, v2: string, v3: string, translation: string, marks: Marks): VerbView {
-  const f = forms(marks)
-  return { v1, v2, v3, translation, learned: f.every((x) => x.state === 'learned'), forms: f }
-}
-
-const unseen: Marks = [['unseen', 0], ['unseen', 0], ['unseen', 0]]
-const learned: Marks = [['learned', 3], ['learned', 4], ['learned', 3]]
-
-const overview: IrregularVerbsOverview = {
-  steps: [
-    {
-      step: 1, title: 'All three forms alike', totalVerbs: 2, learnedVerbs: 0, totalForms: 6, learnedForms: 0,
-      verbs: [verb('cut', 'cut', 'cut', 'різати', unseen), verb('put', 'put', 'put', 'класти', unseen)],
-    },
-    {
-      step: 2, title: 'First and third alike', totalVerbs: 1, learnedVerbs: 1, totalForms: 3, learnedForms: 3,
-      verbs: [verb('run', 'ran', 'run', 'бігти', learned)],
-    },
-    {
-      step: 3, title: 'Second and third alike', totalVerbs: 1, learnedVerbs: 0, totalForms: 3, learnedForms: 1,
-      verbs: [verb('buy', 'bought', 'bought', 'купувати', [['unseen', 0], ['missed', 0], ['learned', 3]])],
-    },
-    {
-      step: 4, title: 'All three forms differ', totalVerbs: 1, learnedVerbs: 0, totalForms: 3, learnedForms: 0,
-      verbs: [verb('go', 'went', 'gone', 'йти', [['unseen', 0], ['learning', 2], ['unseen', 0]])],
-    },
+const progress: VerbsProgress = {
+  learnedPercent: 10,
+  groups: [
+    group(),
+    group({ group: 2, title: 'First and third alike', total: 3, learned: 3, unlocked: true }),
+    group({ group: 3, title: 'Second and third alike', total: 29, unlocked: false }),
+    group({ group: 4, title: 'All three forms differ', total: 27, unlocked: false }),
   ],
+  mixedAvailable: false,
+  errorsAvailable: false,
+  activeSession: null,
 }
 
 beforeEach(() => {
-  apiMock.getIrregularVerbs.mockReset()
-  apiMock.getIrregularVerbs.mockResolvedValue(overview)
+  apiMock.getVerbsProgress.mockReset()
+  apiMock.startVerbSession.mockReset()
+  apiMock.getVerbsProgress.mockResolvedValue(progress)
 })
 
 describe('VerbsScreen', () => {
-  it('labels each step Start, Continue or Review by its progress', async () => {
-    const { container } = await render(<VerbsScreen onStartSession={() => {}} />)
+  it('shows four group tiles, locked ones disabled', async () => {
+    const { container } = await render(<VerbsScreen onOpenGroup={() => {}} onStartSession={() => {}} />)
     await flush()
 
-    const labels = [...container.querySelectorAll('.step-action')].map((b) => b.textContent)
-    expect(labels).toEqual(['Start', 'Review', 'Continue', 'Continue'])
+    const tiles = [...container.querySelectorAll('.group-tile')]
+    expect(tiles).toHaveLength(4)
+    expect(tiles[0].textContent).toContain('All three forms alike')
+    expect(tiles[2].querySelector('.btn')?.hasAttribute('disabled')).toBe(true)
+    expect(tiles[2].textContent).toContain('Locked')
   })
 
-  it('shows learned forms on the bar and learned verbs in the caption', async () => {
-    const { container } = await render(<VerbsScreen onStartSession={() => {}} />)
+  it('opens a group when its tile is clicked', async () => {
+    const onOpenGroup = vi.fn()
+    const { container } = await render(<VerbsScreen onOpenGroup={onOpenGroup} onStartSession={() => {}} />)
     await flush()
 
-    const cards = [...container.querySelectorAll('.step-card')]
-    expect(cards[2].querySelector('.progress-track')?.getAttribute('aria-valuenow')).toBe('33')
-    expect(cards[2].querySelector('.step-caption')?.textContent).toBe('0 of 1 verbs learned')
-    expect(cards[1].querySelector('.step-caption')?.textContent).toBe('1 of 1 verbs learned')
+    await click(container.querySelectorAll('.group-tile .btn')[0])
+
+    expect(onOpenGroup).toHaveBeenCalledWith(1)
   })
 
-  it('expands a step table with a state and streak dots per form, plus a legend', async () => {
-    const { container } = await render(<VerbsScreen onStartSession={() => {}} />)
+  it('disables errors-only and mixed when unavailable, enables them otherwise', async () => {
+    const { container } = await render(<VerbsScreen onOpenGroup={() => {}} onStartSession={() => {}} />)
     await flush()
 
-    expect(container.querySelector('.step-table')).toBeNull()
-
-    await click(container.querySelectorAll('.step-table-toggle')[2])
-
-    const row = container.querySelector('.step-table tbody tr')!
-    const cells = [...row.querySelectorAll('.verb-cell')]
-    expect(cells.map((c) => c.getAttribute('data-state'))).toEqual(['unseen', 'missed', 'learned'])
-    expect(cells.map((c) => c.querySelector('.verb-cell-form')?.textContent)).toEqual(['buy', 'bought', 'bought'])
-    expect(cells.map((c) => c.querySelectorAll('.verb-dot.is-on').length)).toEqual([0, 0, 3])
-    expect(row.querySelector('.verb-cell-translation')?.textContent).toBe('купувати')
-    expect(container.querySelector('.verb-legend')?.textContent).toContain('not seen')
+    expect(container.querySelector('.errors-only-btn')?.hasAttribute('disabled')).toBe(true)
+    expect(container.querySelector('.mixed-session-btn')?.hasAttribute('disabled')).toBe(true)
   })
 
-  it('starts a session for the clicked step', async () => {
+  it('starts a mixed session and reports it', async () => {
+    apiMock.getVerbsProgress.mockResolvedValue({ ...progress, mixedAvailable: true })
+    const started: SessionStarted = { id: 5, mode: 'mixed', group: null, family: null, title: 'Mixed session', total: 10 }
+    apiMock.startVerbSession.mockResolvedValue(started)
     const onStartSession = vi.fn()
-    const { container } = await render(<VerbsScreen onStartSession={onStartSession} />)
+
+    const { container } = await render(<VerbsScreen onOpenGroup={() => {}} onStartSession={onStartSession} />)
     await flush()
 
-    await click(container.querySelectorAll('.step-action')[3])
+    await click(container.querySelector('.mixed-session-btn')!)
+    await flush()
 
-    expect(onStartSession).toHaveBeenCalledWith(4)
+    expect(apiMock.startVerbSession).toHaveBeenCalledWith({ mode: 'mixed' })
+    expect(onStartSession).toHaveBeenCalledWith(started)
+  })
+
+  it('shows a continue banner for an open session', async () => {
+    apiMock.getVerbsProgress.mockResolvedValue({
+      ...progress,
+      activeSession: { id: 7, mode: 'learn', group: 1, family: 'same', answered: 3, total: 16 },
+    })
+    const onStartSession = vi.fn()
+
+    const { container } = await render(<VerbsScreen onOpenGroup={() => {}} onStartSession={onStartSession} />)
+    await flush()
+
+    const banner = container.querySelector('.continue-banner')!
+    expect(banner.textContent).toContain('Continue')
+
+    await click(banner.querySelector('.btn')!)
+
+    expect(onStartSession).toHaveBeenCalledWith({ id: 7, mode: 'learn', group: 1, family: 'same', title: '', total: 16 })
   })
 })
