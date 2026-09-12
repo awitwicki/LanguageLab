@@ -119,7 +119,7 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
       // Повернуте слово стає поточною карткою — так завжди видно, що саме
       // відкотилось, навіть якщо це позначка з попередньої сесії.
       setBuffer((current) => [
-        { wordPairId: undone.wordPairId, word: undone.word, frequency: 0 },
+        { wordPairId: undone.wordPairId, word: undone.word, translation: undone.translation, frequency: 0 },
         ...current,
       ])
       setSorted((current) => Math.max(0, current - 1))

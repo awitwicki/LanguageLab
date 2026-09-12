@@ -41,6 +41,7 @@ function makeWords(count: number): QueueWord[] {
   return Array.from({ length: count }, (_, i) => ({
     wordPairId: i + 1,
     word: `w${i + 1}`,
+    translation: `t${i + 1}`,
     frequency: count - i,
   }))
 }

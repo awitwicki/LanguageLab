@@ -59,6 +59,7 @@ export function SortingScreen({ dictionaryId, dictionaryName, chapterIds, scopeT
               <p key={current.wordPairId} className="card-word">
                 {current.word}
               </p>
+              <p className="card-translation">{current.translation}</p>
               {/* Слово, повернуте через undo, приходить без частоти — краще не
                   показати нічого, ніж збрехати «зустрічається 0 разів». */}
               {current.frequency > 0 ? (

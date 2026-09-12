@@ -85,6 +85,7 @@ export interface ImportResult {
 export interface QueueWord {
   wordPairId: number
   word: string
+  translation: string
   frequency: number
 }
 
@@ -100,6 +101,7 @@ export type SortStatus = 'known' | 'unknown' | 'excluded'
 export interface UndoResult {
   wordPairId: number
   word: string
+  translation: string
   previousStatus: SortStatus
 }
 

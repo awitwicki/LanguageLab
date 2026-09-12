@@ -12,13 +12,13 @@ public enum SortStatus
     Excluded = 2
 }
 
-public sealed record QueueWord(long WordPairId, string Word, int Frequency);
+public sealed record QueueWord(long WordPairId, string Word, string Translation, int Frequency);
 
 public sealed record SortingQueue(IReadOnlyList<QueueWord> Words, int Total, int Sorted, int Remaining);
 
 public sealed record ChapterProgress(long ChapterId, int Total, int Sorted);
 
-public sealed record UndoResult(long WordPairId, string Word, SortStatus PreviousStatus);
+public sealed record UndoResult(long WordPairId, string Word, string Translation, SortStatus PreviousStatus);
 
 public sealed record RecentWord(long WordPairId, string Word);
 
@@ -57,7 +57,7 @@ public class WordSortingService
             .OrderByDescending(dw => dw.Frequency)
             .ThenBy(dw => dw.WordPairId)
             .Take(take)
-            .Select(dw => new QueueWord(dw.WordPairId, dw.WordPair.Word, dw.Frequency))
+            .Select(dw => new QueueWord(dw.WordPairId, dw.WordPair.Word, dw.WordPair.Translation, dw.Frequency))
             .ToListAsync();
 
         return new SortingQueue(words, total, total - remaining, remaining);
@@ -206,10 +206,10 @@ public class WordSortingService
 
         var word = await _dbContext.Words
             .Where(w => w.Id == newest.WordPairId)
-            .Select(w => w.Word)
+            .Select(w => new { w.Word, w.Translation })
             .SingleAsync();
 
-        return new UndoResult(newest.WordPairId, word, newest.Status);
+        return new UndoResult(newest.WordPairId, word.Word, word.Translation, newest.Status);
     }
 
     /// <summary>
