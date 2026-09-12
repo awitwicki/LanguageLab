@@ -1,0 +1,63 @@
+.boxes {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: end;
+}
+
+.boxes-col {
+  display: grid;
+  grid-template-rows: auto 96px auto;
+  justify-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.boxes-count {
+  color: var(--text);
+}
+
+/* Bars grow from the bottom: the track is the full height, the bar is pinned to its floor. */
+.boxes-track {
+  position: relative;
+  width: 100%;
+  max-width: 48px;
+  height: 100%;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  overflow: hidden;
+}
+
+.boxes-bar {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: block;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  transition: height var(--dur) var(--ease);
+}
+
+/* The same accent ramp as LeitnerScale.css: a higher box is a denser accent. */
+.boxes-box1 {
+  background: color-mix(in srgb, var(--accent) 20%, var(--surface));
+}
+
+.boxes-box2 {
+  background: color-mix(in srgb, var(--accent) 40%, var(--surface));
+}
+
+.boxes-box3 {
+  background: color-mix(in srgb, var(--accent) 60%, var(--surface));
+}
+
+.boxes-box4 {
+  background: color-mix(in srgb, var(--accent) 80%, var(--surface));
+}
+
+.boxes-box5 {
+  background: var(--accent);
+}
+
+.boxes-label {
+  white-space: nowrap;
+}

@@ -11,3 +11,33 @@
   line-height: 26px;
   color: var(--text-2);
 }
+
+/* The stats card spans the column; the placeholder copy below keeps its own start alignment. */
+.learning-stats {
+  justify-self: stretch;
+  display: grid;
+  gap: 20px;
+  padding: 20px;
+  margin-bottom: 28px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+}
+
+/* dl/dd are not in the global reset. */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.stat-tile {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.stat-value {
+  margin: 0;
+}

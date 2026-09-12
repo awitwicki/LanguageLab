@@ -17,7 +17,9 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
 - [ ] Show translation on the sorting card (now available for translated words)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
-- [ ] Leitner stats: box histogram, learned / due today (`TrainingSessionService.GetStatsAsync` already exists)
+- [x] Leitner stats: box histogram, learned / due today (`TrainingSessionService.GetStatsAsync` already exists)
+- [ ] Start a global review from the home screen's "Due today" tile: `TrainingScreen` (`web/src/screens/TrainingScreen.tsx`) is tied to a `dictionaryId` (back navigation, next batch) and needs a dictionary-less mode; until then a review starts from a dictionary page
+- [ ] Book-level "Review (N)" button shows the book's own `dueCount` but starts a global review across every book (`DictionaryScreen.tsx`'s `startReview()` with no chapter passes `undefined` scope to `api.startReview`) — either scope the call to the book or label the button as global
 - [ ] User stats: total known / learning / excluded counts
 - [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
 - [ ] Focus management on route change: announce the new screen for screen readers (focus currently falls back to `<body>`)

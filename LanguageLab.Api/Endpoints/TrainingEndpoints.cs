@@ -72,6 +72,11 @@ public static class TrainingEndpoints
             return Results.Ok(new BatchPreview(learning, learnable, candidates));
         });
 
+        // The user's Leitner standing across every book: per-box counts of words in progress,
+        // learned, and what is due right now. Fed to the home screen.
+        group.MapGet("/stats", async (TrainingSessionService sessions, ICurrentUser currentUser) =>
+            Results.Ok(await sessions.GetStatsAsync(await currentUser.GetIdAsync(), DateTime.UtcNow)));
+
         group.MapPost("/new-batch", async (
             NewBatchRequest request,
             TrainingSessionService sessions,

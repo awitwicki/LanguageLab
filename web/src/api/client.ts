@@ -190,6 +190,16 @@ export interface TrainingSummary {
   words: WordResult[]
 }
 
+/** The user's Leitner standing across every book. boxCounts: index 0 = box 1, words in progress only. */
+export interface TrainingStats {
+  boxCounts: number[]
+  learned: number
+  known: number
+  due: number
+  correct: number
+  wrong: number
+}
+
 export type VerbLearnState = 'new' | 'learning1' | 'learning2' | 'learning3' | 'learned' | 'mastered' | 'forgotten'
 
 export type FamilyStatus = 'locked' | 'available' | 'done'
@@ -479,6 +489,8 @@ export const api = {
 
     return request<BatchPreview>(`/api/training/preview?${params}`) as Promise<BatchPreview>
   },
+
+  trainingStats: () => request<TrainingStats>('/api/training/stats') as Promise<TrainingStats>,
 
   /** Without a scope reviews everything due across all books; with one, only that book or those chapters. */
   startReview: (scope?: { dictionaryId: number; chapterIds: number[] | null }) =>
