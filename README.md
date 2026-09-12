@@ -29,7 +29,6 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Top-100/200/500/1000 English word dictionaries, public
 - [ ] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
 - [ ] Comment sweep: code comments are still Ukrainian in ~190 lines across `web/src` (plus `useBatchPreview.test.ts` test names), 36 backend `.cs` files (`Domain` mostly), `Program.cs` and the `Dockerfile` — comments only, no UI copy
-- [ ] Telegram scopes `phone` and `telegram:bot_access` are not requested; revisit if the bot ever needs to message web users
 
 ## Development
 
