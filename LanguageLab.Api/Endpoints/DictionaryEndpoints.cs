@@ -92,7 +92,7 @@ public static class DictionaryEndpoints
                 .ToDictionary(p => p.ChapterId);
 
             var whole = await sorting.GetQueueAsync(userId, id, chapterIds: null, take: 1);
-            var topWords = await stats.GetTopWordsAsync(id);
+            var topWords = await stats.GetTopWordsAsync(id, userId);
 
             // «До вивчення» = перекладене, на полиці «не знаю», ще не тренувалось —
             // саме те, що потрапить у новий батч. По одному COUNT на главу, як і прогрес сортування.

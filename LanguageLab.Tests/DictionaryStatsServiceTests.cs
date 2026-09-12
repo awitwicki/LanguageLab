@@ -43,13 +43,15 @@ public class DictionaryStatsServiceTests
         return db;
     }
 
+    private const long RequestingUserId = 1;
+
     [Fact]
     public async Task TopWords_sorted_by_frequency_desc_and_scoped_to_dictionary()
     {
         await using var db = await ArrangeAsync();
         var service = new DictionaryStatsService(db);
 
-        var top = await service.GetTopWordsAsync(1, take: 3);
+        var top = await service.GetTopWordsAsync(1, RequestingUserId, take: 3);
 
         Assert.Equal(new[] { "silo", "holston", "abide" }, top.Select(t => t.Word));
         Assert.Equal(new[] { 15, 7, 3 }, top.Select(t => t.Frequency));
@@ -62,7 +64,7 @@ public class DictionaryStatsServiceTests
         await using var db = await ArrangeAsync();
         var service = new DictionaryStatsService(db);
 
-        var top = await service.GetTopWordsAsync(1);
+        var top = await service.GetTopWordsAsync(1, RequestingUserId);
 
         Assert.Equal(5, top.Count);
         Assert.DoesNotContain(top, t => t.Word == "dune");
@@ -74,7 +76,7 @@ public class DictionaryStatsServiceTests
         await using var db = await ArrangeAsync();
         var service = new DictionaryStatsService(db);
 
-        var top = await service.GetTopWordsAsync(1, take: 0);
+        var top = await service.GetTopWordsAsync(1, RequestingUserId, take: 0);
 
         Assert.Single(top);
         Assert.Equal("silo", top[0].Word);
@@ -93,8 +95,32 @@ public class DictionaryStatsServiceTests
             new DictionaryWord { DictionaryId = 1, WordPairId = 2, Frequency = 4 });
         await db.SaveChangesAsync();
 
-        var top = await new DictionaryStatsService(db).GetTopWordsAsync(1);
+        var top = await new DictionaryStatsService(db).GetTopWordsAsync(1, RequestingUserId);
 
         Assert.Equal(new[] { "apple", "zebra" }, top.Select(t => t.Word));
+    }
+
+    [Fact]
+    public async Task TopWords_skips_a_word_the_requesting_user_excluded_and_backfills_from_further_down()
+    {
+        await using var db = await ArrangeAsync();
+        db.ExcludedWords.Add(new ExcludedWord { UserId = RequestingUserId, WordPairId = 1, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var top = await new DictionaryStatsService(db).GetTopWordsAsync(1, RequestingUserId, take: 3);
+
+        Assert.Equal(new[] { "holston", "abide", "cleaning" }, top.Select(t => t.Word));
+    }
+
+    [Fact]
+    public async Task TopWords_another_users_exclusion_does_not_affect_this_users_list()
+    {
+        await using var db = await ArrangeAsync();
+        db.ExcludedWords.Add(new ExcludedWord { UserId = RequestingUserId + 1, WordPairId = 1, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        var top = await new DictionaryStatsService(db).GetTopWordsAsync(1, RequestingUserId, take: 3);
+
+        Assert.Equal(new[] { "silo", "holston", "abide" }, top.Select(t => t.Word));
     }
 }

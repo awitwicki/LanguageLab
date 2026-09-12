@@ -75,11 +75,22 @@
 
 .top-word {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   padding: 8px 10px;
   border-radius: var(--r-md);
+}
+
+.exclude-word {
+  padding: 0 6px;
+  font-size: var(--fs-body);
+  line-height: 1;
+  color: var(--text-3);
+}
+
+.top-words-notice button {
+  vertical-align: baseline;
 }
 
 .top-word .rank {

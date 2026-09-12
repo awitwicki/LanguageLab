@@ -8,6 +8,8 @@ const apiMock = vi.hoisted(() => ({
   startReview: vi.fn(),
   setDictionaryVisibility: vi.fn(),
   deleteDictionary: vi.fn(),
+  mark: vi.fn(),
+  undo: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
@@ -69,6 +71,8 @@ beforeEach(() => {
   apiMock.startReview.mockResolvedValue(reviewStarted)
   apiMock.setDictionaryVisibility.mockResolvedValue(null)
   apiMock.deleteDictionary.mockResolvedValue(null)
+  apiMock.mark.mockResolvedValue(null)
+  apiMock.undo.mockResolvedValue(null)
 })
 
 describe('DictionaryScreen — chapters', () => {
@@ -378,5 +382,62 @@ describe('DictionaryScreen — delete', () => {
     expect(onDeleted).not.toHaveBeenCalled()
     expect(button.textContent).toBe('Delete dictionary')
     expect(container.textContent).toContain('network error')
+  })
+})
+
+describe('DictionaryScreen — exclude word', () => {
+  const words = (container: HTMLElement) =>
+    [...container.querySelectorAll('.top-word')].map((r) => r.querySelector('.word')?.textContent)
+
+  it('excludes a word, refreshes the list, and offers Undo', async () => {
+    const refreshed: DictionaryDetail = {
+      ...detail,
+      topWords: [
+        { wordPairId: 2, word: 'abide', frequency: 750 },
+        { wordPairId: 3, word: 'cleaning', frequency: 200 },
+      ],
+    }
+    apiMock.getDictionary.mockResolvedValueOnce(detail).mockResolvedValueOnce(refreshed)
+    const { container } = await render(screen())
+    await flush()
+
+    await click(container.querySelector<HTMLButtonElement>('.top-word .exclude-word')!)
+    await flush()
+
+    expect(apiMock.mark).toHaveBeenCalledWith(1, 'excluded')
+    expect(apiMock.getDictionary).toHaveBeenCalledTimes(2)
+    expect(words(container)).toEqual(['abide', 'cleaning'])
+    expect(container.querySelector('.top-words-notice')?.textContent).toContain('Excluded "silo"')
+  })
+
+  it('Undo reverses the exclusion and refreshes the list again', async () => {
+    const withoutSilo: DictionaryDetail = { ...detail, topWords: [{ wordPairId: 2, word: 'abide', frequency: 750 }] }
+    apiMock.getDictionary.mockResolvedValueOnce(detail).mockResolvedValueOnce(withoutSilo).mockResolvedValueOnce(detail)
+    const { container } = await render(screen())
+    await flush()
+
+    await click(container.querySelector<HTMLButtonElement>('.top-word .exclude-word')!)
+    await flush()
+    await click(container.querySelector<HTMLButtonElement>('.top-words-notice .btn')!)
+    await flush()
+
+    expect(apiMock.undo).toHaveBeenCalledTimes(1)
+    expect(apiMock.getDictionary).toHaveBeenCalledTimes(3)
+    expect(container.querySelector('.top-words-notice')).toBeNull()
+    expect(words(container)).toEqual(['silo', 'abide'])
+  })
+
+  it('shows an inline error and keeps the word when excluding fails', async () => {
+    apiMock.mark.mockRejectedValue(new Error('network error'))
+    const { container } = await render(screen())
+    await flush()
+
+    await click(container.querySelector<HTMLButtonElement>('.top-word .exclude-word')!)
+    await flush()
+
+    expect(apiMock.getDictionary).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('.top-words-notice')).toBeNull()
+    expect(container.textContent).toContain('network error')
+    expect(words(container)).toEqual(['silo', 'abide'])
   })
 })

@@ -7,7 +7,7 @@ public sealed record TopWord(long WordPairId, string Word, int Frequency);
 
 /// <summary>
 /// Цифри по словнику для екрана статистики. Окремо від WordSortingService:
-/// тут немає юзера й полиць — лише те, що видно з самого словника.
+/// тут немає юзерських полиць, крім фільтра виключених слів нижче.
 /// </summary>
 public class DictionaryStatsService
 {
@@ -22,15 +22,17 @@ public class DictionaryStatsService
     }
 
     /// <summary>
-    /// Найчастіші слова словника за книжковою частотою. При рівній частоті —
-    /// за алфавітом, щоб порядок був стабільним між запитами.
+    /// Найчастіші слова словника за книжковою частотою, без слів, які цей юзер
+    /// вже виключив (вони підмінюються наступними за частотою). При рівній
+    /// частоті — за алфавітом, щоб порядок був стабільним між запитами.
     /// </summary>
-    public async Task<IReadOnlyList<TopWord>> GetTopWordsAsync(long dictionaryId, int take = DefaultTopWords)
+    public async Task<IReadOnlyList<TopWord>> GetTopWordsAsync(long dictionaryId, long userId, int take = DefaultTopWords)
     {
         take = Math.Clamp(take, 1, MaxTopWords);
 
         return await _dbContext.DictionaryWords
             .Where(dw => dw.DictionaryId == dictionaryId)
+            .Where(dw => !_dbContext.ExcludedWords.Any(e => e.UserId == userId && e.WordPairId == dw.WordPairId))
             .OrderByDescending(dw => dw.Frequency)
             .ThenBy(dw => dw.WordPair.Word)
             .Take(take)

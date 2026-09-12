@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, type ChapterView, type DictionaryDetail, type TrainingStarted, type UserRole } from '../api/client'
+import { api, type ChapterView, type DictionaryDetail, type TopWord, type TrainingStarted, type UserRole } from '../api/client'
 import { LeitnerScale } from '../components/LeitnerScale'
 import { ProgressBar } from '../components/ProgressBar'
 import { chaptersLabel, formatDue, formatInt, percentOf, wordsLabel } from '../lib/format'
@@ -27,6 +27,9 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
   const [deleteConfirming, setDeleteConfirming] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [excludingId, setExcludingId] = useState<number | null>(null)
+  const [excludeNotice, setExcludeNotice] = useState<string | null>(null)
+  const [excludeError, setExcludeError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -34,6 +37,8 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
     setDetail(null)
     setError(null)
     setReviewNotice(null)
+    setExcludeNotice(null)
+    setExcludeError(null)
     api
       .getDictionary(id)
       .then((d) => {
@@ -106,6 +111,36 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
       setDeleteError(e instanceof Error ? e.message : String(e))
     } finally {
       setDeleteBusy(false)
+    }
+  }
+
+  // A word excluded here also affects sortedCount/learnableCount/etc, so a full refetch
+  // (rather than a local splice) both backfills the list and keeps the rest of the screen right.
+  const excludeWord = async (word: TopWord) => {
+    setExcludingId(word.wordPairId)
+    setExcludeError(null)
+    setExcludeNotice(null)
+
+    try {
+      await api.mark(word.wordPairId, 'excluded')
+      setDetail(await api.getDictionary(id))
+      setExcludeNotice(word.word)
+    } catch (e) {
+      setExcludeError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setExcludingId(null)
+    }
+  }
+
+  const undoExclude = async () => {
+    setExcludeError(null)
+
+    try {
+      await api.undo()
+      setDetail(await api.getDictionary(id))
+      setExcludeNotice(null)
+    } catch (e) {
+      setExcludeError(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -264,6 +299,15 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
         {detail.topWords.length > 0 && (
           <section className="section">
             <h2 className="title">Most frequent words</h2>
+            {excludeNotice && (
+              <p className="footnote top-words-notice">
+                Excluded "{excludeNotice}".{' '}
+                <button type="button" className="btn btn-quiet" onClick={() => void undoExclude()}>
+                  Undo
+                </button>
+              </p>
+            )}
+            {excludeError && <p className="footnote error">{excludeError}</p>}
             <ol className="top-words">
               {detail.topWords.map((item, index) => (
                 <li key={item.wordPairId} className="top-word">
@@ -276,6 +320,16 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
                     />
                   </span>
                   <span className="count num">{formatInt(item.frequency)}</span>
+                  <button
+                    type="button"
+                    className="btn btn-quiet exclude-word"
+                    disabled={excludingId === item.wordPairId}
+                    aria-label={`Exclude "${item.word}"`}
+                    title="Not a real word (a name, a place) — exclude it from this list and from exercises"
+                    onClick={() => void excludeWord(item)}
+                  >
+                    ×
+                  </button>
                 </li>
               ))}
             </ol>
