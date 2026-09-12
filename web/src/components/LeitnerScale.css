@@ -63,6 +63,11 @@
   color: var(--text);
 }
 
+/* In the compact grid the caption takes its own row under the track and the percent. */
+.leitner-compact .leitner-caption {
+  grid-column: 1 / -1;
+}
+
 .leitner-legend {
   display: flex;
   flex-wrap: wrap;

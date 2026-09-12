@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { api, type TrainingStarted } from '../api/client'
 import { LeitnerScale } from '../components/LeitnerScale'
 import { formatInt, wordsLabel } from '../lib/format'
@@ -30,6 +30,27 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
 
   const learnableCount = preview?.learnableCount ?? 0
   const inChapter = chapterIds !== null && chapterIds.length > 0
+  const radioRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  // ARIA radiogroup: one tab stop, arrows pick the neighbour (wrapping) and follow it with focus.
+  const onRadioKey = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const step =
+      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? 1
+        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+          ? -1
+          : 0
+
+    if (step === 0) {
+      return
+    }
+
+    event.preventDefault()
+    const current = (BATCH_SIZES as readonly number[]).indexOf(batchSize)
+    const index = (current + step + BATCH_SIZES.length) % BATCH_SIZES.length
+    setBatchSize(BATCH_SIZES[index])
+    radioRefs.current[index]?.focus()
+  }
 
   const start = async () => {
     setBusy(true)
@@ -79,14 +100,19 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
       )}
 
       <div className="segment" role="radiogroup" aria-label="Batch size">
-        {BATCH_SIZES.map((size) => (
+        {BATCH_SIZES.map((size, index) => (
           <button
             key={size}
+            ref={(el) => {
+              radioRefs.current[index] = el
+            }}
             type="button"
             role="radio"
             aria-checked={size === batchSize}
+            tabIndex={size === batchSize ? 0 : -1}
             className={`segment-item num${size === batchSize ? ' is-active' : ''}`}
             onClick={() => setBatchSize(size)}
+            onKeyDown={onRadioKey}
           >
             {size}
           </button>

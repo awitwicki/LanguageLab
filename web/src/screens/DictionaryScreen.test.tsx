@@ -225,7 +225,7 @@ describe('DictionaryScreen — actions', () => {
     expect(container.textContent).toContain('No words to learn yet')
   })
 
-  it('"Review (3)" appears when dueCount > 0 and starts a review', async () => {
+  it('"Review (3)" appears when dueCount > 0 and starts a review scoped to the book', async () => {
     const onReview = vi.fn()
     const { container } = await render(screen({ onReview }))
     await flush()
@@ -233,11 +233,11 @@ describe('DictionaryScreen — actions', () => {
     await click(buttons(container).find((b) => b.textContent === 'Review (3)')!)
     await flush()
 
-    expect(apiMock.startReview).toHaveBeenCalledTimes(1)
+    expect(apiMock.startReview).toHaveBeenCalledWith({ dictionaryId: 7, chapterIds: null })
     expect(onReview).toHaveBeenCalledWith(reviewStarted, undefined)
   })
 
-  // The header's button is the global review; a chapter row may still offer its own.
+  // The header's button is the book's review; a chapter row may still offer its own.
   it('no header review button without due words', async () => {
     apiMock.getDictionary.mockResolvedValue({ ...detail, dueCount: 0 })
     const { container } = await render(screen())
@@ -253,6 +253,9 @@ describe('DictionaryScreen — actions', () => {
 
     expect(container.querySelector('.dict-header .dict-learning .leitner-percent')?.textContent).toBe('26%')
     expect(container.querySelector('.dict-learning')?.textContent).toContain('Learned')
+    // The caption explains the book's scale once; the identical chapter scales below don't repeat it.
+    expect(container.querySelector('.dict-learning .leitner-caption')?.textContent).toContain('Leitner')
+    expect(container.querySelector('.chapter-learning .leitner-caption')).toBeNull()
 
     apiMock.getDictionary.mockResolvedValue({ ...detail, learning: noLearning })
     const empty = await render(screen())

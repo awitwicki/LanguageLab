@@ -47,14 +47,15 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
     }
   }, [id])
 
-  // One path for both the header's global review and a chapter's own: the scope is the
-  // only difference, and a chapter's 204 is the same race as the global one.
+  // One path for both the header's book-wide review and a chapter's own: the scope is the
+  // only difference, and a chapter's 204 is the same race as the book's. The review across
+  // every book starts from the home screen instead.
   const startReview = async (chapter?: ChapterView) => {
     setReviewBusy(true)
     setReviewNotice(null)
 
     try {
-      const started = await api.startReview(chapter ? { dictionaryId: id, chapterIds: [chapter.id] } : undefined)
+      const started = await api.startReview({ dictionaryId: id, chapterIds: chapter ? [chapter.id] : null })
 
       // 204: між завантаженням екрана й кліком прострочені могли закритись іншою сесією.
       if (!started) {
@@ -161,7 +162,7 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
         {detail.learning.total > 0 && (
           <div className="dict-learning">
             <span className="footnote">Learned</span>
-            <LeitnerScale progress={detail.learning} />
+            <LeitnerScale progress={detail.learning} caption />
           </div>
         )}
       </header>

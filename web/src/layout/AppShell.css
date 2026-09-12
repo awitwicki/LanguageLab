@@ -25,6 +25,11 @@
   min-width: 0;
 }
 
+/* Focused programmatically on a screen change; the region itself needs no ring. */
+.shell-content:focus {
+  outline: none;
+}
+
 .content {
   max-width: var(--content-max);
   padding: 40px 48px 64px;

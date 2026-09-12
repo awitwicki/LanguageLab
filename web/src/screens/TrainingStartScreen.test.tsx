@@ -1,3 +1,4 @@
+import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BatchCandidate, BatchPreview, TrainingStarted } from '../api/client'
 import { click, flush, render } from '../test/render'
@@ -48,6 +49,16 @@ function buttons(container: HTMLElement) {
 
 function rows(container: HTMLElement) {
   return [...container.querySelectorAll<HTMLElement>('.batch-row')]
+}
+
+function radios(container: HTMLElement) {
+  return [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+}
+
+function press(target: Element, key: string) {
+  return act(async () => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+  })
 }
 
 beforeEach(() => {
@@ -193,5 +204,50 @@ describe('TrainingStartScreen — start and navigation', () => {
     await click(buttons(container).find((b) => b.textContent?.includes('Wool'))!)
 
     expect(onBack).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('TrainingStartScreen — batch-size radiogroup', () => {
+  it('only the checked size is in the tab order (roving tabindex)', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    expect(radios(container).map((r) => r.tabIndex)).toEqual([-1, 0, -1])
+
+    await click(radios(container)[2])
+    expect(radios(container).map((r) => r.tabIndex)).toEqual([-1, -1, 0])
+  })
+
+  it('arrow keys check the neighbour and move focus to it, wrapping at both ends', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    radios(container)[1].focus()
+    await press(radios(container)[1], 'ArrowRight')
+    expect(radios(container).map((r) => r.getAttribute('aria-checked'))).toEqual(['false', 'false', 'true'])
+    expect(document.activeElement).toBe(radios(container)[2])
+    expect(rows(container)).toHaveLength(20)
+
+    await press(radios(container)[2], 'ArrowDown')
+    expect(document.activeElement).toBe(radios(container)[0])
+    expect(rows(container)).toHaveLength(5)
+
+    await press(radios(container)[0], 'ArrowLeft')
+    expect(document.activeElement).toBe(radios(container)[2])
+
+    await press(radios(container)[2], 'ArrowUp')
+    expect(document.activeElement).toBe(radios(container)[1])
+    expect(rows(container)).toHaveLength(10)
+  })
+
+  it('other keys leave the group alone', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    radios(container)[1].focus()
+    await press(radios(container)[1], 'Tab')
+
+    expect(document.activeElement).toBe(radios(container)[1])
+    expect(rows(container)).toHaveLength(10)
   })
 })

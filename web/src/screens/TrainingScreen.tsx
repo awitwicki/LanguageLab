@@ -7,7 +7,8 @@ import './TrainingScreen.css'
 type Phase = 'cards' | 'quiz' | 'summary'
 
 interface Props {
-  dictionaryId: number
+  /** null for a review across every book: it starts from the home screen and goes back there. */
+  dictionaryId: number | null
   dictionaryName: string
   scopeTitle: string
   chapterIds: number[] | null
@@ -18,6 +19,7 @@ interface Props {
 }
 
 export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapterIds, batchSize, started, onBack }: Props) {
+  const backLabel = dictionaryId === null ? 'Home' : dictionaryName
   // Сесія живе тут, а не в маршруті: «Повторити помилки» та «Ще один батч» починають
   // нову сесію на місці, без стрибка по екранах.
   const [session, setSession] = useState(started)
@@ -164,7 +166,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
   }
 
   const anotherBatch = async () => {
-    if (batchSize === null) {
+    if (batchSize === null || dictionaryId === null) {
       return
     }
 
@@ -218,7 +220,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
     <>
       <div className="training-nav">
         <button type="button" className="btn btn-quiet" onClick={onBack}>
-          ‹ {dictionaryName}
+          ‹ {backLabel}
         </button>
       </div>
 
@@ -365,7 +367,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
               </button>
             )}
             <button type="button" className="btn btn-quiet" onClick={onBack}>
-              Back to dictionary
+              {dictionaryId === null ? 'Back home' : 'Back to dictionary'}
             </button>
           </div>
         </section>

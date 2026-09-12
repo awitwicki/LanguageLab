@@ -16,7 +16,7 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 - `LanguageLab.Infrastructure/` — EF Core `ApplicationDbContext`, PostgreSQL provider, migrations.
 - `LanguageLab.Application/` — services on top of the domain: word selection, training sessions, book import, sorting, per-scope Leitner progress (`LearningProgressService`), the irregular-verbs trainer (`VerbProgressService`, `VerbSessionService`). Used by the API.
 - `LanguageLab.Api/` — ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. Endpoints: `/api/dictionaries`, `/api/sorting`, `/api/training` (Leitner quiz on top of `TrainingSessionService`; the question queue lives in the DB); `GET /api/training/preview` — scope's progress scale + batch candidates by frequency, `new-batch` accepts explicit `wordPairIds`.
-  `POST /api/training/review` takes an optional `{ dictionaryId, chapterIds }` body: without it the review is global, with it only that scope's due words — the chapter row offers this once a chapter has no new words left.
+  `POST /api/training/review` takes an optional `{ dictionaryId, chapterIds }` body: without it the review is global (started from the home screen's "Due today" tile), with it only that scope's due words — the book header reviews the book, a chapter row its chapter once it has no new words left.
   `GET /api/training/stats` — the user's global Leitner standing (per-box counts, learned, due), rendered on the home screen.
   `Auth/` (claims, session validation, the OIDC event handlers), `/api/auth/*`
   (telegram/start, the handler-owned telegram/callback, me, logout), `/api/admin/users*`

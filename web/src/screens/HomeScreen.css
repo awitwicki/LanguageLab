@@ -38,6 +38,10 @@
   min-width: 0;
 }
 
-.stat-value {
+/* The value and, on the due tile, the review button that acts on it. */
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0;
 }

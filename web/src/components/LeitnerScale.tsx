@@ -3,13 +3,19 @@ import { formatInt } from '../lib/format'
 import { learningPercent, learningSegments } from '../lib/learning'
 import './LeitnerScale.css'
 
+/** The percent is a weighted score, not a share of words — this line says so wherever the scale stands alone. */
+const CAPTION =
+  'How far the words marked “don’t know” have climbed the Leitner boxes: box 1 counts one fifth, learned counts in full.'
+
 interface Props {
   progress: LearningProgress
   /** compact — смуга + відсоток в один рядок (рядок глави, хедер); large — відсоток зверху, легенда знизу (екран старту). */
   size?: 'compact' | 'large'
+  /** A footnote under the scale explaining the percent. Always on for large; the book header turns it on, chapter rows under it don't repeat it. */
+  caption?: boolean
 }
 
-export function LeitnerScale({ progress, size = 'compact' }: Props) {
+export function LeitnerScale({ progress, size = 'compact', caption = size === 'large' }: Props) {
   // Немає слів «не знаю» — нема що показувати; викликач не резервує місця.
   if (progress.total <= 0) {
     return null
@@ -43,6 +49,8 @@ export function LeitnerScale({ progress, size = 'compact' }: Props) {
           ))}
         </ul>
       )}
+
+      {caption && <p className="leitner-caption footnote">{CAPTION}</p>}
     </div>
   )
 }

@@ -97,7 +97,7 @@ public static class DictionaryEndpoints
             // «До вивчення» = перекладене, на полиці «не знаю», ще не тренувалось —
             // саме те, що потрапить у новий батч. По одному COUNT на главу, як і прогрес сортування.
             var learnable = await selection.CountLearnableAsync(userId, id);
-            var due = await selection.CountDueAsync(userId, now);
+            var due = await selection.CountDueAsync(userId, now, id);
 
             // Розклад по боксах: книжка одним викликом, глави — ще двома запитами на всі одразу.
             var learning = await learningProgress.GetAsync(userId, id);

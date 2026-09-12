@@ -293,4 +293,23 @@ describe('TrainingScreen — summary', () => {
 
     expect(onBack).toHaveBeenCalledTimes(1)
   })
+
+  it('a review across every book has no dictionary: both back buttons lead home', async () => {
+    const onBack = vi.fn()
+    const { container } = await openSummary({
+      dictionaryId: null,
+      dictionaryName: 'All dictionaries',
+      scopeTitle: 'Review',
+      chapterIds: null,
+      onBack,
+    })
+
+    expect(buttons(container)[0].textContent).toBe('‹ Home')
+    expect(container.textContent).toContain('All dictionaries · Review')
+    expect(buttons(container).find((b) => b.textContent?.includes('Back to dictionary'))).toBeUndefined()
+
+    await click(buttons(container).find((b) => b.textContent === 'Back home')!)
+
+    expect(onBack).toHaveBeenCalledTimes(1)
+  })
 })

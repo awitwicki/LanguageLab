@@ -24,7 +24,8 @@ type Route =
   | { name: 'training-start'; dictionaryId: number; chapterIds: number[] | null; scopeTitle: string }
   | {
       name: 'training'
-      dictionaryId: number
+      /** null for a review across every book, started from the home screen. */
+      dictionaryId: number | null
       scopeTitle: string
       chapterIds: number[] | null
       batchSize: number | null
@@ -36,6 +37,7 @@ type Route =
   | { name: 'admin' }
 
 const REVIEW_TITLE = 'Review'
+const ALL_DICTIONARIES = 'All dictionaries'
 
 export default function App() {
   const { state, loginFailed, signOut, deleteAccount, dismissBanned } = useAuth()
@@ -104,6 +106,7 @@ export default function App() {
   return (
     <AppShell
       user={state.user}
+      screenKey={routeKey}
       onHome={() => setRoute({ name: 'home' })}
       onAdmin={() => setRoute({ name: 'admin' })}
       onSignOut={() => void signOut()}
@@ -127,6 +130,16 @@ export default function App() {
         <HomeScreen
           hasDictionaries={(dictionaries?.length ?? 0) > 0}
           onImport={() => setRoute({ name: 'import' })}
+          onReview={(started) =>
+            setRoute({
+              name: 'training',
+              dictionaryId: null,
+              scopeTitle: REVIEW_TITLE,
+              chapterIds: null,
+              batchSize: null,
+              started,
+            })
+          }
         />
       )}
 
@@ -193,12 +206,15 @@ export default function App() {
         <TrainingScreen
           key={route.started.trainingId}
           dictionaryId={route.dictionaryId}
-          dictionaryName={activeName}
+          dictionaryName={route.dictionaryId === null ? ALL_DICTIONARIES : activeName}
           scopeTitle={route.scopeTitle}
           chapterIds={route.chapterIds}
           batchSize={route.batchSize}
           started={route.started}
-          onBack={() => openDictionary(route.dictionaryId)}
+          onBack={() => {
+            if (route.dictionaryId === null) setRoute({ name: 'home' })
+            else openDictionary(route.dictionaryId)
+          }}
         />
       )}
 
