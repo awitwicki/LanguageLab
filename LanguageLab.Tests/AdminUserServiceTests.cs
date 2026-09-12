@@ -26,7 +26,11 @@ public class AdminUserServiceTests
                 Id = OtherAdminId, TelegramUserId = 102, FirstName = "Bo", CreatedAt = Now.AddDays(1),
                 Role = secondAdmin ? UserRole.Admin : UserRole.User,
             },
-            new TelegramUser { Id = MemberId, TelegramUserId = 103, Role = UserRole.User, FirstName = "Cy", CreatedAt = Now.AddDays(2) });
+            new TelegramUser
+            {
+                Id = MemberId, TelegramUserId = 103, Role = UserRole.User, FirstName = "Cy", LastName = "Park",
+                Username = "cyrus", CreatedAt = Now.AddDays(2),
+            });
 
         await db.SaveChangesAsync();
 
@@ -38,11 +42,77 @@ public class AdminUserServiceTests
     {
         await using var db = await SeedAsync();
 
-        var users = await new AdminUserService(db).ListAsync();
+        var page = await new AdminUserService(db).ListAsync();
 
-        Assert.Equal(new[] { AdminId, OtherAdminId, MemberId }, users.Select(u => u.Id));
-        Assert.Equal("Ada", users[0].DisplayName);
-        Assert.Equal(UserRole.Admin, users[0].Role);
+        Assert.Equal(new[] { AdminId, OtherAdminId, MemberId }, page.Items.Select(u => u.Id));
+        Assert.Equal("Ada", page.Items[0].DisplayName);
+        Assert.Equal(UserRole.Admin, page.Items[0].Role);
+        Assert.Equal(3, page.Total);
+    }
+
+    /// <summary>The admin types whatever they remember about the person: any part of the name or handle.</summary>
+    [Theory]
+    [InlineData("ad", AdminId)]
+    [InlineData("BO", OtherAdminId)]
+    [InlineData("park", MemberId)]
+    [InlineData("CYR", MemberId)]
+    public async Task Search_matches_name_and_username_case_insensitively(string search, long expectedId)
+    {
+        await using var db = await SeedAsync();
+
+        var page = await new AdminUserService(db).ListAsync(search);
+
+        Assert.Equal(new[] { expectedId }, page.Items.Select(u => u.Id));
+        Assert.Equal(1, page.Total);
+    }
+
+    /// <summary>An id pasted from Telegram finds the account even when the profile is blank.</summary>
+    [Fact]
+    public async Task A_numeric_search_also_matches_the_telegram_id()
+    {
+        await using var db = await SeedAsync();
+
+        var page = await new AdminUserService(db).ListAsync("102");
+
+        Assert.Equal(new[] { OtherAdminId }, page.Items.Select(u => u.Id));
+    }
+
+    [Fact]
+    public async Task A_blank_search_lists_everyone()
+    {
+        await using var db = await SeedAsync();
+
+        var page = await new AdminUserService(db).ListAsync("   ");
+
+        Assert.Equal(3, page.Total);
+    }
+
+    [Fact]
+    public async Task Pages_are_cut_from_the_filtered_list_and_report_the_total()
+    {
+        await using var db = await SeedAsync();
+
+        var page = await new AdminUserService(db).ListAsync(search: null, page: 2, pageSize: 2);
+
+        Assert.Equal(new[] { MemberId }, page.Items.Select(u => u.Id));
+        Assert.Equal(3, page.Total);
+        Assert.Equal(2, page.Page);
+        Assert.Equal(2, page.PageSize);
+    }
+
+    /// <summary>Garbage in the query string is clamped, not refused: the list always answers.</summary>
+    [Theory]
+    [InlineData(0, 0, 1, AdminUserService.DefaultPageSize)]
+    [InlineData(-5, 1000, 1, AdminUserService.MaxPageSize)]
+    [InlineData(3, 10, 3, 10)]
+    public async Task Page_and_page_size_are_clamped(int page, int pageSize, int expectedPage, int expectedPageSize)
+    {
+        await using var db = await SeedAsync();
+
+        var result = await new AdminUserService(db).ListAsync(search: null, page: page, pageSize: pageSize);
+
+        Assert.Equal(expectedPage, result.Page);
+        Assert.Equal(expectedPageSize, result.PageSize);
     }
 
     [Fact]

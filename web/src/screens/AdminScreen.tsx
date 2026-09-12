@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, type AdminUser } from '../api/client'
+import { api, type AdminUser, type AdminUserPage } from '../api/client'
+import { formatInt, plural } from '../lib/format'
 import './AdminScreen.css'
 
 interface Props {
@@ -7,27 +8,55 @@ interface Props {
   meId: number
 }
 
+/** How long the admin has to stop typing before the search is sent. */
+const searchDelayMs = 300
+
 const dateFormat = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' })
 
 function formatDate(value: string | null) {
   return value ? dateFormat.format(new Date(value)) : '—'
 }
 
+function pageCount(data: AdminUserPage) {
+  return Math.max(1, Math.ceil(data.total / data.pageSize))
+}
+
 export function AdminScreen({ meId }: Props) {
-  const [users, setUsers] = useState<AdminUser[] | null>(null)
+  // `query` is what is typed, `search` is what was last sent: the two differ during the
+  // debounce so a keystroke does not fire a request.
+  const [query, setQuery] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [data, setData] = useState<AdminUserPage | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<number | null>(null)
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setSearch(query.trim())
+      setPage(1)
+    }, searchDelayMs)
+
+    return () => clearTimeout(handle)
+  }, [query])
 
   const reload = useCallback(
     () =>
       api
-        .listUsers()
-        .then((items) => {
-          setUsers(items)
+        .listUsers({ search, page })
+        .then((result) => {
+          // A delete can empty the page we are on; fall back to the last page that exists
+          // rather than show an empty table with a live "Previous" button.
+          if (result.items.length === 0 && result.page > 1) {
+            setPage(pageCount(result))
+            return
+          }
+
+          setData(result)
           setError(null)
         })
         .catch((e) => setError(e instanceof Error ? e.message : String(e))),
-    [],
+    [search, page],
   )
 
   useEffect(() => {
@@ -60,14 +89,36 @@ export function AdminScreen({ meId }: Props) {
     void run(() => api.deleteUser(user.id))
   }
 
+  const pages = data ? pageCount(data) : 1
+
   return (
     <section className="admin">
       <h1 className="large-title">Users</h1>
 
-      {error && <p className="error">{error}</p>}
-      {!users && !error && <p className="footnote">Loading…</p>}
+      <div className="admin-toolbar">
+        <label className="field admin-search">
+          <input
+            type="search"
+            placeholder="Search by name or username"
+            aria-label="Search users"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
 
-      {users && (
+        {data && (
+          <span className="footnote admin-count">
+            {data.total === 0
+              ? 'No users match'
+              : `${formatInt(data.total)} ${plural(data.total, 'user', 'users')}`}
+          </span>
+        )}
+      </div>
+
+      {error && <p className="error">{error}</p>}
+      {!data && !error && <p className="footnote">Loading…</p>}
+
+      {data && data.items.length > 0 && (
         <table className="admin-table">
           <thead>
             <tr>
@@ -80,7 +131,7 @@ export function AdminScreen({ meId }: Props) {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => {
+            {data.items.map((user) => {
               const isMe = user.id === meId
 
               return (
@@ -139,6 +190,30 @@ export function AdminScreen({ meId }: Props) {
             })}
           </tbody>
         </table>
+      )}
+
+      {data && pages > 1 && (
+        <nav className="admin-pager" aria-label="Pages">
+          <button
+            type="button"
+            className="btn btn-quiet prev"
+            disabled={data.page <= 1}
+            onClick={() => setPage(data.page - 1)}
+          >
+            Previous
+          </button>
+          <span className="footnote num">
+            Page {formatInt(data.page)} of {formatInt(pages)}
+          </span>
+          <button
+            type="button"
+            className="btn btn-quiet next"
+            disabled={data.page >= pages}
+            onClick={() => setPage(data.page + 1)}
+          >
+            Next
+          </button>
+        </nav>
       )}
     </section>
   )

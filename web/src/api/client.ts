@@ -15,6 +15,14 @@ export interface AdminUser extends CurrentUser {
   lastLoginAt: string | null
 }
 
+/** One page of the admin list; total counts the whole filtered list, page is 1-based. */
+export interface AdminUserPage {
+  items: AdminUser[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export interface DictionaryListItem {
   id: number
   name: string
@@ -566,7 +574,18 @@ export const api = {
   /** Answers 409 { message } when refused — the last-admin rule. */
   deleteMe: () => request<null>('/api/auth/me', { method: 'DELETE' }),
 
-  listUsers: () => request<AdminUser[]>('/api/admin/users') as Promise<AdminUser[]>,
+  /** Page size is the server's default; the answer says what it was. */
+  listUsers: (params: { search?: string; page: number }) => {
+    const query = new URLSearchParams()
+
+    if (params.search) {
+      query.set('search', params.search)
+    }
+
+    query.set('page', String(params.page))
+
+    return request<AdminUserPage>(`/api/admin/users?${query}`) as Promise<AdminUserPage>
+  },
 
   banUser: (id: number) => request<null>(`/api/admin/users/${id}/ban`, { method: 'POST' }),
 

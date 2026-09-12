@@ -14,7 +14,11 @@ public static class AdminEndpoints
     {
         var group = app.MapGroup("/api/admin").RequireAuthorization("Admin");
 
-        group.MapGet("/users", async (AdminUserService admin) => Results.Ok(await admin.ListAsync()));
+        // Optional query: ?search=&page=&pageSize=. The service clamps whatever arrives.
+        group.MapGet("/users", async (
+                string? search, int? page, int? pageSize, AdminUserService admin) =>
+            Results.Ok(await admin.ListAsync(
+                search, page ?? 1, pageSize ?? AdminUserService.DefaultPageSize)));
 
         group.MapPost("/users/{id:long}/ban", async (
                 long id, AdminUserService admin, ICurrentUserContext currentUser) =>

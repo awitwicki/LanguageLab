@@ -1,5 +1,6 @@
+import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AdminUser } from '../api/client'
+import type { AdminUser, AdminUserPage } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { AdminScreen } from './AdminScreen'
 
@@ -13,6 +14,11 @@ const users: AdminUser[] = [
     role: 'user', isBanned: false, createdAt: '2026-09-02T00:00:00Z', lastLoginAt: null,
   },
 ]
+
+/** One page as the server answers it; a single page unless total says otherwise. */
+function page(items: AdminUser[], extra: Partial<AdminUserPage> = {}): AdminUserPage {
+  return { items, total: items.length, page: 1, pageSize: 25, ...extra }
+}
 
 function respond(handler: (path: string, method: string) => { status: number; body?: unknown }) {
   vi.stubGlobal(
@@ -29,11 +35,24 @@ function respond(handler: (path: string, method: string) => { status: number; bo
   )
 }
 
-afterEach(() => vi.unstubAllGlobals())
+function pageParam(path: string) {
+  return Number(new URL(path, 'http://x').searchParams.get('page') ?? 1)
+}
+
+function setValue(input: HTMLInputElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!
+  setter.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.useRealTimers()
+})
 
 describe('AdminScreen', () => {
   it('lists the users with their role and status', async () => {
-    respond(() => ({ status: 200, body: users }))
+    respond(() => ({ status: 200, body: page(users) }))
 
     const { container } = await render(<AdminScreen meId={1} />)
     await flush()
@@ -49,7 +68,7 @@ describe('AdminScreen', () => {
   // The server refuses these anyway; disabling them keeps the user from discovering that
   // by being told no.
   it('disables every action on your own row', async () => {
-    respond(() => ({ status: 200, body: users }))
+    respond(() => ({ status: 200, body: page(users) }))
 
     const { container } = await render(<AdminScreen meId={1} />)
     await flush()
@@ -70,7 +89,7 @@ describe('AdminScreen', () => {
 
       return {
         status: 200,
-        body: users.map((u) => (u.id === 2 ? { ...u, isBanned: banned } : u)),
+        body: page(users.map((u) => (u.id === 2 ? { ...u, isBanned: banned } : u))),
       }
     })
 
@@ -88,7 +107,7 @@ describe('AdminScreen', () => {
     respond((_path, method) =>
       method === 'POST'
         ? { status: 409, body: { message: 'This is the last administrator — promote someone else first.' } }
-        : { status: 200, body: users },
+        : { status: 200, body: page(users) },
     )
 
     const { container } = await render(<AdminScreen meId={99} />)
@@ -111,7 +130,7 @@ describe('AdminScreen', () => {
         return { status: 204 }
       }
 
-      return { status: 200, body: users }
+      return { status: 200, body: page(users) }
     })
 
     const { container } = await render(<AdminScreen meId={1} />)
@@ -127,5 +146,100 @@ describe('AdminScreen', () => {
     await flush()
 
     expect(deleted).toBe(true)
+  })
+
+  it('shows how many users match', async () => {
+    respond(() => ({ status: 200, body: page(users, { total: 41 }) }))
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    expect(container.querySelector('.admin-count')?.textContent).toBe('41 users')
+  })
+
+  // The server filters; the screen only has to ask, and only once the admin stops typing.
+  it('sends the search term after a pause in typing', async () => {
+    const calls: string[] = []
+
+    respond((path) => {
+      calls.push(path)
+      return { status: 200, body: page(users) }
+    })
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+    expect(calls).toEqual(['/api/admin/users?page=1'])
+
+    vi.useFakeTimers()
+    await act(async () => setValue(container.querySelector<HTMLInputElement>('input[type="search"]')!, 'bo'))
+    expect(calls).toHaveLength(1)
+
+    await act(() => vi.advanceTimersByTimeAsync(300))
+    vi.useRealTimers()
+    await flush()
+
+    expect(calls.at(-1)).toBe('/api/admin/users?search=bo&page=1')
+  })
+
+  it('moves between pages', async () => {
+    respond((path) => ({
+      status: 200,
+      body: page(pageParam(path) === 1 ? [users[0]] : [users[1]], { total: 2, page: pageParam(path), pageSize: 1 }),
+    }))
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    expect(container.querySelector('.admin-pager')?.textContent).toContain('Page 1 of 2')
+    expect(container.querySelector<HTMLButtonElement>('.prev')?.disabled).toBe(true)
+
+    await click(container.querySelector('.next')!)
+    await flush()
+
+    expect(container.querySelector('.user-name')?.textContent).toBe('Bo Lind')
+    expect(container.querySelector('.admin-pager')?.textContent).toContain('Page 2 of 2')
+    expect(container.querySelector<HTMLButtonElement>('.next')?.disabled).toBe(true)
+  })
+
+  it('hides the pager when everything fits on one page', async () => {
+    respond(() => ({ status: 200, body: page(users) }))
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    expect(container.querySelector('.admin-pager')).toBeNull()
+  })
+
+  // Deleting the only row of the last page must not leave the admin staring at an empty table.
+  it('steps back to the last page when a delete empties the current one', async () => {
+    let deleted = false
+
+    respond((path, method) => {
+      if (method === 'DELETE') {
+        deleted = true
+        return { status: 204 }
+      }
+
+      const remaining = deleted ? [users[0]] : users
+      const current = pageParam(path)
+      const items = remaining.slice(current - 1, current)
+
+      return { status: 200, body: page(items, { total: remaining.length, page: current, pageSize: 1 }) }
+    })
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    await click(container.querySelector('.next')!)
+    await flush()
+    expect(container.querySelector('.user-name')?.textContent).toBe('Bo Lind')
+
+    await click(container.querySelector('.delete')!)
+    await click(container.querySelector('.delete')!)
+    await flush()
+    await flush()
+
+    expect(container.querySelector('.user-name')?.textContent).toBe('Ada Vance')
+    expect(container.querySelector('.admin-pager')).toBeNull()
   })
 })

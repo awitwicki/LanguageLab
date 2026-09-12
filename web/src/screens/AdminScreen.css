@@ -50,3 +50,27 @@
   gap: 4px;
   justify-content: flex-end;
 }
+
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-search {
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+
+.admin-search input {
+  width: 100%;
+}
+
+.admin-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}

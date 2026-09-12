@@ -27,6 +27,9 @@ public sealed record AdminUserView(
     DateTime CreatedAt,
     DateTime? LastLoginAt);
 
+/// <summary>One page of the admin list. Total counts the whole filtered list, not the page.</summary>
+public sealed record AdminUserPage(IReadOnlyList<AdminUserView> Items, int Total, int Page, int PageSize);
+
 /// <summary>
 /// The admin panel's operations, guards included. They live here rather than in the
 /// endpoints so the rules can be tested without an HTTP stack.
@@ -40,20 +43,51 @@ public class AdminUserService
         _dbContext = dbContext;
     }
 
-    /// <summary>Oldest first: the admin is normally the first row, and the list reads as a history.</summary>
-    public async Task<IReadOnlyList<AdminUserView>> ListAsync()
+    public const int DefaultPageSize = 25;
+    public const int MaxPageSize = 100;
+
+    /// <summary>
+    /// Oldest first: the admin is normally the first row, and the list reads as a history.
+    /// Search is a case-insensitive substring over first name, last name and username —
+    /// DisplayName is assembled in memory, so the query has to look at its parts. A term
+    /// made of digits is also tried as the Telegram id, which is what an admin has at hand
+    /// when a profile is blank. Out-of-range paging is clamped rather than refused.
+    /// </summary>
+    public async Task<AdminUserPage> ListAsync(string? search = null, int page = 1, int pageSize = DefaultPageSize)
     {
-        var users = await _dbContext.Users
-            .AsNoTracking()
+        page = Math.Max(page, 1);
+        pageSize = pageSize < 1 ? DefaultPageSize : Math.Min(pageSize, MaxPageSize);
+
+        var query = _dbContext.Users.AsNoTracking();
+        var term = search?.Trim().ToLowerInvariant();
+
+        if (!string.IsNullOrEmpty(term))
+        {
+            var telegramId = long.TryParse(term, out var parsed) ? parsed : (long?)null;
+
+            query = query.Where(u =>
+                (u.FirstName != null && u.FirstName.ToLower().Contains(term))
+                || (u.LastName != null && u.LastName.ToLower().Contains(term))
+                || (u.Username != null && u.Username.ToLower().Contains(term))
+                || (telegramId != null && u.TelegramUserId == telegramId));
+        }
+
+        var total = await query.CountAsync();
+
+        var users = await query
             .OrderBy(u => u.CreatedAt)
             .ThenBy(u => u.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
-        return users
+        var items = users
             .Select(u => new AdminUserView(
                 u.Id, u.TelegramUserId, u.DisplayName, u.Username, u.PhotoUrl,
                 u.Role, u.IsBanned, u.CreatedAt, u.LastLoginAt))
             .ToList();
+
+        return new AdminUserPage(items, total, page, pageSize);
     }
 
     public async Task<AdminActionResult> SetBannedAsync(long actorId, long targetId, bool banned)
