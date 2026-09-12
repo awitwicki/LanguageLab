@@ -12,7 +12,8 @@ interface Props {
 
 /// Список словників живе в сайдбарі, тож «домівка» — це порожній стан:
 /// або підказка обрати словник, або запрошення імпортувати першу книжку.
-/// Once the user has trained anything, their global Leitner standing sits on top of it.
+/// Once the user has sorted anything, their shelf totals sit on top of it; once they have
+/// trained anything, their global Leitner standing joins them.
 export function HomeScreen({ hasDictionaries, onImport, onReview }: Props) {
   const [stats, setStats] = useState<TrainingStats | null>(null)
   const [reviewBusy, setReviewBusy] = useState(false)
@@ -58,35 +59,46 @@ export function HomeScreen({ hasDictionaries, onImport, onReview }: Props) {
   }
 
   const inProgress = stats ? stats.boxCounts.reduce((sum, n) => sum + n, 0) : 0
-  const hasActivity = stats !== null && inProgress + stats.learned > 0
+  const hasSorted = stats !== null && stats.known + stats.unknown + stats.excluded > 0
+  const hasTrained = stats !== null && inProgress + stats.learned > 0
 
   return (
     <section className="welcome">
-      {hasActivity && stats && (
+      {(hasSorted || hasTrained) && stats && (
         <section className="learning-stats">
           <h2 className="title">Your learning</h2>
 
           <dl className="stat-tiles">
-            <StatTile label="In progress" value={inProgress} />
-            <StatTile label="Learned" value={stats.learned} />
-            <StatTile
-              label="Due today"
-              value={stats.due}
-              action={
-                stats.due > 0 && (
-                  <button type="button" className="btn btn-primary" disabled={reviewBusy} onClick={() => void startReview()}>
-                    Review
-                  </button>
-                )
-              }
-            />
+            <StatTile label="Known" value={stats.known} />
+            <StatTile label="To learn" value={stats.unknown} />
+            <StatTile label="Excluded" value={stats.excluded} />
           </dl>
 
-          {reviewNotice && <p className="footnote">{reviewNotice}</p>}
+          {hasTrained && (
+            <>
+              <dl className="stat-tiles">
+                <StatTile label="In progress" value={inProgress} />
+                <StatTile label="Learned" value={stats.learned} />
+                <StatTile
+                  label="Due today"
+                  value={stats.due}
+                  action={
+                    stats.due > 0 && (
+                      <button type="button" className="btn btn-primary" disabled={reviewBusy} onClick={() => void startReview()}>
+                        Review
+                      </button>
+                    )
+                  }
+                />
+              </dl>
 
-          <BoxHistogram boxCounts={stats.boxCounts} />
+              {reviewNotice && <p className="footnote">{reviewNotice}</p>}
 
-          <p className="footnote">Each correct answer moves a word up a box; box 5 graduates to learned.</p>
+              <BoxHistogram boxCounts={stats.boxCounts} />
+
+              <p className="footnote">Each correct answer moves a word up a box; box 5 graduates to learned.</p>
+            </>
+          )}
         </section>
       )}
 

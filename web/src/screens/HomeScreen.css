@@ -32,6 +32,12 @@
   margin: 0;
 }
 
+/* Shelf totals above, Leitner standing below: a hairline keeps the two rows apart. */
+.stat-tiles + .stat-tiles {
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+
 .stat-tile {
   display: grid;
   gap: 2px;

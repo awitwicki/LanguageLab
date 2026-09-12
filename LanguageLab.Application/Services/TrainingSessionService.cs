@@ -26,7 +26,9 @@ public sealed record TrainingSummary(
 public sealed record TrainingStats(
     IReadOnlyList<int> BoxCounts,   // індекс 0 = box 1, довжина = LeitnerScheduler.MaxBox
     int Learned,
-    int Known,
+    int Known,                      // sorting shelves, global across books: "know" / "don't know" / excluded
+    int Unknown,
+    int Excluded,
     int Due,
     int Correct,
     int Wrong);
@@ -434,12 +436,14 @@ public class TrainingSessionService
 
         var learned = await _dbContext.WordProgresses.CountAsync(p => p.UserId == userId && p.IsLearned);
         var known = await _dbContext.KnownWords.CountAsync(k => k.UserId == userId);
+        var unknown = await _dbContext.UnknownWords.CountAsync(u => u.UserId == userId);
+        var excluded = await _dbContext.ExcludedWords.CountAsync(e => e.UserId == userId);
         var due = await _selection.CountDueAsync(userId, nowUtc);
 
         var correct = await _dbContext.WordProgresses.Where(p => p.UserId == userId).SumAsync(p => p.CorrectCount);
         var wrong = await _dbContext.WordProgresses.Where(p => p.UserId == userId).SumAsync(p => p.WrongCount);
 
-        return new TrainingStats(boxCounts, learned, known, due, correct, wrong);
+        return new TrainingStats(boxCounts, learned, known, unknown, excluded, due, correct, wrong);
     }
 
     private async Task<Training> CreateTrainingAsync(

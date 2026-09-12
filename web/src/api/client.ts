@@ -202,7 +202,10 @@ export interface TrainingSummary {
 export interface TrainingStats {
   boxCounts: number[]
   learned: number
+  /** Sorting shelves, global across books: "know" / "don't know" / excluded. */
   known: number
+  unknown: number
+  excluded: number
   due: number
   correct: number
   wrong: number

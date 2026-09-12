@@ -417,7 +417,7 @@ public class TrainingSessionServiceTests
     }
 
     [Fact]
-    public async Task GetStats_AggregatesBoxHistogramLearnedKnownDueAndAnswerCounts()
+    public async Task GetStats_AggregatesBoxHistogramLearnedShelvesDueAndAnswerCounts()
     {
         await using var db = await ArrangeAsync();
 
@@ -432,9 +432,16 @@ public class TrainingSessionServiceTests
             // Вивчене слово: не входить у гістограму боксів (IsLearned == true), лише в Learned.
             new WordProgress { Id = 6, UserId = UserId, WordPairId = 6, Box = 5, IsLearned = true, CorrectCount = 5, WrongCount = 1, LastSeenAt = Now });
 
+        // The fixture starts with all 12 words on the "don't know" shelf; shelves are
+        // exclusive, so moving three of them elsewhere leaves 9 there. Sizes differ
+        // (2/9/1) so a count read off the wrong table fails the test.
+        db.UnknownWords.RemoveRange(db.UnknownWords.Where(u => u.WordPairId >= 7 && u.WordPairId <= 9));
+
         db.KnownWords.AddRange(
             new KnownWord { Id = 1, UserId = UserId, WordPairId = 7 },
             new KnownWord { Id = 2, UserId = UserId, WordPairId = 8 });
+
+        db.ExcludedWords.Add(new ExcludedWord { Id = 1, UserId = UserId, WordPairId = 9 });
 
         await db.SaveChangesAsync();
 
@@ -444,6 +451,8 @@ public class TrainingSessionServiceTests
         Assert.Equal(new[] { 2, 1, 1, 0, 1 }, stats.BoxCounts);
         Assert.Equal(1, stats.Learned);
         Assert.Equal(2, stats.Known);
+        Assert.Equal(9, stats.Unknown);
+        Assert.Equal(1, stats.Excluded);
         Assert.Equal(1, stats.Due);
         Assert.Equal(15, stats.Correct);
         Assert.Equal(5, stats.Wrong);

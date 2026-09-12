@@ -3,8 +3,26 @@ import type { TrainingStarted, TrainingStats } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { HomeScreen } from './HomeScreen'
 
-const active: TrainingStats = { boxCounts: [12, 6, 0, 3, 1], learned: 40, known: 500, due: 7, correct: 120, wrong: 15 }
-const untouched: TrainingStats = { boxCounts: [0, 0, 0, 0, 0], learned: 0, known: 0, due: 0, correct: 0, wrong: 0 }
+const active: TrainingStats = {
+  boxCounts: [12, 6, 0, 3, 1],
+  learned: 40,
+  known: 500,
+  unknown: 2797,
+  excluded: 31,
+  due: 7,
+  correct: 120,
+  wrong: 15,
+}
+const untouched: TrainingStats = {
+  boxCounts: [0, 0, 0, 0, 0],
+  learned: 0,
+  known: 0,
+  unknown: 0,
+  excluded: 0,
+  due: 0,
+  correct: 0,
+  wrong: 0,
+}
 const reviewStarted: TrainingStarted = { trainingId: 9, mode: 'review', words: [], totalQuestions: 12 }
 
 type Reply = { status: number; body?: unknown }
@@ -35,26 +53,46 @@ function buttons(container: HTMLElement) {
   return [...container.querySelectorAll<HTMLButtonElement>('button')]
 }
 
+function tiles(container: HTMLElement) {
+  return [...container.querySelectorAll('.stat-tile')].map((t) => [
+    t.querySelector('.stat-label')?.textContent,
+    t.querySelector('.stat-value')?.textContent,
+  ])
+}
+
 afterEach(() => vi.unstubAllGlobals())
 
 describe('HomeScreen', () => {
-  it('shows in-progress, learned and due-today tiles plus the box histogram once there is any Leitner activity', async () => {
+  it('shows the shelf tiles, then the Leitner tiles and the box histogram once there is any activity', async () => {
     respondStats(200, active)
 
     const { container } = await render(home())
     await flush()
 
-    const tiles = [...container.querySelectorAll('.stat-tile')].map((t) => [
-      t.querySelector('.stat-label')?.textContent,
-      t.querySelector('.stat-value')?.textContent,
-    ])
-    expect(tiles).toEqual([
+    expect(tiles(container)).toEqual([
+      ['Known', '500'],
+      ['To learn', '2 797'],
+      ['Excluded', '31'],
       ['In progress', '22'],
       ['Learned', '40'],
       ['Due today', '7'],
     ])
     expect(container.querySelectorAll('.boxes-bar')).toHaveLength(5)
     expect(container.querySelector('.welcome-hint')?.textContent).toContain('sidebar')
+  })
+
+  it('sorted but never trained → the shelf tiles alone, no Leitner tiles or histogram', async () => {
+    respondStats(200, { ...untouched, known: 12, unknown: 3 })
+
+    const { container } = await render(home())
+    await flush()
+
+    expect(tiles(container)).toEqual([
+      ['Known', '12'],
+      ['To learn', '3'],
+      ['Excluded', '0'],
+    ])
+    expect(container.querySelector('.boxes')).toBeNull()
   })
 
   it('"Review" next to the due-today tile starts a review across every book and hands it back', async () => {
