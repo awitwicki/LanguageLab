@@ -8,6 +8,10 @@ public sealed record DictionaryListItem(long Id, string Name, int WordsCount, bo
 
 public sealed record AddPersonalWordRequest(string? Word, string? Translation);
 
+public sealed record BulkWordEntryRequest(string? Word, string? Translation);
+
+public sealed record AddPersonalWordsRequest(IReadOnlyList<BulkWordEntryRequest>? Words);
+
 /// <summary>A refusal written for the user; the client shows Message instead of the status code.</summary>
 public sealed record DictionaryError(string Message);
 
@@ -95,6 +99,18 @@ public static class DictionaryEndpoints
             return added == null
                 ? Results.Json(new DictionaryError("Already in your dictionary."), statusCode: StatusCodes.Status409Conflict)
                 : Results.Created($"/api/dictionaries/personal/words/{added.WordPairId}", added);
+        });
+
+        group.MapPost("/personal/words/import", async (
+            AddPersonalWordsRequest request, PersonalDictionaryService personal, ICurrentUser currentUser) =>
+        {
+            var entries = (request.Words ?? [])
+                .Select(w => new BulkWordEntry(w.Word ?? string.Empty, w.Translation ?? string.Empty))
+                .ToList();
+
+            var outcomes = await personal.AddManyAsync(await currentUser.GetIdAsync(), entries, DateTime.UtcNow);
+
+            return Results.Ok(outcomes);
         });
 
         group.MapDelete("/personal/words/{wordPairId:long}", async (

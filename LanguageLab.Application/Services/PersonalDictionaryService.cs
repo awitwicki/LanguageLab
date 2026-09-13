@@ -8,6 +8,12 @@ namespace LanguageLab.Application.Services;
 /// <summary>Box is null until the word's first exercise; 1..5 while learning; IsLearned once graduated.</summary>
 public sealed record PersonalWord(long WordPairId, string Word, string Translation, int? Box, bool IsLearned);
 
+/// <summary>One line of a bulk import, before normalization.</summary>
+public sealed record BulkWordEntry(string Word, string Translation);
+
+/// <summary>Word/Translation echo the normalized input, for a UI to render a per-line result list.</summary>
+public sealed record BulkWordOutcome(string Word, string Translation, bool Added, string? Error);
+
 public sealed record PersonalDictionaryView(
     long Id,
     string Name,
@@ -132,6 +138,37 @@ public class PersonalDictionaryService
         }
 
         return new PersonalWord(pair.Id, pair.Word, pair.Translation, Box: null, IsLearned: false);
+    }
+
+    /// <summary>
+    /// Adds each line independently via AddAsync, so one invalid or duplicate line does not
+    /// stop the rest — including a duplicate against an earlier line in the same batch, since
+    /// each AddAsync call commits before the next line's duplicate check runs.
+    /// </summary>
+    public async Task<IReadOnlyList<BulkWordOutcome>> AddManyAsync(
+        long userId, IReadOnlyList<BulkWordEntry> entries, DateTime nowUtc)
+    {
+        var outcomes = new List<BulkWordOutcome>(entries.Count);
+
+        foreach (var entry in entries)
+        {
+            var word = WordText.Normalize(entry.Word);
+            var translation = entry.Translation.Trim();
+
+            try
+            {
+                var added = await AddAsync(userId, entry.Word, entry.Translation, nowUtc);
+                outcomes.Add(added == null
+                    ? new BulkWordOutcome(word, translation, Added: false, Error: "Already in your dictionary.")
+                    : new BulkWordOutcome(word, translation, Added: true, Error: null));
+            }
+            catch (ArgumentException e)
+            {
+                outcomes.Add(new BulkWordOutcome(word, translation, Added: false, Error: e.Message));
+            }
+        }
+
+        return outcomes;
     }
 
     /// <summary>

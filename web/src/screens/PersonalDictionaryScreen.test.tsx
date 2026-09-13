@@ -10,6 +10,7 @@ const apiMock = vi.hoisted(() => ({
   addPersonalWord: vi.fn(),
   removePersonalWord: vi.fn(),
   startReview: vi.fn(),
+  importPersonalWords: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
@@ -43,6 +44,16 @@ function setValue(input: HTMLInputElement, value: string) {
 
 function type(input: HTMLInputElement, value: string) {
   return act(async () => setValue(input, value))
+}
+
+function setTextAreaValue(el: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!
+  setter.call(el, value)
+  el.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+function typeArea(el: HTMLTextAreaElement, value: string) {
+  return act(async () => setTextAreaValue(el, value))
 }
 
 function pressEnter(input: HTMLInputElement) {
@@ -241,6 +252,69 @@ describe('PersonalDictionaryScreen', () => {
 
     expect(apiMock.startReview).toHaveBeenCalledWith({ dictionaryId: 5, chapterIds: null })
     expect(onReview).toHaveBeenCalledWith(reviewStarted, 5)
+  })
+
+  it('Import multiple words toggles a textarea for pasting lines', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    const toggle = () => container.querySelector<HTMLButtonElement>('.bulk-import > button')!
+
+    expect(container.querySelector('textarea[name="bulk"]')).toBeNull()
+
+    await click(toggle())
+    expect(container.querySelector('textarea[name="bulk"]')).not.toBeNull()
+
+    await click(toggle())
+    expect(container.querySelector('textarea[name="bulk"]')).toBeNull()
+  })
+
+  it('imports parsed lines, shows a summary, reloads the list and reports the change', async () => {
+    apiMock.importPersonalWords.mockResolvedValue([
+      { word: 'banana', translation: 'банан', added: true, error: null },
+      { word: 'apple', translation: 'яблуко', added: false, error: 'Already in your dictionary.' },
+    ])
+    apiMock.getPersonalDictionary.mockResolvedValueOnce(empty).mockResolvedValueOnce({ ...withWords, words: [apple] })
+    const onChanged = vi.fn()
+    const { container } = await render(screen({ onChanged }))
+    await flush()
+
+    await click(
+      [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Import multiple words')!,
+    )
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea[name="bulk"]')!
+    await typeArea(textarea, 'banana,банан\napple,яблуко')
+    await click(container.querySelector<HTMLButtonElement>('form.bulk-import-form button[type="submit"]')!)
+    await flush()
+
+    expect(apiMock.importPersonalWords).toHaveBeenCalledWith([
+      { word: 'banana', translation: 'банан' },
+      { word: 'apple', translation: 'яблуко' },
+    ])
+    expect(container.textContent).toContain('1 added')
+    expect(container.textContent).toContain('apple')
+    expect(container.textContent).toContain('Already in your dictionary.')
+    expect(textarea.value).toBe('')
+    expect(onChanged).toHaveBeenCalledTimes(1)
+    expect(apiMock.getPersonalDictionary).toHaveBeenCalledTimes(2)
+  })
+
+  it('a line without a comma is reported as invalid without being sent to the server', async () => {
+    apiMock.importPersonalWords.mockResolvedValue([{ word: 'mango', translation: 'манго', added: true, error: null }])
+    const { container } = await render(screen())
+    await flush()
+
+    await click(
+      [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === 'Import multiple words')!,
+    )
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea[name="bulk"]')!
+    await typeArea(textarea, 'bad-line\nmango,манго')
+    await click(container.querySelector<HTMLButtonElement>('form.bulk-import-form button[type="submit"]')!)
+    await flush()
+
+    expect(apiMock.importPersonalWords).toHaveBeenCalledWith([{ word: 'mango', translation: 'манго' }])
+    expect(container.textContent).toContain('bad-line')
+    expect(container.textContent).toContain('1 added')
   })
 
   it('a learned word reads Learned and the scale appears once anything was trained', async () => {

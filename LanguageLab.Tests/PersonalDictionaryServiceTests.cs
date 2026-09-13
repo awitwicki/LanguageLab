@@ -202,4 +202,61 @@ public class PersonalDictionaryServiceTests
         Assert.Equal(0, view.WordsCount);
         Assert.Equal(1, await db.Dictionaries.CountAsync(d => d.IsPersonal && d.OwnerId == UserId));
     }
+
+    [Fact]
+    public async Task AddMany_adds_new_words_and_reports_duplicates()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+        await service.AddAsync(UserId, "apple", "яблуко", Now);
+
+        var outcomes = await service.AddManyAsync(UserId,
+        [
+            new BulkWordEntry("apple", "інше"),
+            new BulkWordEntry("Banana", " банан "),
+            new BulkWordEntry("banana", "ще раз"),
+        ], Now);
+
+        Assert.Equal(3, outcomes.Count);
+
+        Assert.False(outcomes[0].Added);
+        Assert.Equal("Already in your dictionary.", outcomes[0].Error);
+
+        Assert.True(outcomes[1].Added);
+        Assert.Equal("banana", outcomes[1].Word);
+        Assert.Equal("банан", outcomes[1].Translation);
+        Assert.Null(outcomes[1].Error);
+
+        // The second "banana" line is a duplicate of the first, not of the pre-existing "apple".
+        Assert.False(outcomes[2].Added);
+        Assert.Equal("Already in your dictionary.", outcomes[2].Error);
+
+        Assert.Equal(2, await db.Words.CountAsync());
+        Assert.Equal(2, (await db.Dictionaries.SingleAsync()).WordsCount);
+    }
+
+    [Fact]
+    public async Task AddMany_reports_invalid_lines_without_stopping_the_batch()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+
+        var outcomes = await service.AddManyAsync(UserId,
+        [
+            new BulkWordEntry("bad!", "щось"),
+            new BulkWordEntry("kiwi", "   "),
+            new BulkWordEntry("mango", "манго"),
+        ], Now);
+
+        Assert.False(outcomes[0].Added);
+        Assert.Contains("letters", outcomes[0].Error);
+
+        Assert.False(outcomes[1].Added);
+        Assert.Equal("The translation cannot be empty.", outcomes[1].Error);
+
+        Assert.True(outcomes[2].Added);
+        Assert.Null(outcomes[2].Error);
+
+        Assert.Equal(1, await db.Words.CountAsync());
+    }
 }

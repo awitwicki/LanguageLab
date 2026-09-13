@@ -41,6 +41,26 @@
   color: var(--text-3);
 }
 
+.bulk-import {
+  margin-bottom: 16px;
+}
+
+.bulk-import-form {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.bulk-import-form textarea {
+  width: 100%;
+  resize: vertical;
+}
+
+.bulk-import-issues {
+  display: grid;
+  gap: 2px;
+}
+
 .personal-actions {
   display: flex;
   flex-wrap: wrap;

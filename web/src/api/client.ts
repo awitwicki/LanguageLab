@@ -101,6 +101,19 @@ export interface PersonalDictionary {
   words: PersonalWord[]
 }
 
+export interface BulkWordEntry {
+  word: string
+  translation: string
+}
+
+/** word/translation echo the normalized input, for rendering a per-line result list. */
+export interface BulkWordOutcome {
+  word: string
+  translation: string
+  added: boolean
+  error: string | null
+}
+
 export interface ImportWord {
   word: string
   count: number
@@ -490,6 +503,12 @@ export const api = {
 
   removePersonalWord: (wordPairId: number) =>
     request<null>(`/api/dictionaries/personal/words/${wordPairId}`, { method: 'DELETE' }),
+
+  importPersonalWords: (words: BulkWordEntry[]) =>
+    request<BulkWordOutcome[]>('/api/dictionaries/personal/words/import', {
+      method: 'POST',
+      body: JSON.stringify({ words }),
+    }) as Promise<BulkWordOutcome[]>,
 
   importDictionary: (payload: {
     name: string

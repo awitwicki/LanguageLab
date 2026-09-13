@@ -11,6 +11,7 @@ Web app for learning new words from books
 Backlog of short topics. When something gets deferred (a stub, an inactive button, "we'll do it later") —
 add one line here **in the same set of changes**. Done items are marked `[x]`.
 
+- [ ] Possibility to star chapters for fast access on dashboard, and minitable with starred chapteers in dict page
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService` (`LanguageLab.Application/Translation`) now exists for single words; wire it into `BookImportService` / `WordSortingService.MarkAsync` (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
 - [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme

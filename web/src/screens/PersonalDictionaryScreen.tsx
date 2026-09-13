@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type PersonalDictionary, type PersonalWord, type TrainingStarted } from '../api/client'
+import { api, type BulkWordEntry, type BulkWordOutcome, type PersonalDictionary, type PersonalWord, type TrainingStarted } from '../api/client'
 import { LeitnerScale } from '../components/LeitnerScale'
 import { formatInt, wordsLabel } from '../lib/format'
 import './PersonalDictionaryScreen.css'
@@ -23,6 +23,12 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
   const [lookupNote, setLookupNote] = useState<string | null>(null)
   const [addBusy, setAddBusy] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkResult, setBulkResult] = useState<BulkWordOutcome[] | null>(null)
+  const [bulkError, setBulkError] = useState<string | null>(null)
 
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
@@ -112,6 +118,42 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
       setFormError(e instanceof Error ? e.message : String(e))
     } finally {
       setAddBusy(false)
+    }
+  }
+
+  const canImport = bulkText.trim() !== '' && !bulkBusy
+
+  const importBulk = async (event: React.FormEvent) => {
+    event.preventDefault()
+
+    if (!canImport) return
+
+    const parsed = parseBulkLines(bulkText)
+    const entries = parsed.flatMap((line) => (line.entry ? [line.entry] : []))
+
+    setBulkBusy(true)
+    setBulkError(null)
+
+    try {
+      const outcomes = entries.length > 0 ? await api.importPersonalWords(entries) : []
+      let next = 0
+      const results = parsed.map((line) =>
+        line.entry
+          ? outcomes[next++]
+          : { word: line.raw, translation: '', added: false, error: 'Needs a word and translation separated by a comma.' },
+      )
+
+      setBulkResult(results)
+      setBulkText('')
+
+      if (results.some((r) => r.added)) {
+        onChanged?.()
+        await reload()
+      }
+    } catch (e) {
+      setBulkError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -214,6 +256,49 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
         {formError && <p className="footnote error add-word-note">{formError}</p>}
       </form>
 
+      <div className="bulk-import">
+        <button type="button" className="btn btn-quiet" onClick={() => setBulkOpen((v) => !v)}>
+          {bulkOpen ? 'Hide import' : 'Import multiple words'}
+        </button>
+        {bulkOpen && (
+          <form className="bulk-import-form" onSubmit={(e) => void importBulk(e)}>
+            <label className="field">
+              <textarea
+                name="bulk"
+                value={bulkText}
+                placeholder="One word per line: word,translation"
+                aria-label="Words to import"
+                rows={5}
+                onChange={(e) => setBulkText(e.target.value)}
+              />
+            </label>
+            <button type="submit" className="btn btn-primary" disabled={!canImport}>
+              Import
+            </button>
+            {bulkError && <p className="footnote error">{bulkError}</p>}
+            {bulkResult && (
+              <>
+                <p className="footnote bulk-import-summary">
+                  {bulkResult.filter((r) => r.added).length} added
+                  {bulkResult.some((r) => !r.added) && `, ${bulkResult.filter((r) => !r.added).length} skipped`}
+                </p>
+                {bulkResult.some((r) => !r.added) && (
+                  <ul className="footnote bulk-import-issues">
+                    {bulkResult
+                      .filter((r) => !r.added)
+                      .map((r, i) => (
+                        <li key={i}>
+                          {r.word}: {r.error}
+                        </li>
+                      ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </form>
+        )}
+      </div>
+
       <div className="personal-actions">
         <button
           type="button"
@@ -260,6 +345,28 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
       </section>
     </>
   )
+}
+
+interface ParsedBulkLine {
+  raw: string
+  entry: BulkWordEntry | null
+}
+
+/** One "word,translation" pair per line; a line without a comma has no entry. */
+function parseBulkLines(text: string): ParsedBulkLine[] {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .map((line) => {
+      const comma = line.indexOf(',')
+
+      if (comma === -1) {
+        return { raw: line, entry: null }
+      }
+
+      return { raw: line, entry: { word: line.slice(0, comma).trim(), translation: line.slice(comma + 1).trim() } }
+    })
 }
 
 function wordState(item: PersonalWord): string {
