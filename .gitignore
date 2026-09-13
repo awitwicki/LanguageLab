@@ -227,3 +227,4 @@ web/node_modules/
 web/dist/
 .worktrees/
 /docs/superpowers
+result/import-sorted-words.sql
