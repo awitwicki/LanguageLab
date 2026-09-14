@@ -51,3 +51,24 @@
   gap: 12px;
   margin: 0;
 }
+
+/* Starred chapters: the same card as the stats, one list per book. */
+.starred-chapters {
+  justify-self: stretch;
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  margin-bottom: 28px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+}
+
+.starred-book {
+  display: grid;
+  gap: 8px;
+}
+
+.starred-book h3 {
+  color: var(--text-2);
+}

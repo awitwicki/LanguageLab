@@ -21,6 +21,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<ChapterWord> ChapterWords { get; set; }
     public DbSet<DictionaryWord> DictionaryWords { get; set; }
     public DbSet<ExcludedWord> ExcludedWords { get; set; }
+    public DbSet<StarredChapter> StarredChapters { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -178,5 +179,10 @@ public class ApplicationDbContext : DbContext
         builder.Entity<KnownWord>().HasIndex(k => new { k.UserId, k.CreatedAt });
         builder.Entity<UnknownWord>().HasIndex(u => new { u.UserId, u.CreatedAt });
         builder.Entity<ExcludedWord>().HasIndex(e => new { e.UserId, e.CreatedAt });
+
+        // One star per user per chapter; the list on the home screen is a lookup by user.
+        builder.Entity<StarredChapter>()
+            .HasIndex(s => new { s.UserId, s.ChapterId })
+            .IsUnique();
     }
 }

@@ -15,17 +15,6 @@ public sealed record AddPersonalWordsRequest(IReadOnlyList<BulkWordEntryRequest>
 /// <summary>A refusal written for the user; the client shows Message instead of the status code.</summary>
 public sealed record DictionaryError(string Message);
 
-public sealed record ChapterView(
-    long Id,
-    int Order,
-    string Title,
-    int WordsCount,
-    int SortedCount,
-    int LearnableCount,
-    LearningProgress Learning,
-    int DueCount,
-    DateTime? NextDueAt);
-
 public sealed record DictionaryDetail(
     long Id,
     string Name,
@@ -121,11 +110,11 @@ public static class DictionaryEndpoints
 
         group.MapGet("/{id:long}", async (
             long id,
-            ApplicationDbContext db,
             WordSortingService sorting,
             DictionaryStatsService stats,
             WordSelectionService selection,
             LearningProgressService learningProgress,
+            ChapterStatsService chapterStats,
             DictionaryAccessService access,
             ICurrentUserContext currentUser) =>
         {
@@ -143,46 +132,16 @@ public static class DictionaryEndpoints
                 return Results.NotFound();
             }
 
-            var chapters = await db.Chapters
-                .Where(c => c.DictionaryId == id)
-                .OrderBy(c => c.Order)
-                .Select(c => new { c.Id, c.Order, c.Title, c.WordsCount })
-                .ToListAsync();
-
-            var progress = (await sorting.GetChapterProgressAsync(userId, id))
-                .ToDictionary(p => p.ChapterId);
-
             var whole = await sorting.GetQueueAsync(userId, id, chapterIds: null, take: 1);
             var topWords = await stats.GetTopWordsAsync(id, userId);
 
-            // «До вивчення» = перекладене, на полиці «не знаю», ще не тренувалось —
-            // саме те, що потрапить у новий батч. По одному COUNT на главу, як і прогрес сортування.
+            // "To learn" = translated, on the "don't know" shelf, never trained — what a new batch takes.
             var learnable = await selection.CountLearnableAsync(userId, id);
             var due = await selection.CountDueAsync(userId, now, id);
 
-            // Розклад по боксах: книжка одним викликом, глави — ще двома запитами на всі одразу.
+            // The book's own box breakdown; the chapters' come with their rows.
             var learning = await learningProgress.GetAsync(userId, id);
-            var chapterLearning = await learningProgress.GetByChapterAsync(userId, id);
-
-            // Once a chapter has no new words left, its row offers a review of what is due
-            // there instead — or says when the next word comes due. One query for all chapters.
-            var chapterReview = await selection.GetReviewAvailabilityByChapterAsync(userId, id, now);
-
-            var chapterViews = new List<ChapterView>(chapters.Count);
-
-            foreach (var c in chapters)
-            {
-                var chapterLearnable = await selection.CountLearnableAsync(userId, id, [c.Id]);
-                var review = chapterReview.TryGetValue(c.Id, out var r) ? r : ReviewAvailability.None;
-
-                chapterViews.Add(new ChapterView(
-                    c.Id, c.Order, c.Title, c.WordsCount,
-                    progress.TryGetValue(c.Id, out var p) ? p.Sorted : 0,
-                    chapterLearnable,
-                    chapterLearning.TryGetValue(c.Id, out var l) ? l : LearningProgress.Empty,
-                    review.DueCount,
-                    review.NextDueAt));
-            }
+            var chapterViews = await chapterStats.GetChapterViewsAsync(userId, id, now);
 
             return Results.Ok(new DictionaryDetail(
                 dictionary.Id,

@@ -51,6 +51,12 @@
   }
 }
 
+/* The left column: the starred mini-list (when any) above the full chapter list. */
+.dict-chapters {
+  display: grid;
+  min-width: 0;
+}
+
 .dict-actions {
   display: flex;
   flex-wrap: wrap;
@@ -121,82 +127,4 @@
 .top-word .count {
   font-size: var(--fs-footnote);
   color: var(--text-2);
-}
-
-.chapter-list {
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  overflow: hidden;
-}
-
-/* Рядок глави — дві окремі кнопки без вкладення: основна зона (сортування) і «Вправа». */
-.chapter-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px;
-  padding-right: 8px;
-}
-
-.chapter-row + .chapter-row {
-  border-top: 1px solid var(--hairline);
-}
-
-/* Третій рядок глави: шкала Leitner під обома кнопками. */
-.chapter-learning {
-  grid-column: 1 / -1;
-  padding: 0 16px 12px;
-}
-
-.chapter-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 16px;
-  width: 100%;
-  padding: 12px 16px;
-  text-align: left;
-  color: var(--text);
-  transition: background-color var(--dur) var(--ease);
-}
-
-.chapter-main:hover {
-  background: color-mix(in srgb, var(--text) 4%, transparent);
-}
-
-/* Контейнер обрізає все за межами (overflow: hidden) — кільце фокуса малюємо всередину. */
-.chapter-main:focus-visible,
-.chapter-train:focus-visible {
-  outline-offset: -2px;
-}
-
-.chapter-text {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.chapter-title {
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.chapter-sub,
-.chapter-pct {
-  font-size: var(--fs-footnote);
-  color: var(--text-2);
-}
-
-.chapter-row.done .chapter-pct {
-  color: var(--known);
-  font-weight: 600;
-}
-
-.chevron {
-  font-size: 20px;
-  line-height: 1;
-  color: var(--text-3);
 }

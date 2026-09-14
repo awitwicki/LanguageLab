@@ -10,6 +10,8 @@ const apiMock = vi.hoisted(() => ({
   deleteDictionary: vi.fn(),
   mark: vi.fn(),
   undo: vi.fn(),
+  starChapter: vi.fn(),
+  unstarChapter: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
@@ -31,12 +33,12 @@ const detail: DictionaryDetail = {
   dueCount: 3,
   learning: holstonLearning,
   chapters: [
-    { id: 11, order: 0, title: 'Holston', wordsCount: 300, sortedCount: 150, learnableCount: 42, learning: holstonLearning, dueCount: 0, nextDueAt: null },
-    { id: 12, order: 1, title: '', wordsCount: 100, sortedCount: 100, learnableCount: 0, learning: noLearning, dueCount: 0, nextDueAt: null },
+    { id: 11, order: 0, title: 'Holston', wordsCount: 300, sortedCount: 150, learnableCount: 42, learning: holstonLearning, dueCount: 0, nextDueAt: null, isStarred: false },
+    { id: 12, order: 1, title: '', wordsCount: 100, sortedCount: 100, learnableCount: 0, learning: noLearning, dueCount: 0, nextDueAt: null, isStarred: false },
     // Every word started, five of them due: the row offers a review instead of an exercise.
-    { id: 13, order: 2, title: 'Juliette', wordsCount: 80, sortedCount: 80, learnableCount: 0, learning: dueLearning, dueCount: 5, nextDueAt: null },
+    { id: 13, order: 2, title: 'Juliette', wordsCount: 80, sortedCount: 80, learnableCount: 0, learning: dueLearning, dueCount: 5, nextDueAt: null, isStarred: false },
     // Every word started, none due until tomorrow: the row says so and waits.
-    { id: 14, order: 3, title: 'Lukas', wordsCount: 60, sortedCount: 60, learnableCount: 0, learning: waitingLearning, dueCount: 0, nextDueAt: tomorrow },
+    { id: 14, order: 3, title: 'Lukas', wordsCount: 60, sortedCount: 60, learnableCount: 0, learning: waitingLearning, dueCount: 0, nextDueAt: tomorrow, isStarred: false },
   ],
   topWords: [
     { wordPairId: 1, word: 'silo', frequency: 1500 },
@@ -73,6 +75,8 @@ beforeEach(() => {
   apiMock.deleteDictionary.mockResolvedValue(null)
   apiMock.mark.mockResolvedValue(null)
   apiMock.undo.mockResolvedValue(null)
+  apiMock.starChapter.mockResolvedValue(null)
+  apiMock.unstarChapter.mockResolvedValue(null)
 })
 
 describe('DictionaryScreen — chapters', () => {
@@ -439,5 +443,92 @@ describe('DictionaryScreen — exclude word', () => {
     expect(container.querySelector('.top-words-notice')).toBeNull()
     expect(container.textContent).toContain('network error')
     expect(words(container)).toEqual(['silo', 'abide'])
+  })
+})
+
+describe('DictionaryScreen — starred', () => {
+  const headings = (container: HTMLElement) => [...container.querySelectorAll('h2')].map((h) => h.textContent)
+  const withStar = { ...detail, chapters: detail.chapters.map((c) => (c.id === 13 ? { ...c, isStarred: true } : c)) }
+
+  it('nothing starred → no "Starred" section, one chapter list', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    expect(headings(container)).toEqual(['Chapters', 'Most frequent words'])
+    expect(container.querySelectorAll('.chapter-list')).toHaveLength(1)
+  })
+
+  it('starred chapters sit in a compact list above the chapters', async () => {
+    apiMock.getDictionary.mockResolvedValue(withStar)
+    const { container } = await render(screen())
+    await flush()
+
+    expect(headings(container)).toEqual(['Starred', 'Chapters', 'Most frequent words'])
+
+    const lists = container.querySelectorAll('.chapter-list')
+    expect(lists).toHaveLength(2)
+
+    const starredRows = lists[0].querySelectorAll('.chapter-row')
+    expect(starredRows).toHaveLength(1)
+    expect(starredRows[0].querySelector('.chapter-title')?.textContent).toBe('Juliette')
+    expect(starredRows[0].classList.contains('compact')).toBe(true)
+    expect(starredRows[0].querySelector('.chapter-learning')).toBeNull()
+    expect(starredRows[0].querySelector('.chapter-train')?.textContent).toBe('Review')
+
+    // The full list still has every chapter, with its scale, and the same chapter starred there too.
+    expect(lists[1].querySelectorAll('.chapter-row')).toHaveLength(4)
+    expect(lists[1].querySelectorAll('.chapter-row')[2].querySelector('.chapter-star')?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('a starred row in the mini-list sorts and reviews its chapter like the full list does', async () => {
+    apiMock.getDictionary.mockResolvedValue(withStar)
+    const onSort = vi.fn()
+    const onReview = vi.fn()
+    const { container } = await render(screen({ onSort, onReview }))
+    await flush()
+
+    const row = container.querySelectorAll('.chapter-list')[0].querySelector('.chapter-row')!
+    await click(row.querySelector('.chapter-main')!)
+    expect(onSort).toHaveBeenCalledWith([13], 'Juliette')
+
+    await click(row.querySelector('.chapter-train')!)
+    await flush()
+    expect(apiMock.startReview).toHaveBeenCalledWith({ dictionaryId: 7, chapterIds: [13] })
+    expect(onReview).toHaveBeenCalledWith(reviewStarted, 'Juliette')
+  })
+
+  it('starring sends PUT and the chapter joins the mini-list; unstarring there removes it', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    const holston = container.querySelectorAll('.chapter-row')[0]
+    await click(holston.querySelector('.chapter-star')!)
+    await flush()
+
+    expect(apiMock.starChapter).toHaveBeenCalledWith(11)
+    expect(headings(container)[0]).toBe('Starred')
+    const mini = container.querySelectorAll('.chapter-list')[0]
+    expect(mini.querySelector('.chapter-title')?.textContent).toBe('Holston')
+    expect(mini.querySelector('.chapter-star')?.getAttribute('aria-pressed')).toBe('true')
+
+    await click(mini.querySelector('.chapter-star')!)
+    await flush()
+
+    expect(apiMock.unstarChapter).toHaveBeenCalledWith(11)
+    expect(headings(container)).toEqual(['Chapters', 'Most frequent words'])
+    expect(container.querySelectorAll('.chapter-row')[0].querySelector('.chapter-star')?.getAttribute('aria-pressed')).toBe('false')
+  })
+
+  it('a failed star request flips the star back and shows the error', async () => {
+    apiMock.starChapter.mockRejectedValue(new Error('PUT /api/chapters/11/star → 404'))
+    const { container } = await render(screen())
+    await flush()
+
+    await click(container.querySelectorAll('.chapter-row')[0].querySelector('.chapter-star')!)
+    await flush()
+
+    expect(headings(container)).toEqual(['Chapters', 'Most frequent words'])
+    expect(container.querySelectorAll('.chapter-row')[0].querySelector('.chapter-star')?.getAttribute('aria-pressed')).toBe('false')
+    expect(container.querySelector('.error')?.textContent).toBe('PUT /api/chapters/11/star → 404')
   })
 })

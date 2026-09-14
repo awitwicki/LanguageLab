@@ -1,0 +1,94 @@
+.chapter-list {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+/* Three separate buttons, no nesting: the main area (sort), the side action, the star. */
+.chapter-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.chapter-row + .chapter-row {
+  border-top: 1px solid var(--hairline);
+}
+
+/* The third line: the Leitner scale under all three buttons. */
+.chapter-learning {
+  grid-column: 1 / -1;
+  padding: 0 16px 12px;
+}
+
+.chapter-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+  color: var(--text);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.chapter-row.compact .chapter-main {
+  padding: 8px 16px;
+}
+
+.chapter-main:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+/* The list clips its overflow — draw the focus ring inwards. */
+.chapter-main:focus-visible,
+.chapter-train:focus-visible,
+.chapter-star:focus-visible {
+  outline-offset: -2px;
+}
+
+.chapter-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.chapter-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chapter-sub,
+.chapter-pct {
+  font-size: var(--fs-footnote);
+  color: var(--text-2);
+}
+
+.chapter-row.done .chapter-pct {
+  color: var(--known);
+  font-weight: 600;
+}
+
+.chevron {
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-3);
+}
+
+/* Quiet until set: an empty outline in the tertiary text color, a filled accent star once on. */
+.chapter-star {
+  padding: 0 8px;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-3);
+}
+
+.chapter-star[aria-pressed='true'] {
+  color: var(--accent);
+}

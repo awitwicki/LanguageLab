@@ -46,7 +46,7 @@ describe('learningSegments', () => {
 })
 
 describe('chapterAction', () => {
-  const base = { id: 1, order: 0, title: 'One', wordsCount: 100, sortedCount: 100 }
+  const base = { id: 1, order: 0, title: 'One', wordsCount: 100, sortedCount: 100, isStarred: false }
   const boxes = (...b: number[]) => ({ notStarted: 0, boxes: b, learned: 0, total: b.reduce((a, c) => a + c, 0) })
 
   it('new words left → exercise, whatever else is going on', () => {

@@ -1,23 +1,40 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { api, type TrainingStarted, type TrainingStats } from '../api/client'
+import { api, type ChapterView, type StarredChapter, type TrainingStarted, type TrainingStats } from '../api/client'
 import { BoxHistogram } from '../components/BoxHistogram'
+import { ChapterRow } from '../components/ChapterRow'
 import { formatInt } from '../lib/format'
+import { chapterLabel } from '../lib/labels'
 import './HomeScreen.css'
 
 interface Props {
   hasDictionaries: boolean
   onImport: () => void
+  /** The review across every book, from the "Due today" tile. */
   onReview: (started: TrainingStarted) => void
+  onSort: (dictionaryId: number, chapterIds: number[], scopeTitle: string) => void
+  onTrain: (dictionaryId: number, chapterIds: number[], scopeTitle: string) => void
+  /** A review of one starred chapter; scopeTitle is the chapter's label. */
+  onChapterReview: (started: TrainingStarted, dictionaryId: number, scopeTitle: string) => void
 }
 
-/// Список словників живе в сайдбарі, тож «домівка» — це порожній стан:
-/// або підказка обрати словник, або запрошення імпортувати першу книжку.
+interface StarredBook {
+  dictionaryId: number
+  dictionaryName: string
+  chapters: ChapterView[]
+}
+
+/// The list of dictionaries lives in the sidebar, so the home screen is an empty state:
+/// either a hint to pick a dictionary, or an invitation to import the first book.
 /// Once the user has sorted anything, their shelf totals sit on top of it; once they have
-/// trained anything, their global Leitner standing joins them.
-export function HomeScreen({ hasDictionaries, onImport, onReview }: Props) {
+/// trained anything, their global Leitner standing joins them; once they have starred a
+/// chapter, the starred list sits between the two.
+export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrain, onChapterReview }: Props) {
   const [stats, setStats] = useState<TrainingStats | null>(null)
+  const [starred, setStarred] = useState<StarredChapter[] | null>(null)
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
+  const [starBusyId, setStarBusyId] = useState<number | null>(null)
+  const [starredNotice, setStarredNotice] = useState<{ text: string; isError: boolean } | null>(null)
 
   // Best-effort, like the sidebar's verbs percent: a failed request just leaves the
   // block out rather than turning the home screen into an error page.
@@ -28,6 +45,13 @@ export function HomeScreen({ hasDictionaries, onImport, onReview }: Props) {
       .trainingStats()
       .then((s) => {
         if (!cancelled) setStats(s)
+      })
+      .catch(() => {})
+
+    api
+      .getStarredChapters()
+      .then((list) => {
+        if (!cancelled) setStarred(list)
       })
       .catch(() => {})
 
@@ -58,9 +82,47 @@ export function HomeScreen({ hasDictionaries, onImport, onReview }: Props) {
     }
   }
 
+  // Same race as the tile's review: the chapter's due words may be gone by the click.
+  const startChapterReview = async (item: StarredChapter) => {
+    setReviewBusy(true)
+    setStarredNotice(null)
+
+    try {
+      const started = await api.startReview({ dictionaryId: item.dictionaryId, chapterIds: [item.chapter.id] })
+
+      if (!started) {
+        setStarredNotice({ text: 'Nothing to review today.', isError: false })
+        return
+      }
+
+      onChapterReview(started, item.dictionaryId, chapterLabel(item.chapter))
+    } catch (e) {
+      setStarredNotice({ text: String(e), isError: true })
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+
+  // Everything here is starred already, so the toggle only ever removes; the row goes
+  // once the server agrees — there is nothing to flip back optimistically.
+  const unstar = async (item: StarredChapter) => {
+    setStarBusyId(item.chapter.id)
+    setStarredNotice(null)
+
+    try {
+      await api.unstarChapter(item.chapter.id)
+      setStarred((list) => list?.filter((s) => s.chapter.id !== item.chapter.id) ?? list)
+    } catch (e) {
+      setStarredNotice({ text: String(e), isError: true })
+    } finally {
+      setStarBusyId(null)
+    }
+  }
+
   const inProgress = stats ? stats.boxCounts.reduce((sum, n) => sum + n, 0) : 0
   const hasSorted = stats !== null && stats.known + stats.unknown + stats.excluded > 0
   const hasTrained = stats !== null && inProgress + stats.learned > 0
+  const books = groupByBook(starred ?? [])
 
   return (
     <section className="welcome">
@@ -102,6 +164,41 @@ export function HomeScreen({ hasDictionaries, onImport, onReview }: Props) {
         </section>
       )}
 
+      {books.length > 0 && (
+        <section className="starred-chapters">
+          <h2 className="title">Starred chapters</h2>
+
+          {books.map((book) => (
+            <div key={book.dictionaryId} className="starred-book">
+              <h3 className="headline">{book.dictionaryName}</h3>
+              <ul className="chapter-list">
+                {book.chapters.map((chapter) => {
+                  const item = { dictionaryId: book.dictionaryId, dictionaryName: book.dictionaryName, chapter }
+
+                  return (
+                    <ChapterRow
+                      key={chapter.id}
+                      chapter={chapter}
+                      compact
+                      reviewBusy={reviewBusy}
+                      starBusy={starBusyId === chapter.id}
+                      onSort={() => onSort(book.dictionaryId, [chapter.id], chapterLabel(chapter))}
+                      onTrain={() => onTrain(book.dictionaryId, [chapter.id], chapterLabel(chapter))}
+                      onReview={() => void startChapterReview(item)}
+                      onToggleStar={() => void unstar(item)}
+                    />
+                  )
+                })}
+              </ul>
+            </div>
+          ))}
+
+          {starredNotice && (
+            <p className={`footnote starred-notice${starredNotice.isError ? ' error' : ''}`}>{starredNotice.text}</p>
+          )}
+        </section>
+      )}
+
       <h1 className="large-title">{hasDictionaries ? 'Pick a dictionary' : 'Start with a book'}</h1>
 
       {hasDictionaries ? (
@@ -121,6 +218,23 @@ export function HomeScreen({ hasDictionaries, onImport, onReview }: Props) {
       )}
     </section>
   )
+}
+
+/** The API already orders by book name then chapter order; this only folds consecutive rows of one book together. */
+function groupByBook(starred: StarredChapter[]): StarredBook[] {
+  const books: StarredBook[] = []
+
+  for (const item of starred) {
+    const last = books[books.length - 1]
+
+    if (last && last.dictionaryId === item.dictionaryId) {
+      last.chapters.push(item.chapter)
+    } else {
+      books.push({ dictionaryId: item.dictionaryId, dictionaryName: item.dictionaryName, chapters: [item.chapter] })
+    }
+  }
+
+  return books
 }
 
 function StatTile({ label, value, action }: { label: string; value: number; action?: ReactNode }) {

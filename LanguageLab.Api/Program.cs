@@ -159,6 +159,8 @@ builder.Services.AddScoped<TrainingSessionService>();
 builder.Services.AddScoped<DictionaryStatsService>();
 builder.Services.AddScoped<LearningProgressService>();
 builder.Services.AddScoped<DictionaryAccessService>();
+builder.Services.AddScoped<ChapterStatsService>();
+builder.Services.AddScoped<StarredChapterService>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<VerbProgressService>();
@@ -225,6 +227,7 @@ app.UseAuthorization();
 
 app.MapAuthEndpoints();
 app.MapDictionaryEndpoints();
+app.MapChapterEndpoints();
 app.MapSortingEndpoints();
 app.MapTrainingEndpoints();
 app.MapAdminEndpoints();

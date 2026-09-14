@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { api, type ChapterView, type DictionaryDetail, type TopWord, type TrainingStarted, type UserRole } from '../api/client'
+import { ChapterRow } from '../components/ChapterRow'
 import { LeitnerScale } from '../components/LeitnerScale'
 import { ProgressBar } from '../components/ProgressBar'
-import { chaptersLabel, formatDue, formatInt, percentOf, wordsLabel } from '../lib/format'
+import { chaptersLabel, formatInt, wordsLabel } from '../lib/format'
 import { WHOLE_BOOK, chapterLabel } from '../lib/labels'
-import { chapterAction } from '../lib/learning'
 import './DictionaryScreen.css'
 
 interface Props {
@@ -30,6 +30,8 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
   const [excludingId, setExcludingId] = useState<number | null>(null)
   const [excludeNotice, setExcludeNotice] = useState<string | null>(null)
   const [excludeError, setExcludeError] = useState<string | null>(null)
+  const [starBusyId, setStarBusyId] = useState<number | null>(null)
+  const [starError, setStarError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -39,6 +41,7 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
     setReviewNotice(null)
     setExcludeNotice(null)
     setExcludeError(null)
+    setStarError(null)
     api
       .getDictionary(id)
       .then((d) => {
@@ -144,6 +147,28 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
     }
   }
 
+  // Optimistic, like the visibility toggle: nothing else on the screen depends on a star,
+  // so a local flip is enough and the request only has to be undone on failure.
+  const toggleStar = async (chapter: ChapterView) => {
+    const next = !chapter.isStarred
+    const flip = (d: DictionaryDetail | null, value: boolean) =>
+      d ? { ...d, chapters: d.chapters.map((c) => (c.id === chapter.id ? { ...c, isStarred: value } : c)) } : d
+
+    setStarBusyId(chapter.id)
+    setStarError(null)
+    setDetail((d) => flip(d, next))
+
+    try {
+      if (next) await api.starChapter(chapter.id)
+      else await api.unstarChapter(chapter.id)
+    } catch (e) {
+      setDetail((d) => flip(d, !next))
+      setStarError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setStarBusyId(null)
+    }
+  }
+
   if (error) {
     return <p className="error">{error}</p>
   }
@@ -154,6 +179,8 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
 
   // Смужка частоти — відносно лідера, щоб топ читався як гістограма, а не як таблиця.
   const maxFrequency = detail.topWords[0]?.frequency ?? 1
+  // The mini-list at the top: the same rows, only the starred ones, still in book order.
+  const starred = detail.chapters.filter((c) => c.isStarred)
 
   return (
     <>
@@ -229,69 +256,51 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
 
       {reviewNotice && <p className="footnote dict-actions-hint">{reviewNotice}</p>}
 
-      {/* Глави ліворуч (і першими на вузькому екрані), найчастіші слова — праворуч. */}
+      {/* Chapters on the left (first on a narrow screen), the most frequent words on the right. */}
       <div className="dict-columns">
         {detail.chapters.length > 0 ? (
-          <section className="section">
-            <h2 className="title">Chapters</h2>
-            <p className="footnote">Choose a chapter to sort only it; “Exercise” trains only it.</p>
-            <ul className="chapter-list">
-              {detail.chapters.map((chapter) => {
-                const label = chapterLabel(chapter)
-                const percent = percentOf(chapter.sortedCount, chapter.wordsCount)
-                const action = chapterAction(chapter)
+          <div className="dict-chapters">
+            {starred.length > 0 && (
+              <section className="section">
+                <h2 className="title">Starred</h2>
+                <ul className="chapter-list">
+                  {starred.map((chapter) => (
+                    <ChapterRow
+                      key={chapter.id}
+                      chapter={chapter}
+                      compact
+                      reviewBusy={reviewBusy}
+                      starBusy={starBusyId === chapter.id}
+                      onSort={() => onSort([chapter.id], chapterLabel(chapter))}
+                      onTrain={() => onTrain([chapter.id], chapterLabel(chapter))}
+                      onReview={() => void startReview(chapter)}
+                      onToggleStar={() => void toggleStar(chapter)}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )}
 
-                return (
-                  <li key={chapter.id} className={`chapter-row${percent === 100 ? ' done' : ''}`}>
-                    <button type="button" className="chapter-main" onClick={() => onSort([chapter.id], label)}>
-                      <span className="chapter-text">
-                        <span className="chapter-title">{label}</span>
-                        <span className="chapter-sub num">
-                          {wordsLabel(chapter.wordsCount)} · {chapterSubLine(action)}
-                        </span>
-                      </span>
-                      <span className="chapter-pct num">{percent}%</span>
-                      <span className="chevron" aria-hidden="true">
-                        ›
-                      </span>
-                    </button>
-                    {action.kind === 'review' ? (
-                      <button
-                        type="button"
-                        className="btn btn-quiet chapter-train"
-                        disabled={reviewBusy}
-                        aria-label={`Review: ${label}`}
-                        onClick={() => void startReview(chapter)}
-                      >
-                        Review
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-quiet chapter-train"
-                        disabled={action.kind !== 'exercise'}
-                        title={
-                          action.kind === 'wait' ? 'Nothing due yet in this chapter'
-                          : action.kind === 'none' ? 'No words to learn in this chapter'
-                          : undefined
-                        }
-                        aria-label={`Exercise: ${label}`}
-                        onClick={() => onTrain([chapter.id], label)}
-                      >
-                        Exercise
-                      </button>
-                    )}
-                    {/* Третій рядок — поза кнопкою сортування, щоб шкала не засмічувала її accessible name. */}
-                    {chapter.learning.total > 0 && (
-                      <div className="chapter-learning">
-                        <LeitnerScale progress={chapter.learning} />
-                      </div>
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
+            <section className="section">
+              <h2 className="title">Chapters</h2>
+              <p className="footnote">Choose a chapter to sort only it; “Exercise” trains only it.</p>
+              {starError && <p className="footnote error">{starError}</p>}
+              <ul className="chapter-list">
+                {detail.chapters.map((chapter) => (
+                  <ChapterRow
+                    key={chapter.id}
+                    chapter={chapter}
+                    reviewBusy={reviewBusy}
+                    starBusy={starBusyId === chapter.id}
+                    onSort={() => onSort([chapter.id], chapterLabel(chapter))}
+                    onTrain={() => onTrain([chapter.id], chapterLabel(chapter))}
+                    onReview={() => void startReview(chapter)}
+                    onToggleStar={() => void toggleStar(chapter)}
+                  />
+                ))}
+              </ul>
+            </section>
+          </div>
         ) : (
           <p className="footnote">This dictionary has no chapters — it can only be sorted as a whole.</p>
         )}
@@ -338,20 +347,4 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
       </div>
     </>
   )
-}
-
-/** The second half of a chapter's sub-line: what the row's button is about to offer, or why it can't. */
-function chapterSubLine(action: ReturnType<typeof chapterAction>): string {
-  switch (action.kind) {
-    case 'exercise':
-      return `${formatInt(action.learnable)} to learn`
-    case 'review':
-      return `${formatInt(action.due)} to review`
-    case 'wait':
-      return action.nextDueAt
-        ? `${formatInt(action.inProgress)} in progress · next review ${formatDue(action.nextDueAt, false, new Date())}`
-        : `${formatInt(action.inProgress)} in progress`
-    case 'none':
-      return '0 to learn'
-  }
 }

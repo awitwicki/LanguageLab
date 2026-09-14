@@ -95,6 +95,24 @@ export default function App() {
 
   const startVerbSession = (started: SessionStarted) => setRoute({ name: 'verbs-session', sessionId: started.id })
 
+  // A chapter (or the whole book) can be sorted, trained or reviewed from the book page and,
+  // for starred chapters, from the home screen — the same three transitions either way.
+  const sortScope = (dictionaryId: number, chapterIds: number[] | null, scopeTitle: string) =>
+    setRoute({ name: 'sorting', id: dictionaryId, chapterIds, scopeTitle })
+
+  const trainScope = (dictionaryId: number, chapterIds: number[] | null, scopeTitle: string) =>
+    setRoute({ name: 'training-start', dictionaryId, chapterIds, scopeTitle })
+
+  const reviewScope = (started: TrainingStarted, dictionaryId: number, scopeTitle?: string) =>
+    setRoute({
+      name: 'training',
+      dictionaryId,
+      scopeTitle: scopeTitle ? `${REVIEW_TITLE} · ${scopeTitle}` : REVIEW_TITLE,
+      chapterIds: null,
+      batchSize: null,
+      started,
+    })
+
   // The shell only makes sense for someone signed in: the sidebar lists their dictionaries
   // and every API call behind it needs the cookie.
   if (state.status === 'loading') {
@@ -148,6 +166,9 @@ export default function App() {
               started,
             })
           }
+          onSort={sortScope}
+          onTrain={trainScope}
+          onChapterReview={reviewScope}
         />
       )}
 
@@ -176,22 +197,9 @@ export default function App() {
         <DictionaryScreen
           id={route.id}
           role={state.user.role}
-          onSort={(chapterIds, scopeTitle) =>
-            setRoute({ name: 'sorting', id: route.id, chapterIds, scopeTitle })
-          }
-          onTrain={(chapterIds, scopeTitle) =>
-            setRoute({ name: 'training-start', dictionaryId: route.id, chapterIds, scopeTitle })
-          }
-          onReview={(started, scopeTitle) =>
-            setRoute({
-              name: 'training',
-              dictionaryId: route.id,
-              scopeTitle: scopeTitle ? `${REVIEW_TITLE} · ${scopeTitle}` : REVIEW_TITLE,
-              chapterIds: null,
-              batchSize: null,
-              started,
-            })
-          }
+          onSort={(chapterIds, scopeTitle) => sortScope(route.id, chapterIds, scopeTitle)}
+          onTrain={(chapterIds, scopeTitle) => trainScope(route.id, chapterIds, scopeTitle)}
+          onReview={(started, scopeTitle) => reviewScope(started, route.id, scopeTitle)}
           onDeleted={() => {
             setRoute({ name: 'home' })
             void reload()

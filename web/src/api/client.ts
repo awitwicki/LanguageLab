@@ -53,6 +53,15 @@ export interface ChapterView {
   dueCount: number
   /** When the next in-progress word comes due, or null when none is waiting. ISO 8601. */
   nextDueAt: string | null
+  /** The caller's own star — listed on the home screen and at the top of the book page. */
+  isStarred: boolean
+}
+
+/** One row of the home screen's starred list: the chapter plus the book it belongs to. */
+export interface StarredChapter {
+  dictionaryId: number
+  dictionaryName: string
+  chapter: ChapterView
 }
 
 export interface TopWord {
@@ -671,4 +680,12 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ isPublic }),
     }),
+
+  /** Ordered by book name, then chapter order; only books the user can still see. */
+  getStarredChapters: () => request<StarredChapter[]>('/api/chapters/starred') as Promise<StarredChapter[]>,
+
+  // PUT: starring twice is the same star. 404 = the chapter (or its book) is not visible.
+  starChapter: (chapterId: number) => request<null>(`/api/chapters/${chapterId}/star`, { method: 'PUT' }),
+
+  unstarChapter: (chapterId: number) => request<null>(`/api/chapters/${chapterId}/star`, { method: 'DELETE' }),
 }

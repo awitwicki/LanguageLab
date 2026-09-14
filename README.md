@@ -11,13 +11,13 @@ Web app for learning new words from books
 Backlog of short topics. When something gets deferred (a stub, an inactive button, "we'll do it later") —
 add one line here **in the same set of changes**. Done items are marked `[x]`.
 
-- [ ] Possibility to star chapters for fast access on dashboard, and minitable with starred chapteers in dict page
+- [x] Possibility to star chapters for fast access on dashboard, and minitable with starred chapteers in dict page
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService` (`LanguageLab.Application/Translation`) now exists for single words; wire it into `BookImportService` / `WordSortingService.MarkAsync` (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
 - [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
 - [ ] Spacing tokens in the design system: `web/src/index.css` tokenizes color/typography/radii, but not spacing
 - [ ] Move a word back from "know" to "don't know" outside the exercise-start screen: the cross-out in the batch preview (`web/src/training/useBatchPreview.ts`) — "bring back" only works within the current visit; after that the word can only be reached via `POST /api/sorting/mark`
-- [ ] GET /api/dictionaries/{id}: 3 COUNT queries per chapter (sorted + learnable) — merge into one GROUP BY if this ever becomes slow
+- [ ] `ChapterStatsService.GetChapterViewsAsync`: one COUNT query per returned chapter (plus 3 whole-book queries per call) — also backs `GET /api/chapters/starred` on the home screen now, not just `GET /api/dictionaries/{id}`; merge into one GROUP BY if this ever becomes slow
 - [ ] Shelf admin panel: list of all words in the DB, list of "know", list of "don't know", list of excluded — with the ability to un-mark (move back between shelves) right there
 - [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
 - [ ] Irregular-verbs review ("tonus") mode: SM-2-style scheduling (ease, interval, next-review date), the `Mastered` state, and the priority score for picking which due verbs to show (`VerbProgress.Ease`/`IntervalDays`/`NextReviewAt` are already stored, not read yet)

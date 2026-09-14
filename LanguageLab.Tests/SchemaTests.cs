@@ -267,4 +267,61 @@ public class SchemaTests
 
         Assert.Equal(DeleteBehavior.Cascade, fk.DeleteBehavior);
     }
+
+    /// <summary>One star per user per chapter — the same rule the shelves follow.</summary>
+    [Fact]
+    public void A_chapter_is_starred_once_per_user()
+    {
+        using var db = NewContext();
+
+        var index = db.Model.FindEntityType(typeof(StarredChapter))!.GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(new[] { "UserId", "ChapterId" }));
+
+        Assert.True(index.IsUnique);
+    }
+
+    /// <summary>Deleting a dictionary cascades to its chapters and from there to everyone's stars on them.</summary>
+    [Fact]
+    public async Task Deleting_a_dictionary_removes_its_stars()
+    {
+        await using var db = NewContext();
+
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = DateTime.UtcNow });
+        db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 1, Name = "Wool", WordsCount = 0 });
+        db.Chapters.Add(new Chapter { Id = 1, DictionaryId = 1, Order = 0, Title = "One", WordsCount = 0 });
+        db.StarredChapters.Add(new StarredChapter { Id = 1, UserId = 1, ChapterId = 1, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        // The in-memory provider cascades through the change tracker, so both levels of
+        // dependents must be loaded — Postgres does the same via ON DELETE CASCADE.
+        await db.Chapters.ToListAsync();
+        await db.StarredChapters.ToListAsync();
+
+        db.Dictionaries.Remove(await db.Dictionaries.FirstAsync(d => d.Id == 1));
+        await db.SaveChangesAsync();
+
+        Assert.Empty(await db.StarredChapters.ToListAsync());
+        Assert.Single(await db.Users.ToListAsync());
+    }
+
+    /// <summary>A star is the user's, not the chapter's: deleting the account takes it along.</summary>
+    [Fact]
+    public async Task Deleting_a_user_removes_their_stars()
+    {
+        await using var db = NewContext();
+
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = DateTime.UtcNow });
+        db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 1, Name = "Wool", WordsCount = 0 });
+        db.Chapters.Add(new Chapter { Id = 1, DictionaryId = 1, Order = 0, Title = "One", WordsCount = 0 });
+        db.StarredChapters.Add(new StarredChapter { Id = 1, UserId = 1, ChapterId = 1, CreatedAt = DateTime.UtcNow });
+        await db.SaveChangesAsync();
+
+        await db.StarredChapters.ToListAsync();
+
+        db.Users.Remove(await db.Users.FirstAsync(u => u.Id == 1));
+        await db.SaveChangesAsync();
+
+        Assert.Empty(await db.StarredChapters.ToListAsync());
+        Assert.Single(await db.Chapters.ToListAsync());
+    }
 }

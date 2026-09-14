@@ -12,6 +12,7 @@ const chapter = (order: number, title: string): ChapterView => ({
   learning: { notStarted: 0, boxes: [0, 0, 0, 0, 0], learned: 0, total: 0 },
   dueCount: 0,
   nextDueAt: null,
+  isStarred: false,
 })
 
 describe('chapterLabel', () => {
