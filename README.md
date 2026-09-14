@@ -27,7 +27,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Irregular-verbs statistics screen: mistakes by group, family and `ErrorKind` (`VerbAttempt` already logs everything needed)
 - [ ] Irregular-verbs response-time signal: `VerbAttempt.ResponseMs` is logged but not used by the (future) review scheduling
 - [ ] Top-100/200/500/1000 English word dictionaries, public
-- [ ] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
+- [x] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
 - [ ] Comment sweep: code comments are still Ukrainian in ~190 lines across `web/src` (plus `useBatchPreview.test.ts` test names), 36 backend `.cs` files (`Domain` mostly), `Program.cs` and the `Dockerfile` — comments only, no UI copy
 - [ ] Edit a personal word's translation after it was added (`web/src/screens/PersonalDictionaryScreen.tsx`, `PersonalDictionaryService`)
 - [ ] Cache provider translations into shared `WordPair` rows so the same word is not looked up twice (`TranslationService.LookupAsync`)

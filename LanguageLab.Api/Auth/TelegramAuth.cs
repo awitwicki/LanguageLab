@@ -15,27 +15,8 @@ public static class TelegramAuth
 {
     public const string Scheme = "Telegram";
 
-    /// <summary>Guards the diagnostic claim dump below so it fires once per process, not on every sign-in.</summary>
-    private static int _claimsLogged;
-
     public static async Task OnTokenValidatedAsync(TokenValidatedContext context)
     {
-        // Telegram's discovery document advertises `sub` and `name` but never `id`, so the
-        // claim names ReadIdentity expects are unconfirmed until a real sign-in happens on
-        // the production domain. This dump runs before anything can reject the token, so the
-        // first login leaves the actual names in the log whether it succeeds or fails.
-        // Remove it once they are confirmed — it prints the profile claims verbatim.
-        if (Interlocked.Exchange(ref _claimsLogged, 1) == 0)
-        {
-            var logger = context.HttpContext.RequestServices
-                .GetRequiredService<ILoggerFactory>()
-                .CreateLogger(typeof(TelegramAuth).FullName!);
-
-            logger.LogInformation(
-                "Telegram OIDC claims received: {Claims}",
-                string.Join(", ", context.Principal?.Claims.Select(c => $"{c.Type}={c.Value}") ?? []));
-        }
-
         var identity = ReadIdentity(context.Principal);
 
         if (identity == null)
@@ -71,8 +52,10 @@ public static class TelegramAuth
     }
 
     /// <summary>
-    /// Telegram splits the identifiers: `openid` yields `sub`, while the numeric Telegram
-    /// user id arrives as `id` under the `profile` scope. TelegramUserId must be the latter —
+    /// Telegram splits the identifiers: `openid` yields `sub` (an opaque subject the discovery
+    /// document advertises), while the numeric Telegram user id arrives as `id` under the
+    /// `profile` scope — see the decoded id_token sample at
+    /// https://core.telegram.org/bots/telegram-login. TelegramUserId must be the latter:
     /// existing rows hold real Telegram ids, and keying on `sub` would orphan their shelves.
     /// </summary>
     internal static TelegramIdentity? ReadIdentity(ClaimsPrincipal? principal)
