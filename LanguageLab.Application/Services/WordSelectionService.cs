@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Application.Services;
 
-/// <summary>Слово-кандидат у батч із частотою в тому скоупі, який тренуємо.</summary>
+/// <summary>A batch candidate word with its frequency in the scope being trained.</summary>
 public sealed record Candidate(long WordPairId, string Word, string Translation, int Frequency);
 
 /// <summary>
@@ -17,9 +17,9 @@ public sealed record ReviewAvailability(int DueCount, DateTime? NextDueAt)
 }
 
 /// <summary>
-/// Вирішує, які слова показувати. Тут живе правило «не вчити те, що вже знаю»:
-/// слово потрапляє в новий батч, тільки якщо воно є в цьому словнику, має переклад,
-/// позначене юзером як «хочу вчити», не позначене як відоме, не виключене юзером і ще жодного разу не тренувалося.
+/// Decides which words to show. The "don't learn what I already know" rule lives here:
+/// a word enters a new batch only if it is in this dictionary, has a translation, is marked
+/// by the user as "want to learn", is not marked as known, is not excluded by the user and has never been trained.
 /// </summary>
 public class WordSelectionService
 {
@@ -36,9 +36,9 @@ public class WordSelectionService
     }
 
     /// <summary>
-    /// Найчастіші learnable-слова скоупу за частотою цього скоупу: по главі — сума ChapterWord.Count
-    /// обраних глав, по книжці — DictionaryWord.Frequency. Порядок детермінований (частота, слово, id),
-    /// бо превью на екрані старту має збігатися з батчем.
+    /// The scope's most frequent learnable words by that scope's frequency: per chapter the sum of
+    /// ChapterWord.Count over the chosen chapters, per book DictionaryWord.Frequency. The order is
+    /// deterministic (frequency, word, id) because the start screen's preview must match the batch.
     /// </summary>
     public async Task<IReadOnlyList<Candidate>> GetCandidatesAsync(
         long userId, long dictionaryId, IReadOnlyList<long>? chapterIds, int take)
@@ -71,7 +71,7 @@ public class WordSelectionService
         return rows.Select(x => new Candidate(x.Id, x.Word, x.Translation, x.Frequency)).ToList();
     }
 
-    /// <summary>Перші size кандидатів як WordPair, у тому ж порядку. Порядок питань у квізі тасує QuestionQueueBuilder.</summary>
+    /// <summary>The first size candidates as WordPair, in the same order. QuestionQueueBuilder shuffles the quiz order.</summary>
     public async Task<IReadOnlyList<WordPair>> GetNewBatchAsync(
         long userId, long dictionaryId, int size, IReadOnlyList<long>? chapterIds = null)
     {
@@ -88,13 +88,13 @@ public class WordSelectionService
             .Where(w => ids.Contains(w.Id))
             .ToListAsync();
 
-        // Завантаження за набором id не зберігає порядок — відновлюємо порядок кандидатів.
+        // Loading by a set of ids does not preserve order — restore the candidates' order.
         return ids.Select(id => words.First(w => w.Id == id)).ToList();
     }
 
     /// <summary>
-    /// Підмножина ids, що досі learnable у скоупі, у порядку ids, без дублів. Чужі, зниклі
-    /// (викреслені в іншій вкладці, уже треновані) id мовчки відкидаються — це гонка, не помилка клієнта.
+    /// The subset of ids still learnable in the scope, in ids order, without duplicates. Foreign or
+    /// vanished ids (crossed out in another tab, already trained) are dropped silently — a race, not a client error.
     /// </summary>
     public async Task<IReadOnlyList<WordPair>> GetLearnableByIdsAsync(
         long userId, long dictionaryId, IReadOnlyList<long>? chapterIds, IReadOnlyList<long> ids)
@@ -140,7 +140,7 @@ public class WordSelectionService
             .Where(w => dueIds.Contains(w.Id))
             .ToListAsync();
 
-        // Порядок за DueAt губиться при завантаженні слів — відновлюємо його.
+        // The DueAt order is lost when the words are loaded — restore it.
         return dueIds
             .Select(id => words.First(w => w.Id == id))
             .ToList();
@@ -266,7 +266,7 @@ public class WordSelectionService
             .Where(w => !_dbContext.ExcludedWords.Any(e => e.UserId == userId && e.WordPairId == w.Id))
             .Where(w => !_dbContext.WordProgresses.Any(p => p.UserId == userId && p.WordPairId == w.Id));
 
-        // Скоуп по главах — як у WordSortingService.ScopedQuery: порожній список означає «вся книжка».
+        // Chapter scope as in WordSortingService.ScopedQuery: an empty list means "the whole book".
         if (chapterIds is { Count: > 0 })
         {
             var inChapters = _dbContext.ChapterWords
@@ -279,7 +279,7 @@ public class WordSelectionService
         return query;
     }
 
-    /// <summary>Часткове перемішування Фішера—Йетса: тасуємо лише перші count позицій.</summary>
+    /// <summary>Partial Fisher–Yates shuffle: only the first count positions are shuffled.</summary>
     private static List<long> PickRandom(List<long> source, int count, Random rng)
     {
         var take = Math.Min(count, source.Count);

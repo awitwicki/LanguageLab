@@ -20,8 +20,8 @@ public class WordSelectionServiceTests
         new() { Id = id, Word = word, Translation = translation };
 
     /// <summary>
-    /// Один граф, що містить по одному представнику кожного правила виключення.
-    /// Придатні до навчання тільки слова 1 і 2.
+    /// One graph holding a representative of every exclusion rule.
+    /// Only words 1 and 2 are learnable.
     /// </summary>
     private static async Task<ApplicationDbContext> ArrangeAsync()
     {
@@ -45,13 +45,13 @@ public class WordSelectionServiceTests
         db.Users.Add(new TelegramUser { Id = UserId, TelegramUserId = 1111111111 });
         db.Dictionaries.AddRange(silo, other);
 
-        // Усе, крім слова 7, юзер позначив як «хочу вчити».
+        // Everything except word 7 the user marked as "want to learn".
         for (long wordPairId = 1; wordPairId <= 6; wordPairId++)
         {
             db.UnknownWords.Add(new UnknownWord { Id = wordPairId, UserId = UserId, WordPairId = wordPairId });
         }
 
-        // Слово 8 юзер позначив і як «хочу вчити», і як виключене — виключення має перемогти.
+        // Word 8 the user marked both as "want to learn" and as excluded — exclusion must win.
         db.UnknownWords.Add(new UnknownWord { Id = 8, UserId = UserId, WordPairId = excluded.Id });
         db.ExcludedWords.Add(new ExcludedWord
         {
@@ -78,9 +78,9 @@ public class WordSelectionServiceTests
     }
 
     /// <summary>
-    /// Книжка з двома главами. Глава 1: слова 1, 2, 3; глава 2: слова 4, 5, 6.
-    /// Усі на полиці «хочу вчити», але слово 3 юзер уже знає, а слово 6 без перекладу —
-    /// тож придатні до навчання: 1, 2 (глава 1) і 4, 5 (глава 2).
+    /// A two-chapter book. Chapter 1: words 1, 2, 3; chapter 2: words 4, 5, 6.
+    /// All on the "want to learn" shelf, but the user already knows word 3 and word 6 has
+    /// no translation — so the learnable ones are 1, 2 (chapter 1) and 4, 5 (chapter 2).
     /// </summary>
     private static async Task<ApplicationDbContext> ArrangeWithChaptersAsync()
     {
@@ -124,10 +124,10 @@ public class WordSelectionServiceTests
     }
 
     /// <summary>
-    /// Частоти для перевірки порядку. Словник заповнюється через DictionaryWords (не через навігацію),
-    /// бо саме там живе книжкова частота. Усі шість слів перекладені й «не знаю».
-    /// Книжка: silo 15, abbey 7, holston 7, abide 3, cleaning 2, jahns 1.
-    /// Глава 1: silo 10, abide 3, cleaning 2. Глава 2: abbey 7, holston 7, silo 5, jahns 1.
+    /// Frequencies for checking the order. The dictionary is filled through DictionaryWords (not the
+    /// navigation) because that is where the book frequency lives. All six words are translated and "don't know".
+    /// Book: silo 15, abbey 7, holston 7, abide 3, cleaning 2, jahns 1.
+    /// Chapter 1: silo 10, abide 3, cleaning 2. Chapter 2: abbey 7, holston 7, silo 5, jahns 1.
     /// </summary>
     private static async Task<ApplicationDbContext> ArrangeWithFrequenciesAsync()
     {
@@ -383,8 +383,8 @@ public class WordSelectionServiceTests
     }
 
     /// <summary>
-    /// Виключене слово не вчиться, навіть якщо воно лежить у UnknownWords:
-    /// інакше бот далі показував би те, що юзер викинув у вебі.
+    /// An excluded word is not learned even if it sits in UnknownWords:
+    /// otherwise the bot would keep showing what the user threw out on the web.
     /// </summary>
     [Fact]
     public async Task Excluded_word_never_enters_a_new_batch()
@@ -461,7 +461,7 @@ public class WordSelectionServiceTests
         Assert.Equal(new[] { 10, 3, 2 }, one.Select(c => c.Frequency));
         Assert.Equal(new long[] { 6, 4, 1, 5 }, two.Select(c => c.WordPairId));
         Assert.Equal(new[] { 7, 7, 5, 1 }, two.Select(c => c.Frequency));
-        // Дві глави — сума їхніх лічильників, а не книжкова частота.
+        // Two chapters — the sum of their counts, not the book frequency.
         Assert.Equal(new long[] { 1, 6, 4, 2, 3, 5 }, both.Select(c => c.WordPairId));
         Assert.Equal(15, both[0].Frequency);
     }
@@ -492,7 +492,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        // 99 — не існує; 4 — уже з прогресом; 3 — «знаю»; 5 — без перекладу; 8 — виключене; 2 — двічі.
+        // 99 — does not exist; 4 — already has progress; 3 — "know"; 5 — no translation; 8 — excluded; 2 — twice.
         var words = await new WordSelectionService(db)
             .GetLearnableByIdsAsync(UserId, DictionaryId, chapterIds: null, ids: [2, 99, 4, 1, 2, 3, 5, 8]);
 

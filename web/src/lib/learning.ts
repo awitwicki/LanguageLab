@@ -3,8 +3,8 @@ import type { ChapterView, LearningProgress } from '../api/client'
 export const BOX_COUNT = 5
 
 /**
- * Зважений відсоток: не почато = 0, бокс b = b/5, вивчено = 1. Суворий «частка вивчених»
- * два місяці стояв би на 0 (Leitner доводить слово до «вивчено» не раніше ніж за 55 днів).
+ * A weighted percentage: not started = 0, box b = b/5, learned = 1. A strict "share of learned"
+ * would sit at 0 for two months (Leitner takes at least 55 days to bring a word to "learned").
  */
 export function learningPercent(p: LearningProgress): number {
   if (p.total <= 0) {
@@ -26,11 +26,11 @@ export interface Segment {
   key: SegmentKey
   label: string
   count: number
-  /** Частка від total, 0..1. */
+  /** Share of total, 0..1. */
   share: number
 }
 
-/** Шість сегментів у порядку показу: від «вивчено» до «не почато». Бокс 5 у процесі складено з вивченими — він за одну правильну відповідь від IsLearned. */
+/** Six segments in display order: from "learned" to "not started". Box 5 in progress is folded into learned — it is one correct answer away from IsLearned. */
 export function learningSegments(p: LearningProgress): Segment[] {
   const counts: [SegmentKey, string, number][] = [
     ['learned', 'learned', p.learned + (p.boxes[4] ?? 0)],

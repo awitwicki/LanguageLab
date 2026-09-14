@@ -9,8 +9,8 @@ public sealed record ImportWord(string Word, int Count);
 public sealed record ImportChapter(int Order, string Title, IReadOnlyList<ImportWord> Words);
 
 /// <summary>
-/// Книжка приходить із главами; плаский список (на кшталт «топ-500») — через Words.
-/// Задано має бути рівно одне з двох.
+/// A book arrives with chapters; a flat list (like a "top 500") comes through Words.
+/// Exactly one of the two must be set.
 /// </summary>
 public sealed record ImportRequest(
     string Name,
@@ -21,8 +21,8 @@ public sealed record ImportRequest(
 public sealed record ImportResult(long DictionaryId, int TotalWords, int NewWords, int ReusedWords);
 
 /// <summary>
-/// Заливає розібрану на клієнті книжку в БД. Сирий текст сюди не потрапляє —
-/// лише базові форми з частотами.
+/// Loads a book parsed on the client into the DB. Raw text never gets here —
+/// only base forms with frequencies.
 /// </summary>
 public class BookImportService
 {
@@ -37,7 +37,7 @@ public class BookImportService
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
-            throw new ArgumentException("Назва словника не може бути порожньою.", nameof(request));
+            throw new ArgumentException("The dictionary name cannot be empty.", nameof(request));
         }
 
         var chapters = Normalize(request.Chapters);
@@ -45,11 +45,11 @@ public class BookImportService
 
         if (chapters.Count == 0 && flat.Count == 0)
         {
-            throw new ArgumentException("Імпорт порожній: немає ні глав, ні слів.", nameof(request));
+            throw new ArgumentException("The import is empty: neither chapters nor words.", nameof(request));
         }
 
-        // Частота по книжці — сума по главах. Для пласких імпортів глав немає,
-        // і сума береться прямо зі списку.
+        // Book frequency is the sum over chapters. Flat imports have no chapters,
+        // so the sum is taken straight from the list.
         var totals = new Dictionary<string, int>(StringComparer.Ordinal);
 
         foreach (var counts in chapters.Select(c => c.Words).Append(flat))
@@ -68,8 +68,8 @@ public class BookImportService
             .Where(w => w.OwnerId == null && allWords.Contains(w.Word))
             .ToDictionaryAsync(w => w.Word, StringComparer.Ordinal);
 
-        // Наявні слова не чіпаємо взагалі: книжка приходить із порожніми перекладами
-        // і затерла б результат кроку перекладу.
+        // Existing words are left alone entirely: the book arrives with empty translations
+        // and would wipe out the result of the translation step.
         var created = new List<WordPair>();
 
         foreach (var word in allWords)
@@ -119,8 +119,8 @@ public class BookImportService
             });
         }
 
-        // Один SaveChanges — одна транзакція. Явна BeginTransaction тут зайва
-        // й до того ж не підтримується InMemory-провайдером у тестах.
+        // One SaveChanges is one transaction. An explicit BeginTransaction is redundant
+        // here, and the InMemory provider in the tests does not support it anyway.
         await _dbContext.SaveChangesAsync();
 
         return new ImportResult(
@@ -147,8 +147,8 @@ public class BookImportService
     }
 
     /// <summary>
-    /// Клієнт уже приводить слова до нижнього регістру, але одне слово може
-    /// прийти двічі — дедуплікація потрібна в будь-якому разі.
+    /// The client already lowercases the words, but the same word can arrive
+    /// twice — deduplication is needed regardless.
     /// </summary>
     private static Dictionary<string, int> NormalizeWords(IReadOnlyList<ImportWord>? words)
     {

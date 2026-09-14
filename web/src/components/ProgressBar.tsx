@@ -4,7 +4,7 @@ import './ProgressBar.css'
 interface Props {
   sorted: number
   total: number
-  /** Підпис «X з Y» + відсоток під шкалою. У сайдбарі й панелі сортування його вимикають. */
+  /** The "X of Y" caption + percentage under the bar. The sidebar and the sorting panel turn it off. */
   showLabel?: boolean
 }
 

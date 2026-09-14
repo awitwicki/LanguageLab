@@ -2,7 +2,7 @@
   margin: -8px 0 12px -10px;
 }
 
-/* Картки: той самий груповий список, що й глави на екрані словника. */
+/* Cards: the same grouped list as the chapters on the dictionary screen. */
 .cards {
   display: grid;
   gap: 16px;
@@ -41,7 +41,7 @@
   margin: -16px 0 12px;
 }
 
-/* Картка квізу — та ж поверхня, що й картка сортування; клас свій, щоб не ділити CSS між екранами. */
+/* The quiz card is the same surface as the sorting card; its own class so the screens do not share CSS. */
 .quiz-card {
   display: grid;
   gap: 24px;
@@ -100,7 +100,7 @@
   min-width: 0;
 }
 
-/* Єдине місце з семантичною заливкою на цьому екрані — результат відповіді. */
+/* The only semantic fill on this screen — the answer result. */
 .option.is-correct {
   background: color-mix(in srgb, var(--known) 22%, transparent);
   color: color-mix(in srgb, var(--known) 65%, var(--text));

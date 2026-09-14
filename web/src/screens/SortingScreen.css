@@ -104,7 +104,7 @@
   gap: 8px;
 }
 
-/* Єдине місце, де семантичні кольори стають заливкою: це головна дія екрана. */
+/* The one place where the semantic colors become a fill: this is the screen's primary action. */
 .btn-known {
   background: color-mix(in srgb, var(--known) 18%, transparent);
   color: color-mix(in srgb, var(--known) 65%, var(--text));

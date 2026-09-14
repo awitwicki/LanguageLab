@@ -1,7 +1,7 @@
 /**
- * fb2 масово ходять у windows-1251. `file.text()` завжди читає як utf-8 і
- * перетворив би половину книжки на U+FFFD — а це потім вилізло б у черзі
- * сортування як тисячі псевдослів. Тому читаємо байти й декодуємо самі.
+ * fb2 files are very often windows-1251. `file.text()` always reads as utf-8 and
+ * would turn half the book into U+FFFD — which would later surface in the sorting
+ * queue as thousands of pseudo-words. So read the bytes and decode ourselves.
  */
 export function decodeFb2(buffer: ArrayBuffer): string {
   const head = new TextDecoder('ascii').decode(buffer.slice(0, 256))
@@ -11,7 +11,7 @@ export function decodeFb2(buffer: ArrayBuffer): string {
     try {
       return new TextDecoder(declared).decode(buffer)
     } catch {
-      // Невідомий лейбл — краще прочитати як utf-8, ніж впасти.
+      // Unknown label — better to read as utf-8 than to crash.
     }
   }
 

@@ -7,7 +7,7 @@ public class LeitnerSchedulerTests
     private static readonly DateTime Now = new(2026, 8, 30, 12, 0, 0, DateTimeKind.Utc);
 
     [Theory]
-    [InlineData(1, 2, 3)]   // з боксу 1 у бокс 2 → інтервал боксу 2 = 3 дні
+    [InlineData(1, 2, 3)]   // from box 1 to box 2 → box 2's interval = 3 days
     [InlineData(2, 3, 7)]
     [InlineData(3, 4, 14)]
     [InlineData(4, 5, 30)]

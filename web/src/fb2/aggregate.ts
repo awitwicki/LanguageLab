@@ -14,9 +14,9 @@ export interface AggregatedChapter {
 }
 
 /**
- * Глави з сирим текстом → глави з базовими формами й частотами.
- * Консолідація -ing робиться по словнику всієї книжки, а не глави:
- * дієслово може бути в одній главі, а його герундій — у зовсім іншій.
+ * Chapters with raw text → chapters with base forms and frequencies.
+ * The -ing consolidation runs over the whole book's vocabulary, not the chapter's:
+ * the verb may be in one chapter and its gerund in an entirely different one.
  */
 export function aggregate(chapters: RawChapter[]): AggregatedChapter[] {
   const perChapter = chapters.map((chapter) => {

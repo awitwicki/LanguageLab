@@ -69,11 +69,11 @@ export default function App() {
     [],
   )
 
-  // Словник, до якого належить поточний екран: підсвітка в сайдбарі й «назад».
+  // The dictionary the current screen belongs to: sidebar highlight and "back".
   const activeId = 'id' in route ? route.id : 'dictionaryId' in route ? route.dictionaryId : null
 
-  // Прогрес у сайдбарі має відображати щойно посортоване, а не стан на момент
-  // старту — тому список перезавантажується на кожній зміні маршруту.
+  // The sidebar progress must reflect what was just sorted, not the state at
+  // startup — so the list reloads on every route change.
   const routeKey = activeId === null ? route.name : `${route.name}:${activeId}`
 
   useEffect(() => {

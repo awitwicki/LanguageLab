@@ -1,5 +1,5 @@
-/* Sticky живе на .shell-topbar (AppShell.css): grid-комірка висотою 52px
-   не дала б прилипнути елементу всередині себе. */
+/* Sticky lives on .shell-topbar (AppShell.css): a 52px-high grid cell
+   would not let an element inside it stick. */
 .topbar {
   height: var(--topbar-h);
   display: flex;

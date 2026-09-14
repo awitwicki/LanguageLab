@@ -13,8 +13,8 @@ public class UnknownWord : BaseEntity
     public long WordPairId { get; set; }
 
     /// <summary>
-    /// UTC. Потрібен колонкам «останні 10» і серверному undo: без нього
-    /// історія сортування живе лише в пам'яті вкладки й гине при перезавантаженні.
+    /// UTC. Needed by the "last 10" columns and the server-side undo: without it
+    /// the sorting history lives only in the tab's memory and dies on reload.
     /// </summary>
     public DateTime CreatedAt { get; set; }
 }

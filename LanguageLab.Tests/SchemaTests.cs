@@ -13,8 +13,8 @@ public class SchemaTests
             .Options);
 
     /// <summary>
-    /// Join-таблиця стала сутністю з навантаженням, але скіп-навігація має вціліти:
-    /// на неї спирається LearnableQuery і кнопки бота.
+    /// The join table became an entity with payload, but the skip navigation must survive:
+    /// LearnableQuery and the bot's buttons rely on it.
     /// </summary>
     [Fact]
     public async Task Skip_navigation_survives_payload_join()
@@ -33,7 +33,7 @@ public class SchemaTests
         Assert.Equal(1, found);
     }
 
-    /// <summary>Частота живе на join-рядку, а не на слові: одне слово має різну частоту в різних книжках.</summary>
+    /// <summary>Frequency lives on the join row, not on the word: one word has different frequencies in different books.</summary>
     [Fact]
     public async Task Frequency_is_stored_per_dictionary()
     {
@@ -52,7 +52,7 @@ public class SchemaTests
         Assert.Equal([47, 3], frequencies);
     }
 
-    /// <summary>Глави прив'язані до словника й нумеруються з нуля.</summary>
+    /// <summary>Chapters belong to a dictionary and are numbered from zero.</summary>
     [Fact]
     public async Task Chapters_belong_to_dictionary()
     {

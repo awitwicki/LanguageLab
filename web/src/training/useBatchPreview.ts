@@ -1,18 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type BatchCandidate, type BatchPreview } from '../api/client'
 
-/** Скільки кандидатів тягнемо за раз — максимум сегмент-контролу. Зміна розміру батча — лише зріз, без запиту. */
+/** How many candidates to fetch at once — the segmented control's maximum. Changing the batch size is just a slice, no request. */
 export const PREVIEW_TAKE = 20
 
 export interface Row {
   candidate: BatchCandidate
-  /** Викреслене цього візиту («знаю»): лишається на місці до «Повернути». */
+  /** Struck during this visit ("know"): stays in place until "Bring back". */
   struck: boolean
 }
 
 /**
- * Зводить попередні рядки зі свіжим превью: викреслені лишаються на місці (сервер їх уже не віддає),
- * активні — лише ті, що й далі в топ-batchSize, заміна дописується знизу. Чиста, тестується окремо.
+ * Reconciles the previous rows with a fresh preview: struck ones stay in place (the server no longer
+ * returns them), active ones are only those still in the top batchSize, replacements append at the bottom. Pure, tested on its own.
  */
 export function reconcileRows(
   prev: Row[],
@@ -54,8 +54,8 @@ export function useBatchPreview({ dictionaryId, chapterIds, initialBatchSize }: 
     [dictionaryId, chapterIds],
   )
 
-  // Скоуп змінюється лише разом із маршрутом (екран монтується заново), тож стан не скидаємо —
-  // і setState тут лише в .then, а не синхронно (див. lint react/set-state-in-effect).
+  // The scope only changes with the route (the screen remounts), so the state is not reset —
+  // and setState here happens only in .then, never synchronously (see lint react/set-state-in-effect).
   useEffect(() => {
     let cancelled = false
 
@@ -109,7 +109,7 @@ export function useBatchPreview({ dictionaryId, chapterIds, initialBatchSize }: 
         }
 
         setCrossedOut(next)
-        // Рядок міняється одразу після підтвердження сервером, ще до перезапиту превью.
+        // The row changes right after the server confirms, before the preview is refetched.
         setRows((prev) => prev.map((r) => (r.candidate.wordPairId === id ? { ...r, struck: status === 'known' } : r)))
         await reload(next, batchSize)
       } catch (e) {

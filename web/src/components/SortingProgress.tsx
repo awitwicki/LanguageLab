@@ -3,13 +3,13 @@ import { ProgressBar } from './ProgressBar'
 import './SortingProgress.css'
 
 interface Props {
-  /** Назва словника — дрібно над заголовком. */
+  /** The dictionary name — small, above the heading. */
   scope: string
-  /** Що саме сортуємо чи тренуємо: назва глави або «Уся книжка». */
+  /** What exactly is being sorted or trained: the chapter name or "Whole book". */
   title: string
   sorted: number
   total: number
-  /** Підпис під шкалою. За замовчуванням — «X з Y слів, залишилось Z»; квіз передає «Питання N з M». */
+  /** The caption under the bar. By default "X of Y words, Z left"; the quiz passes "Question N of M". */
   counts?: string
 }
 

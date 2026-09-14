@@ -17,7 +17,7 @@ const apiMock = vi.hoisted(() => ({
 vi.mock('../api/client', () => ({ api: apiMock }))
 
 const noLearning: LearningProgress = { notStarted: 0, boxes: [0, 0, 0, 0, 0], learned: 0, total: 0 }
-// notStarted == learnableCount (42) — так само, як на сервері. (9 + 10 + 12 + 60) / (5 · 71) → 26%.
+// notStarted == learnableCount (42) — same as on the server. (9 + 10 + 12 + 60) / (5 · 71) → 26%.
 const holstonLearning: LearningProgress = { notStarted: 42, boxes: [9, 5, 0, 3, 0], learned: 12, total: 71 }
 const dueLearning: LearningProgress = { notStarted: 0, boxes: [5, 4, 0, 0, 0], learned: 1, total: 10 }
 const waitingLearning: LearningProgress = { notStarted: 0, boxes: [2, 6, 0, 0, 0], learned: 0, total: 8 }
@@ -131,7 +131,7 @@ describe('DictionaryScreen — chapters', () => {
     const scale = rows[0].querySelector('.chapter-learning .leitner')!
     expect(scale).not.toBeNull()
     expect(scale.querySelector('.leitner-percent')?.textContent).toBe('26%')
-    // Шкала — поза кнопкою сортування: її aria-label не має засмічувати назву кнопки.
+    // The scale sits outside the sort button: its aria-label must not pollute the button's name.
     expect(rows[0].querySelector('.chapter-main .leitner')).toBeNull()
     expect(rows[1].querySelector('.chapter-learning')).toBeNull()
   })

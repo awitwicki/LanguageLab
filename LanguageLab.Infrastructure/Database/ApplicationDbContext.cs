@@ -71,9 +71,9 @@ public class ApplicationDbContext : DbContext
             .HasFilter("\"IsPersonal\"")
             .HasDatabaseName("IX_Dictionaries_OwnerId_Personal");
 
-        // Join-таблиця тепер сутність із навантаженням (Frequency), але назва й каскади
-        // ті самі, що були за конвенцією — міграція лише додає колонку.
-        // Каскад потрібен кнопці «🗑 Видалити», яка зносить WordPair глобально.
+        // The join table is now an entity with payload (Frequency), but the name and the
+        // cascades are the ones the convention produced — the migration only adds a column.
+        // The cascade is needed by the "🗑 Delete" button, which removes a WordPair globally.
         builder.Entity<Dictionary>()
             .HasMany(d => d.Words)
             .WithMany(w => w.Dictionaries)
@@ -87,12 +87,12 @@ public class ApplicationDbContext : DbContext
                     j.ToTable("DictionaryWords");
                     j.HasKey(dw => new { dw.DictionaryId, dw.WordPairId });
 
-                    // Черга сортування завжди йде ORDER BY Frequency DESC у межах словника.
+                    // The sorting queue always goes ORDER BY Frequency DESC within a dictionary.
                     j.HasIndex(dw => new { dw.DictionaryId, dw.Frequency });
                 });
 
-        // Одне слово не може бути двічі відоме або двічі невідоме одному юзеру.
-        // Досі це трималося тільки перевіркою в C#; сід із задачі 6 покладається на ON CONFLICT.
+        // One word cannot be known twice or unknown twice for the same user. Until now this
+        // was held only by a check in C#; the seed from task 6 relies on ON CONFLICT.
         builder.Entity<KnownWord>()
             .HasIndex(k => new { k.UserId, k.WordPairId })
             .IsUnique();
@@ -138,7 +138,7 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(a => a.TaskId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Вибірка закріплення: слова цього юзера, не вивчені, з простроченим DueAt.
+        // The review selection: this user's words, not learned, with an overdue DueAt.
         builder.Entity<WordProgress>()
             .HasIndex(p => new { p.UserId, p.IsLearned, p.DueAt });
 
@@ -170,12 +170,12 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(cw => cw.WordPairId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Третя полиця живе за тими самими правилами, що дві попередні.
+        // The third shelf lives by the same rules as the previous two.
         builder.Entity<ExcludedWord>()
             .HasIndex(e => new { e.UserId, e.WordPairId })
             .IsUnique();
 
-        // Вибірка «останні 10» на кожній полиці — це ORDER BY CreatedAt DESC по юзеру.
+        // The "last 10" selection on each shelf is ORDER BY CreatedAt DESC per user.
         builder.Entity<KnownWord>().HasIndex(k => new { k.UserId, k.CreatedAt });
         builder.Entity<UnknownWord>().HasIndex(u => new { u.UserId, u.CreatedAt });
         builder.Entity<ExcludedWord>().HasIndex(e => new { e.UserId, e.CreatedAt });

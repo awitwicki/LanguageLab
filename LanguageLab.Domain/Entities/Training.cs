@@ -15,7 +15,7 @@ public class Training : BaseEntity
     [ForeignKey(nameof(User))]
     public long UserId { get; set; }
 
-    /// <summary>null у режимі закріплення — воно тягне слова з усіх словників одразу.</summary>
+    /// <summary>null in review mode — it pulls words from every dictionary at once.</summary>
     public Dictionary? Dictionary { get; set; }
     [ForeignKey(nameof(Dictionary))]
     public long? DictionaryId { get; set; }

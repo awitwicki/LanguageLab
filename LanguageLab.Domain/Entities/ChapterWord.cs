@@ -1,9 +1,9 @@
 namespace LanguageLab.Domain.Entities;
 
 /// <summary>
-/// Скільки разів слово трапляється в конкретній главі. Ключ складений,
-/// окремого Id немає — рядків десятки тисяч на книжку, і жодна навігація
-/// на них поодинці не посилається.
+/// How many times a word occurs in a particular chapter. The key is composite,
+/// there is no separate Id — a book has tens of thousands of these rows, and no
+/// navigation ever refers to one of them individually.
 /// </summary>
 public class ChapterWord
 {

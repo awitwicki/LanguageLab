@@ -1,6 +1,6 @@
 import { verb } from 'wink-lemmatizer'
 
-/** Порт stopwords з NLTK — той самий набір, що використовує extract.py. */
+/** A port of NLTK's stopwords — the same set extract.py uses. */
 const STOP_WORDS = new Set([
   'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've",
   "you'll", "you'd", 'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself',
@@ -21,21 +21,21 @@ const STOP_WORDS = new Set([
   "wouldn't",
 ])
 
-/** З extract.py: числівники, з яких складаються порядкові форми. */
+/** From extract.py: the numerals ordinal forms are built from. */
 const NUMBER_PREFIXES = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
 const ORDINAL_SUFFIXES = new Set(['th', 'st', 'nd', 'rd'])
 
 /**
- * Порядкові форми, які не зводяться до `prefix + suffix` через випадання
- * голосної (nine → ninth, а не nineth). extract.py має той самий
- * prefix/suffix алгоритм і той самий пробіл — там він просто ніколи не
- * зустрічається, бо застосовується лише до частин складених слів.
+ * Ordinal forms that do not reduce to `prefix + suffix` because a vowel
+ * drops out (nine → ninth, not nineth). extract.py has the same
+ * prefix/suffix algorithm and the same gap — there it simply never comes
+ * up, since it applies only to the parts of compound words.
  */
 const IRREGULAR_ORDINALS = new Set(['ninth'])
 
 /**
- * З extract.py: -ing форми, які є самостійними іменниками й не мають
- * згортатись у дієслово, навіть коли база присутня в тексті.
+ * From extract.py: -ing forms that are nouns in their own right and must
+ * not collapse into the verb, even when the base is present in the text.
  */
 const ING_HOMOGRAPH_KEEP = new Set([
   'building', 'ceiling', 'clothing', 'evening', 'feeling', 'meaning', 'morning', 'nothing',
@@ -43,11 +43,11 @@ const ING_HOMOGRAPH_KEEP = new Set([
 ])
 
 /**
- * Апостроф лишається в слові (не вирізається як звичайна пунктуація):
- * інакше "don't"/"wasn't" стають "dont"/"wasnt" — валідними на вигляд
- * словами, і `isRejected` (тільки [a-z]) уже не впізнає в них скорочення.
- * Книги здебільшого пишуть апостроф типографським символом (’), тож він
- * спершу нормалізується до звичайного '.
+ * The apostrophe stays in the word (it is not cut out like ordinary punctuation):
+ * otherwise "don't"/"wasn't" become "dont"/"wasnt" — valid-looking words that
+ * `isRejected` (only [a-z]) no longer recognizes as contractions.
+ * Books mostly write the apostrophe as the typographic character (’), so it
+ * is normalized to a plain ' first.
  */
 export function cleanWord(word: string): string {
   return word
@@ -88,8 +88,8 @@ export function isRejected(word: string): boolean {
 }
 
 /**
- * Якщо в тексті є і дієслово, і його -ing форма — лишаємо дієслово.
- * Без цього ти сортував би `surround` і `surrounding` як два різні слова.
+ * When the text has both a verb and its -ing form, keep the verb.
+ * Without this you would sort `surround` and `surrounding` as two different words.
  */
 export function consolidateIngForms(vocabulary: Set<string>): Set<string> {
   const result = new Set(vocabulary)

@@ -33,7 +33,7 @@ export interface DictionaryListItem {
   isPersonal: boolean
 }
 
-/** Розклад слів скоупу по боксах Leitner. boxes: індекс 0 = бокс 1, лише не вивчені; вивчені — learned. */
+/** How a scope's words are spread across the Leitner boxes. boxes: index 0 = box 1, unlearned only; learned ones are in learned. */
 export interface LearningProgress {
   notStarted: number
   boxes: number[]
@@ -195,7 +195,7 @@ export interface BatchCandidate {
   wordPairId: number
   word: string
   translation: string
-  /** Частота в тому скоупі, який тренуємо: по главі або по книжці. */
+  /** Frequency in the scope being trained: per chapter or per book. */
   frequency: number
 }
 
@@ -551,8 +551,8 @@ export const api = {
   getRecent: (take = 10) =>
     request<RecentWords>(`/api/sorting/recent?take=${take}`) as Promise<RecentWords>,
 
-  // 204 (нема слів / нема прострочених / нема помилок) приходить як null — це стан, не помилка.
-  // wordPairIds — «що бачив у превью, те й тренуєш»; без них сервер бере той самий топ за частотою.
+  // 204 (no words / nothing due / no mistakes) arrives as null — a state, not an error.
+  // wordPairIds — "you train what the preview showed"; without them the server takes the same frequency top.
   startNewBatch: (dictionaryId: number, chapterIds: number[] | null, batchSize: number, wordPairIds: number[] | null = null) =>
     request<TrainingStarted>('/api/training/new-batch', {
       method: 'POST',

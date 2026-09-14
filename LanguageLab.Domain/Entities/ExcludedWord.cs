@@ -3,9 +3,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace LanguageLab.Domain.Entities;
 
 /// <summary>
-/// Третя полиця поруч із KnownWord і UnknownWord: слово, яке юзер прибрав
-/// зі списку назавжди (імена, сміття після лематизації). Глобальна —
-/// виключене слово не вилазить і в наступних книжках.
+/// The third shelf next to KnownWord and UnknownWord: a word the user removed
+/// from the list for good (names, lemmatization garbage). Global — an excluded
+/// word does not show up in later books either.
 /// </summary>
 public class ExcludedWord : BaseEntity
 {

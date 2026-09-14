@@ -24,7 +24,7 @@ public sealed record TrainingSummary(
     IReadOnlyList<WordResult> Words);
 
 public sealed record TrainingStats(
-    IReadOnlyList<int> BoxCounts,   // індекс 0 = box 1, довжина = LeitnerScheduler.MaxBox
+    IReadOnlyList<int> BoxCounts,   // index 0 = box 1, length = LeitnerScheduler.MaxBox
     int Learned,
     int Known,                      // sorting shelves, global across books: "know" / "don't know" / excluded
     int Unknown,
@@ -34,8 +34,8 @@ public sealed record TrainingStats(
     int Wrong);
 
 /// <summary>
-/// Наступне питання для UI: варіанти в порядку OptionIds і лічильники сесії.
-/// Question == null означає, що черга вичерпана — лічильники при цьому фінальні.
+/// The next question for the UI: options in OptionIds order plus the session counters.
+/// Question == null means the queue is exhausted — the counters are final at that point.
 /// </summary>
 public sealed record QuestionView(
     TrainingQuestion? Question,
@@ -44,9 +44,9 @@ public sealed record QuestionView(
     int Total);
 
 /// <summary>
-/// Життєвий цикл однієї сесії: створення черги питань, прийом відповідей і підсумкова
-/// оцінка за Leitner. Черга генерується наперед і лежить у БД, тому бот можна
-/// перезапустити посеред квізу, а callback_data вміщає лише два id.
+/// The life cycle of one session: building the question queue, taking answers and the final
+/// Leitner grading. The queue is generated up front and lives in the DB, so the bot could be
+/// restarted mid-quiz and callback_data only had to carry two ids.
 /// </summary>
 public class TrainingSessionService
 {
@@ -91,7 +91,7 @@ public class TrainingSessionService
     {
         batchSize = Math.Clamp(batchSize, MinBatchSize, MaxBatchSize);
 
-        // Явні id — «що бачив у превью, те й тренуєш»; без них — той самий топ за частотою, що й у превью.
+        // Explicit ids — "you train what the preview showed"; without them, the same frequency top the preview uses.
         var words = wordPairIds is { Count: > 0 }
             ? (await _selection.GetLearnableByIdsAsync(userId, dictionaryId, chapterIds, wordPairIds)).Take(batchSize).ToList()
             : await _selection.GetNewBatchAsync(userId, dictionaryId, batchSize, chapterIds);
@@ -101,8 +101,8 @@ public class TrainingSessionService
             return null;
         }
 
-        // Дистрактори — з усієї книжки, а не лише з глави: варіанти природніші,
-        // а маленька глава не лишає квіз без валідних дистракторів.
+        // Distractors come from the whole book, not just the chapter: the options read more
+        // naturally, and a small chapter does not leave the quiz without valid distractors.
         var pool = await _selection.GetDistractorPoolAsync(userId, dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
@@ -169,7 +169,7 @@ public class TrainingSessionService
     public Task<Training?> FindAsync(long trainingId, long userId) =>
         _dbContext.Trainings.FirstOrDefaultAsync(t => t.Id == trainingId && t.UserId == userId);
 
-    /// <summary>Слова сесії для фази карток — по одному разу, за алфавітом.</summary>
+    /// <summary>The session's words for the card phase — each once, alphabetically.</summary>
     public async Task<IReadOnlyList<WordPair>> GetBatchWordsAsync(long trainingId)
     {
         var wordIds = await _dbContext.TrainingQuestions
@@ -185,8 +185,8 @@ public class TrainingSessionService
     }
 
     /// <summary>
-    /// OptionIds — звичайний масив без зовнішнього ключа: слово могло зникнути після генерації
-    /// черги. Зниклі id пропускаємо, а правильну відповідь підставляємо назад, якщо її не лишилось.
+    /// OptionIds is a plain array with no foreign key: a word may have vanished after the queue
+    /// was generated. Missing ids are skipped, and the correct answer is put back if it is gone.
     /// </summary>
     public async Task<QuestionView> GetNextQuestionViewAsync(long trainingId)
     {
@@ -224,8 +224,8 @@ public class TrainingSessionService
             .Include(q => q.WordPair)
             .FirstOrDefaultAsync(q => q.Id == questionId);
 
-        // Питання може бути відсутнім (наприклад, слово видалили) або вже відповіданим —
-        // у Телеграмі стара клавіатура лишається натискабельною, тому обидва випадки — no-op.
+        // The question may be missing (say, the word was deleted) or already answered — in
+        // Telegram the old keyboard stays clickable, so both cases are a no-op.
         if (question == null || question.IsCorrect != null)
         {
             return null;
@@ -255,9 +255,9 @@ public class TrainingSessionService
         var userId = question.UserId;
         var wordPairId = question.WordPairId;
 
-        // Слово потрапляє в тренування лише з полиці «не знаю», тож перекласти його
-        // на «знаю» — це саме перекласти, а не покласти вдруге: полиці взаємовиключні
-        // (той самий інваріант, що й у WordSortingService.MarkAsync).
+        // A word only enters training from the "don't know" shelf, so moving it to "know"
+        // is exactly a move, not a second placement: the shelves are mutually exclusive
+        // (the same invariant WordSortingService.MarkAsync keeps).
         var unknown = await _dbContext.UnknownWords
             .FirstOrDefaultAsync(u => u.UserId == userId && u.WordPairId == wordPairId);
 
@@ -284,7 +284,7 @@ public class TrainingSessionService
 
         if (progress == null)
         {
-            // У новому батчі рядка прогресу для слова ще немає — його треба саме створити.
+            // In a new batch the word has no progress row yet — it has to be created here.
             progress = new WordProgress { UserId = userId, WordPairId = wordPairId, Box = LeitnerScheduler.MaxBox };
             _dbContext.WordProgresses.Add(progress);
         }
@@ -293,9 +293,9 @@ public class TrainingSessionService
         progress.DueAt = null;
         progress.LastSeenAt = nowUtc;
 
-        // Слово більше не бере участі в оцінці Leitner цієї сесії — знімаємо геть усі його
-        // питання, а не лише невідповідані, інакше FinishAsync побачить вже відповідане
-        // питання й переоцінить щойно закріплене слово.
+        // The word no longer takes part in this session's Leitner grading — drop all of its
+        // questions, not just the unanswered ones, otherwise FinishAsync would see an answered
+        // question and re-grade a word that was just fixed.
         var pending = await _dbContext.TrainingQuestions
             .Where(q => q.TrainingId == question.TrainingId && q.WordPairId == wordPairId)
             .ToListAsync();
@@ -319,7 +319,7 @@ public class TrainingSessionService
 
         var word = question.WordPair;
 
-        // Каскад налаштований лише на DictionaryWords, решту зносимо явно.
+        // Cascade is configured only on DictionaryWords; the rest is deleted explicitly.
         _dbContext.KnownWords.RemoveRange(_dbContext.KnownWords.Where(k => k.WordPairId == word.Id));
         _dbContext.UnknownWords.RemoveRange(_dbContext.UnknownWords.Where(u => u.WordPairId == word.Id));
         _dbContext.WordProgresses.RemoveRange(_dbContext.WordProgresses.Where(p => p.WordPairId == word.Id));
@@ -340,9 +340,9 @@ public class TrainingSessionService
             .Where(q => q.TrainingId == trainingId && q.IsCorrect != null)
             .ToListAsync();
 
-        // Сесію можна довести до підсумку повторно: у Телеграмі стара клавіатура лишається
-        // натискабельною, тож подвійний клік по останній відповіді знову веде хендлер сюди.
-        // Удруге лише перечитуємо збережений стан, не оцінюючи наново.
+        // A session can be brought to its summary twice: in Telegram the old keyboard stays
+        // clickable, so a double click on the last answer leads the handler here again.
+        // The second time only re-reads the stored state without grading anew.
         var alreadyFinished = training.FinishedAt != null;
 
         var results = new List<WordResult>();
@@ -368,9 +368,9 @@ public class TrainingSessionService
                 continue;
             }
 
-            // Дві живі сесії можуть містити те саме слово: стара клавіатура лишається натискабельною,
-            // а GetDueWordsAsync щоразу віддає той самий набір прострочених слів. Оцінюємо слово рівно
-            // один раз — якщо його вже закріплено або вже оцінено сесією, що стартувала пізніше за цю.
+            // Two live sessions can hold the same word: the old keyboard stays clickable, and
+            // GetDueWordsAsync returns the same set of due words every time. Grade the word exactly
+            // once — skip it if it is already fixed or already graded by a session started after this one.
             if (progress != null && (progress.IsLearned || progress.LastSeenAt > training.CreatedAt))
             {
                 results.Add(new WordResult(
@@ -392,7 +392,7 @@ public class TrainingSessionService
                 _dbContext.WordProgresses.Add(progress);
             }
 
-            // Оцінка на агрегаті сесії, а не після кожної відповіді.
+            // Grading on the session's aggregate, not after every answer.
             var outcome = LeitnerScheduler.Grade(progress.Box, correct == total, nowUtc);
 
             progress.Box = outcome.Box;
@@ -415,8 +415,8 @@ public class TrainingSessionService
         var totalAnswers = answered.Count;
         var correctAnswers = answered.Count(q => q.IsCorrect == true);
 
-        // Знаменник — фактично відповідані питання: слова, зняті кнопками,
-        // зменшують і чисельник, і знаменник.
+        // The denominator is the questions actually answered: words removed via the
+        // buttons shrink both the numerator and the denominator.
         var ratio = totalAnswers == 0 ? 0d : (double)correctAnswers / totalAnswers;
 
         return new TrainingSummary(correctAnswers, totalAnswers, ratio, totalAnswers > 0 && ratio >= PassThreshold, results);

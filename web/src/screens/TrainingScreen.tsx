@@ -12,7 +12,7 @@ interface Props {
   dictionaryName: string
   scopeTitle: string
   chapterIds: number[] | null
-  /** null для повторення — тоді «Ще один батч» не показується. */
+  /** null for a review — then "One more batch" is not shown. */
   batchSize: number | null
   started: TrainingStarted
   onBack: () => void
@@ -20,8 +20,8 @@ interface Props {
 
 export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapterIds, batchSize, started, onBack }: Props) {
   const backLabel = dictionaryId === null ? 'Home' : dictionaryName
-  // Сесія живе тут, а не в маршруті: «Повторити помилки» та «Ще один батч» починають
-  // нову сесію на місці, без стрибка по екранах.
+  // The session lives here, not in the route: "Retry mistakes" and "One more batch" start
+  // a new session in place, without jumping between screens.
   const [session, setSession] = useState(started)
   // Every mode opens on the word list: a review's words may be long forgotten, and
   // Enter skips the list at once for anyone who wants pure recall.
@@ -42,8 +42,8 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
       const n = await api.nextQuestion(session.trainingId)
 
       if (n.question === null) {
-        // Не лишаємо нотатку («Знаю» / «більше не з’явиться») з попереднього питання —
-        // вона стосувалась картки квізу, а не екрана підсумків.
+        // Do not keep the note ("Know" / "won't show up again") from the previous question —
+        // it referred to the quiz card, not the summary screen.
         setNotice(null)
         setSummary(await api.finish(session.trainingId))
         setPhase('summary')
@@ -71,19 +71,19 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
     setError(null)
   }
 
-  // Лише перемикає фазу: перше питання підтягне ефект нижче — так «Почати квіз»
-  // і старт повторення ідуть одним шляхом і не роблять подвійного запиту.
+  // Only switches the phase: the effect below fetches the first question — so "Start quiz"
+  // and starting a review take one path and do not double the request.
   const startQuiz = useCallback(() => setPhase('quiz'), [])
 
-  // Той самий ефект підвантажує перше питання після «Почати квіз» і після перезапуску сесії.
+  // The same effect loads the first question after "Start quiz" and after a session restart.
   useEffect(() => {
     if (phase === 'quiz' && next === null && summary === null) {
       void Promise.resolve().then(() => loadNext())
     }
   }, [phase, next, summary, loadNext])
 
-  // Опції стають disabled одразу після відповіді, тож фокус з обраної кнопки випадає на
-  // <body>; переносимо його на «Далі» — саме туди веде наступна клавіатурна дія.
+  // The options become disabled right after the answer, so focus falls off the chosen button
+  // onto <body>; move it to "Next" — that is where the next keyboard action goes.
   useEffect(() => {
     if (answer) {
       nextButtonRef.current?.focus()
@@ -103,7 +103,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
       try {
         const result = await api.answer(session.trainingId, next.question.id, wordPairId)
 
-        // 204: питання вже відповідане або зникло — нічого підсвічувати, йдемо далі.
+        // 204: the question is already answered or gone — nothing to highlight, move on.
         if (!result) {
           await loadNext()
           return
@@ -192,8 +192,8 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      // preventDefault() лише коли гілка реально щось робить — інакше в реальному браузері
-      // (на відміну від jsdom) воно скасовує рідну активацію фокусованої кнопки клавішею Enter.
+      // preventDefault() only when the branch actually does something — otherwise in a real browser
+      // (unlike jsdom) it cancels the native Enter activation of the focused button.
       let handled = true
 
       if (phase === 'cards' && event.key === 'Enter') {

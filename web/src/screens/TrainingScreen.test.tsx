@@ -158,7 +158,7 @@ describe('TrainingScreen — quiz', () => {
     const { container } = await openQuiz()
 
     const options = [...container.querySelectorAll<HTMLButtonElement>('.option')]
-    await click(options[0]) // силос — неправильно
+    await click(options[0]) // силос — wrong
     await flush()
 
     expect(apiMock.answer).toHaveBeenCalledWith(5, 100, 2)
@@ -276,7 +276,7 @@ describe('TrainingScreen — summary', () => {
     const { container: review } = await openSummary()
     expect(buttons(review).find((b) => b.textContent?.includes('Another batch'))).toBeUndefined()
 
-    // Новий батч відкривається на картках — до підсумку треба пройти «Почати квіз».
+    // A new batch opens on the cards — reaching the summary means going through "Start quiz".
     const { container } = await render(screen())
     await click(buttons(container).find((b) => b.textContent?.includes('Start quiz'))!)
     await flush()

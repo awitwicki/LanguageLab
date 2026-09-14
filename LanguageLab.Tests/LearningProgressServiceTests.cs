@@ -32,21 +32,21 @@ public class LearningProgressServiceTests
         };
 
     /// <summary>
-    /// Книжка з трьох глав, по одному представнику кожного правила:
-    ///  1 silo     — «не знаю», без прогресу           → не почато (глави 1 і 2)
-    ///  2 abide    — «не знаю», бокс 2                  → бокс 2    (глава 1)
-    ///  3 cleaning — «не знаю», бокс 4                  → бокс 4    (глава 1)
-    ///  4 holston  — «знаю» + прогрес IsLearned         → вивчено   (глава 2)
-    ///  5 jahns    — «не знаю», без перекладу           → поза множиною (глава 2)
-    ///  6 solo     — «не знаю» + виключене, бокс 1      → поза множиною (глава 2)
-    ///  7 able     — «знаю», без прогресу               → поза множиною (глава 1)
-    ///  8 wool     — не сортоване                       → поза множиною (глава 3 — лише воно)
-    ///  9 dune     — «не знаю», але в іншому словнику   → поза скоупом
-    /// 10 lift     — «не знаю», бокс 5, ще не вивчене   → бокс 5    (глава 2)
-    /// 11 abyss    — «не знаю», без прогресу            → не почато (глава 1)
-    /// Книжка: не почато 2, бокси [0,1,0,1,1], вивчено 1, разом 6.
-    /// Глава 1: не почато 2, бокси [0,1,0,1,0], вивчено 0, разом 4.
-    /// Глава 2: не почато 1, бокси [0,0,0,0,1], вивчено 1, разом 3.
+    /// A three-chapter book with one representative of every rule:
+    ///  1 silo     — "don't know", no progress            → not started (chapters 1 and 2)
+    ///  2 abide    — "don't know", box 2                  → box 2       (chapter 1)
+    ///  3 cleaning — "don't know", box 4                  → box 4       (chapter 1)
+    ///  4 holston  — "know" + IsLearned progress          → learned     (chapter 2)
+    ///  5 jahns    — "don't know", no translation         → outside the set (chapter 2)
+    ///  6 solo     — "don't know" + excluded, box 1       → outside the set (chapter 2)
+    ///  7 able     — "know", no progress                  → outside the set (chapter 1)
+    ///  8 wool     — not sorted                           → outside the set (chapter 3 — its only word)
+    ///  9 dune     — "don't know", but in another dictionary → out of scope
+    /// 10 lift     — "don't know", box 5, not learned yet → box 5       (chapter 2)
+    /// 11 abyss    — "don't know", no progress            → not started (chapter 1)
+    /// Book: not started 2, boxes [0,1,0,1,1], learned 1, total 6.
+    /// Chapter 1: not started 2, boxes [0,1,0,1,0], learned 0, total 4.
+    /// Chapter 2: not started 1, boxes [0,0,0,0,1], learned 1, total 3.
     /// </summary>
     private static async Task<ApplicationDbContext> ArrangeAsync()
     {
@@ -161,8 +161,8 @@ public class LearningProgressServiceTests
     }
 
     /// <summary>
-    /// «Не почато» і «до вивчення» — одне число: сірий сегмент шкали має збігатися
-    /// з підрядком глави. Якщо предикати розійдуться — падає саме цей тест.
+    /// "Not started" and "to learn" are one number: the scale's grey segment must match
+    /// the chapter's subtitle. If the predicates ever diverge, this is the test that fails.
     /// </summary>
     [Fact]
     public async Task NotStarted_equals_CountLearnable_for_every_scope()

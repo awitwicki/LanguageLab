@@ -10,7 +10,7 @@
   gap: 12px;
 }
 
-/* Той самий трек, що в ProgressBar; «не почато» — прозорий сегмент, крізь який видно трек. */
+/* The same track as ProgressBar; "not started" is a transparent segment the track shows through. */
 .leitner-track {
   display: flex;
   height: 6px;
@@ -30,7 +30,7 @@
   height: 100%;
 }
 
-/* Градієнт одного акценту: чим вищий бокс, тим густіший. Мішання з --surface дає непрозорі кольори в обох темах. */
+/* A single-accent gradient: the higher the box, the denser. Mixing with --surface gives opaque colors in both themes. */
 .leitner-learned {
   background: var(--accent);
 }

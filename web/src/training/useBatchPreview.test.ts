@@ -7,14 +7,14 @@ const ids = (rows: Row[]) => rows.map((r) => r.candidate.wordPairId)
 const struck = (rows: Row[]) => rows.filter((r) => r.struck).map((r) => r.candidate.wordPairId)
 
 describe('reconcileRows', () => {
-  it('перший рендер: перші batchSize кандидатів, ніхто не викреслений', () => {
+  it('first render: the first batchSize candidates, none struck', () => {
     const rows = reconcileRows([], [c(1), c(2), c(3), c(4)], 3, new Set())
 
     expect(ids(rows)).toEqual([1, 2, 3])
     expect(struck(rows)).toEqual([])
   })
 
-  it('викреслене слово лишається на місці, заміна дописується знизу', () => {
+  it('a struck word stays in place, the replacement is appended at the bottom', () => {
     const prev = reconcileRows([], [c(1), c(2), c(3), c(4), c(5)], 3, new Set())
 
     const rows = reconcileRows(prev, [c(1), c(3), c(4), c(5)], 3, new Set([2]))
@@ -23,7 +23,7 @@ describe('reconcileRows', () => {
     expect(struck(rows)).toEqual([2])
   })
 
-  it('повернення знімає викреслення; зайвий активний знизу випадає', () => {
+  it('bringing back clears the strike; the surplus active row at the bottom drops', () => {
     const prev: Row[] = [
       { candidate: c(1), struck: false },
       { candidate: c(2), struck: true },
@@ -37,7 +37,7 @@ describe('reconcileRows', () => {
     expect(struck(rows)).toEqual([])
   })
 
-  it('менший розмір батча обрізає активні, але не викреслені', () => {
+  it('a smaller batch size trims active rows but not struck ones', () => {
     const prev: Row[] = [
       { candidate: c(1), struck: false },
       { candidate: c(2), struck: true },
@@ -51,7 +51,7 @@ describe('reconcileRows', () => {
     expect(struck(rows)).toEqual([2])
   })
 
-  it('більший розмір батча дописує нових знизу, порядок старих не рухає', () => {
+  it('a bigger batch size appends new rows at the bottom without reordering the old ones', () => {
     const prev = reconcileRows([], [c(1), c(2), c(3), c(4), c(5)], 2, new Set())
 
     const rows = reconcileRows(prev, [c(1), c(2), c(3), c(4), c(5)], 4, new Set())

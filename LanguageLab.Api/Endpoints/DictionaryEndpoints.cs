@@ -177,8 +177,8 @@ public static class DictionaryEndpoints
                 return Results.NotFound();
             }
 
-            // Каскади знесуть Chapters, ChapterWords і DictionaryWords.
-            // WordPair і полиці юзера лишаються — вони глобальні.
+            // Cascades take down Chapters, ChapterWords and DictionaryWords.
+            // WordPair and the user's shelves stay — they are global.
             db.Dictionaries.Remove(dictionary);
             await db.SaveChangesAsync();
 

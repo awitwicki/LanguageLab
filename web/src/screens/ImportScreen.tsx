@@ -23,12 +23,12 @@ export function ImportScreen({ onImported }: Props) {
   const worker = useRef<Worker | null>(null)
   const pending = useRef<((response: WorkerResponse) => void) | null>(null)
 
-  // Прев'ю глав рахується з уже розібраного дерева, тому перемикання
-  // рівня вкладеності миттєве — файл вдруге не парситься.
+  // The chapter preview is computed from the already parsed tree, so switching
+  // the nesting level is instant — the file is not parsed a second time.
   const chapters = useMemo(() => flattenChapters(sections, mode), [sections, mode])
 
-  // Один воркер на весь час екрана: інакше кожне перемикання рівня
-  // пересилало б дерево секцій у новий інстанс.
+  // One worker for the screen's whole lifetime: otherwise every level switch
+  // would ship the section tree to a fresh instance.
   useEffect(() => {
     const instance = new Worker(new URL('../worker/parseBook.worker.ts', import.meta.url), {
       type: 'module',
@@ -40,8 +40,8 @@ export function ImportScreen({ onImported }: Props) {
     return () => instance.terminate()
   }, [])
 
-  // Слот один, бо UI не дає запустити дві операції одночасно:
-  // кнопки заблоковані, поки стадія не повернулась у 'preview'.
+  // A single slot, because the UI does not allow two operations at once:
+  // the buttons are disabled until the stage returns to 'preview'.
   const ask = useCallback(
     (request: WorkerRequest, transfer: Transferable[] = []) =>
       new Promise<WorkerResponse>((resolve) => {
@@ -51,10 +51,10 @@ export function ImportScreen({ onImported }: Props) {
     [],
   )
 
-  // Декодування й розбір XML ідуть тут, у головному потоці, а не у воркері:
-  // їм потрібен DOMParser, якого немає у Worker-скоупі в цьому браузері.
-  // Вони швидкі — нативний розбір XML багатомегабайтного файлу займає
-  // набагато менше секунди, тож вкладка не підвисає.
+  // Decoding and XML parsing happen here, on the main thread, not in the worker:
+  // they need DOMParser, which the Worker scope lacks in this browser.
+  // They are fast — native XML parsing of a multi-megabyte file takes far
+  // less than a second, so the tab does not freeze.
   const onFile = useCallback((file: File) => {
     setStage('parsing')
     setError(null)
@@ -79,8 +79,8 @@ export function ImportScreen({ onImported }: Props) {
   const onUpload = useCallback(async () => {
     setError(null)
 
-    // Лематизація йде у воркері й тільки тут — після того, як обрано рівень
-    // глав. Робити її на кожне перемикання рівня було б нестерпно повільно.
+    // Lemmatization runs in the worker and only here — after the chapter level
+    // is chosen. Doing it on every level switch would be unbearably slow.
     setStage('aggregating')
     const response = await ask({ kind: 'aggregate', sections, mode })
 

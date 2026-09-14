@@ -17,16 +17,16 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
   const [total, setTotal] = useState(0)
   const [sorted, setSorted] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  // Поки перша черга не приїхала, екран не має казати «усе посортовано»: total=0 — це ще не порожньо.
+  // Until the first queue arrives the screen must not say "all sorted": total=0 is not yet empty.
   const [loaded, setLoaded] = useState(false)
 
-  // Одна активна відправка за раз. Це не перестраховка: undo на сервері знімає
-  // «найсвіжішу позначку», і якщо mark ще летить — undo зніме не те слово.
+  // One active submission at a time. Not over-caution: undo on the server removes
+  // "the most recent mark", and if a mark is still in flight, undo removes the wrong word.
   const chain = useRef<Promise<unknown>>(Promise.resolve())
 
-  // Слова, чия позначка вже накладена оптимістично, але сервер її ще не підтвердив.
-  // Без цього refill (він приходить із серверною відповіддю) відкочував би такі
-  // слова назад у буфер і в лічильник — вони ж у тій відповіді ще не враховані.
+  // Words whose mark is applied optimistically but not yet confirmed by the server.
+  // Without this a refill (it comes with the server's response) would roll such words
+  // back into the buffer and the counter — they are not counted in that response yet.
   const pendingIds = useRef<Set<number>>(new Set())
 
   const enqueue = useCallback(<T,>(work: () => Promise<T>): Promise<T> => {
@@ -38,9 +38,9 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
   const refill = useCallback(async () => {
     const queue = await api.getQueue(dictionaryId, chapterIds, BUFFER_SIZE)
 
-    // Слова «в польоті» сервер ще вважає непосортованими й віддає їх знову —
-    // локальний стан тут свіжіший, тож викидаємо їх із відповіді, а їхні
-    // позначки додаємо назад у лічильник, щоб прогрес не стрибав назад.
+    // Words "in flight" the server still considers unsorted and returns again —
+    // the local state is fresher here, so drop them from the response and add
+    // their marks back into the counter so the progress does not jump backwards.
     setBuffer(queue.words.filter((w) => !pendingIds.current.has(w.wordPairId)))
     setTotal(queue.total)
     setSorted(queue.sorted + pendingIds.current.size)
@@ -65,7 +65,7 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
         return
       }
 
-      // Оптимістично: картка міняється зараз, запит летить у фоні.
+      // Optimistic: the card changes now, the request flies in the background.
       pendingIds.current.add(word.wordPairId)
       setBuffer((current) => current.slice(1))
       setSorted((current) => current + 1)
@@ -80,9 +80,9 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
         try {
           await api.mark(word.wordPairId, status)
         } finally {
-          // Знімаємо «в польоті» саме тут, до refill: щойно сервер відповів,
-          // слово вже враховане в його queue.sorted, і рахувати його вдруге
-          // (як pending) означало б завищити прогрес.
+          // Clear "in flight" right here, before the refill: once the server answered,
+          // the word is already counted in its queue.sorted, and counting it a second
+          // time (as pending) would inflate the progress.
           pendingIds.current.delete(word.wordPairId)
         }
 
@@ -90,9 +90,9 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
           await refill()
         }
       }).catch((e) => {
-        // Відкочуємо тільки це слово, а не знімок усього стану: наступні позначки
-        // вже наклали свій оптимістичний стан, їхні запити ще летять, і повний
-        // відкат стер би їх разом із цією невдачею.
+        // Roll back only this word, not a snapshot of the whole state: later marks
+        // have already applied their optimistic state, their requests are still in
+        // flight, and a full rollback would wipe them along with this failure.
         setBuffer((current) => [word, ...current])
         setSorted((current) => Math.max(0, current - 1))
 
@@ -116,8 +116,8 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
         return
       }
 
-      // Повернуте слово стає поточною карткою — так завжди видно, що саме
-      // відкотилось, навіть якщо це позначка з попередньої сесії.
+      // The returned word becomes the current card — so it is always visible what
+      // exactly was rolled back, even if it is a mark from a previous session.
       setBuffer((current) => [
         { wordPairId: undone.wordPairId, word: undone.word, translation: undone.translation, frequency: 0 },
         ...current,

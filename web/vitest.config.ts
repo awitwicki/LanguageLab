@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    // DOMParser потрібен chapters.ts; у чистому node його немає.
+    // chapters.ts needs DOMParser; plain node does not have one.
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
   },

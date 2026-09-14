@@ -13,7 +13,7 @@
   color: var(--text-2);
 }
 
-/* Сегмент-контрол: одна доріжка з трьома радіо-кнопками, активна — «випливає» поверхнею. */
+/* Segmented control: one track with three radio buttons, the active one "floats" up as a surface. */
 .segment {
   display: inline-flex;
   padding: 3px;
@@ -43,7 +43,7 @@
   color: var(--text);
 }
 
-/* Шкала й табличка — на всю ширину колонки, решта елементів лишаються start. */
+/* The scale and the table span the column's full width; the other elements stay at start. */
 .training-start > .leitner,
 .training-start > .batch-preview {
   justify-self: stretch;
@@ -108,7 +108,7 @@
   line-height: 1;
 }
 
-/* Контейнер обрізає все за межами (overflow: hidden) — кільце фокуса малюємо всередину. */
+/* The container clips everything outside (overflow: hidden) — the focus ring is drawn inward. */
 .batch-row .btn:focus-visible {
   outline-offset: -2px;
 }

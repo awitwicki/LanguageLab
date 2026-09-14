@@ -1,7 +1,7 @@
 export interface SectionNode {
   title: string
   depth: number
-  /** Текст, що належить саме цій секції, без тексту вкладених. */
+  /** The text belonging to this section itself, without the nested ones. */
   ownText: string
   children: SectionNode[]
 }
@@ -17,13 +17,13 @@ export interface RawChapter {
   text: string
 }
 
-/** 'leaf' — глава це секція без вкладених; число — фіксована глибина, 1-based. */
+/** 'leaf' — a chapter is a section with no nested ones; a number is a fixed depth, 1-based. */
 export type ChapterMode = 'leaf' | number
 
 /**
- * Розбирає fb2 у дерево секцій один раз. Перемикання рівня вкладеності на
- * екрані прев'ю потім працює через flattenChapters по цьому ж дереву,
- * без повторного парсингу файлу.
+ * Parses the fb2 into a section tree once. Switching the nesting level on
+ * the preview screen then works through flattenChapters over that same tree,
+ * without parsing the file again.
  */
 export function parseBook(xml: string): ParsedBook {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
@@ -33,7 +33,7 @@ export function parseBook(xml: string): ParsedBook {
   const sections: SectionNode[] = []
 
   for (const body of Array.from(doc.getElementsByTagName('body'))) {
-    // Виноски — не текст книжки: їх номери й службові хвости дали б сміттєві «слова».
+    // Footnotes are not the book's text: their numbers and boilerplate would yield garbage "words".
     if (body.getAttribute('name') === 'notes') {
       continue
     }
@@ -76,9 +76,9 @@ function toNode(section: Element, depth: number): SectionNode {
   const ownTextParts: string[] = []
 
   for (const child of Array.from(section.children)) {
-    // <binary> сюди не потрапляє — він лежить поза <body>. Але заголовок і
-    // вкладені секції виключаємо явно: заголовок дасть номер глави як «слово»,
-    // а вкладені зберуться окремо.
+    // <binary> never gets here — it sits outside <body>. But the title and the
+    // nested sections are excluded explicitly: the title would yield the chapter
+    // number as a "word", and the nested ones are collected separately.
     if (child.tagName === 'section' || child.tagName === 'title') {
       continue
     }
@@ -94,7 +94,7 @@ function toNode(section: Element, depth: number): SectionNode {
   }
 }
 
-/** Текст секції разом з усіма вкладеними — потрібен, коли глави злипаються в одну. */
+/** The section's text together with all nested ones — needed when chapters merge into one. */
 function collectText(node: SectionNode): string {
   return [node.ownText, ...node.children.map(collectText)].join(' ').trim()
 }

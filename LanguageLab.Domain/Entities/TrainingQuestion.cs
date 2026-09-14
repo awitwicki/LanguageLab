@@ -4,8 +4,8 @@ using LanguageLab.Domain.Training;
 namespace LanguageLab.Domain.Entities;
 
 /// <summary>
-/// Елемент наперед згенерованої черги питань сесії. Існує до того, як юзер відповів:
-/// IsCorrect == null означає «ще не відповідав».
+/// An item of a session's pre-generated question queue. Exists before the user answers:
+/// IsCorrect == null means "not answered yet".
 /// </summary>
 public class TrainingQuestion : BaseEntity
 {
@@ -23,12 +23,12 @@ public class TrainingQuestion : BaseEntity
     [ForeignKey(nameof(Training))]
     public long TrainingId { get; set; }
 
-    /// <summary>Позиція в черзі, 0-based.</summary>
+    /// <summary>Position in the queue, 0-based.</summary>
     public int Order { get; set; }
 
     public QuestionDirection Direction { get; set; }
 
-    /// <summary>Id WordPair у порядку показу. Мапиться на bigint[] Postgres.</summary>
+    /// <summary>WordPair ids in display order. Maps to a Postgres bigint[].</summary>
     public List<long> OptionIds { get; set; } = [];
 
     public long? PickedWordPairId { get; set; }

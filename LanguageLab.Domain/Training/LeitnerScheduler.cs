@@ -1,15 +1,15 @@
 namespace LanguageLab.Domain.Training;
 
 /// <summary>
-/// Класичний Leitner на 5 боксів. Чистий: час подається ззовні, стану немає.
-/// Оцінка застосовується раз на сесію по слову, на агрегаті всіх відповідей на нього.
+/// Classic five-box Leitner. Pure: time comes from outside, there is no state.
+/// Grading applies once per session per word, on the aggregate of all answers to it.
 /// </summary>
 public static class LeitnerScheduler
 {
     public const int MinBox = 1;
     public const int MaxBox = 5;
 
-    /// <summary>Скільки днів чекати до наступного показу. Індекс = Box - 1.</summary>
+    /// <summary>How many days to wait before the next showing. Index = Box - 1.</summary>
     public static readonly IReadOnlyList<int> IntervalDays = Array.AsReadOnly(new[] { 1, 3, 7, 14, 30 });
 
     public static LeitnerOutcome Grade(int box, bool allCorrect, DateTime nowUtc)
@@ -17,7 +17,7 @@ public static class LeitnerScheduler
         if (box is < MinBox or > MaxBox)
         {
             throw new ArgumentOutOfRangeException(
-                nameof(box), box, $"Box має бути в межах {MinBox}..{MaxBox}.");
+                nameof(box), box, $"Box must be within {MinBox}..{MaxBox}.");
         }
 
         if (!allCorrect)

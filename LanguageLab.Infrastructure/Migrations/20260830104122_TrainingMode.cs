@@ -81,8 +81,8 @@ namespace LanguageLab.Infrastructure.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            // Переносимо наявні зв'язки словник→слово перед тим, як колонка зникне.
-            // На порожній базі це no-op; на будь-якій іншій — рятує всі членства.
+            // Carry the existing dictionary→word links over before the column disappears.
+            // On an empty database this is a no-op; on any other it rescues every membership.
             migrationBuilder.Sql(
                 """
                 INSERT INTO "DictionaryWords" ("DictionaryId", "WordPairId")

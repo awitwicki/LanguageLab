@@ -17,7 +17,7 @@ public class TrainingSessionServiceTests
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options);
 
-    /// <summary>Словник із 12 слів, усі позначені юзером як «хочу вчити».</summary>
+    /// <summary>A 12-word dictionary, every word marked by the user as "want to learn".</summary>
     private static async Task<ApplicationDbContext> ArrangeAsync()
     {
         var db = NewContext();
@@ -56,8 +56,8 @@ public class TrainingSessionServiceTests
 
         while (await service.GetNextQuestionAsync(trainingId) is { } question)
         {
-            // Кожне «провальне» слово помиляємо рівно один раз — цього досить,
-            // щоб воно не порахувалося як allCorrect.
+            // Each "failing" word is answered wrong exactly once — enough for it
+            // not to count as allCorrect.
             var shouldFail = wordIdsToFail.Contains(question.WordPairId) && failed.Add(question.WordPairId);
 
             var picked = shouldFail
@@ -154,7 +154,7 @@ public class TrainingSessionServiceTests
         var question = await service.GetNextQuestionAsync(training!.Id);
         var wordPairId = question!.WordPairId;
 
-        // У тренування слово потрапляє тільки з полиці «не знаю» — тобто рядок там є.
+        // A word enters training only from the "don't know" shelf — so the row is there.
         Assert.True(await db.UnknownWords.AnyAsync(u => u.UserId == UserId && u.WordPairId == wordPairId));
 
         await service.MarkKnownAsync(question.Id, Now);
@@ -360,8 +360,8 @@ public class TrainingSessionServiceTests
             .ToListAsync();
         Assert.Equal(5, before.Count);
 
-        // Пізніший nowUtc, щоб виявити регресію: якщо захист не спрацює, DueAt зсунеться,
-        // а тест з тим самим часом міг би випадково лишитися зеленим.
+        // A later nowUtc to catch a regression: if the guard fails, DueAt shifts, whereas
+        // a test with the same time could stay green by accident.
         await service.FinishAsync(training.Id, Now.AddDays(10));
 
         var after = await db.WordProgresses
@@ -393,8 +393,8 @@ public class TrainingSessionServiceTests
         var wrongPick = first.OptionIds.First(id => id != wordPairId);
         await service.AnswerAsync(first.Id, wrongPick, Now);
 
-        // Черга навмисно не ставить те саме слово двічі підряд — тому беремо саме друге
-        // питання цього слова за Order, а не покладаємося на GetNextQuestionAsync.
+        // The queue deliberately never places the same word twice in a row — so take this
+        // word's second question by Order rather than relying on GetNextQuestionAsync.
         var questionsForWord = await db.TrainingQuestions
             .Where(q => q.TrainingId == training.Id && q.WordPairId == wordPairId)
             .OrderBy(q => q.Order)
@@ -421,15 +421,15 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        // Гістограма навмисно нерівномірна (2/1/1/0/1), щоб зсув індексу на одну позицію
-        // (box N потрапив би в комірку N замість N-1) провалив тест.
+        // The histogram is deliberately uneven (2/1/1/0/1) so that an off-by-one index
+        // (box N landing in cell N instead of N-1) fails the test.
         db.WordProgresses.AddRange(
             new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 1, CorrectCount = 2, WrongCount = 1, LastSeenAt = Now },
             new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 1, CorrectCount = 1, WrongCount = 0, LastSeenAt = Now },
             new WordProgress { Id = 3, UserId = UserId, WordPairId = 3, Box = 2, CorrectCount = 3, WrongCount = 1, DueAt = Now.AddDays(-1), LastSeenAt = Now },
             new WordProgress { Id = 4, UserId = UserId, WordPairId = 4, Box = 3, CorrectCount = 0, WrongCount = 2, DueAt = Now.AddDays(5), LastSeenAt = Now },
             new WordProgress { Id = 5, UserId = UserId, WordPairId = 5, Box = 5, CorrectCount = 4, WrongCount = 0, LastSeenAt = Now },
-            // Вивчене слово: не входить у гістограму боксів (IsLearned == true), лише в Learned.
+            // A learned word: not in the box histogram (IsLearned == true), only in Learned.
             new WordProgress { Id = 6, UserId = UserId, WordPairId = 6, Box = 5, IsLearned = true, CorrectCount = 5, WrongCount = 1, LastSeenAt = Now });
 
         // The fixture starts with all 12 words on the "don't know" shelf; shelves are
@@ -469,8 +469,8 @@ public class TrainingSessionServiceTests
 
         var service = Service(db);
 
-        // Обидві сесії стартують до того, як хоч одна завершиться — тому обидві бачать
-        // однаковий набір прострочених слів.
+        // Both sessions start before either finishes — so both see the same set of
+        // due words.
         var sessionA = await service.StartReviewAsync(UserId, Now.AddMinutes(1));
         var sessionB = await service.StartReviewAsync(UserId, Now.AddMinutes(2));
 
@@ -493,8 +493,8 @@ public class TrainingSessionServiceTests
         var progress1 = await db.WordProgresses.SingleAsync(p => p.WordPairId == 1);
         var progress2 = await db.WordProgresses.SingleAsync(p => p.WordPairId == 2);
 
-        // Кожне слово мало просунутися рівно на один бокс і отримати рівно один
-        // додатковий правильний залік — а не подвоєно другою (стільки ж) сесією.
+        // Each word should have advanced exactly one box and gained exactly one extra
+        // correct answer — not doubled by the second (identical) session.
         Assert.Equal(3, progress1.Box);
         Assert.Equal(2, progress1.CorrectCount);
         Assert.Equal(4, progress2.Box);
@@ -536,9 +536,9 @@ public class TrainingSessionServiceTests
     [Fact]
     public async Task Retry_StillRegradesAfterTheGuard()
     {
-        // Єдиний нерухомий Now скрізь — регресійний тест саме на межу `>` проти `>=`:
-        // якщо охорону послабити до `>=`, LastSeenAt (== Now після першого FinishAsync)
-        // помилково «затулить» CreatedAt повторної сесії (теж == Now), і бокси не зрушать.
+        // A single frozen Now everywhere — a regression test on the `>` versus `>=` boundary:
+        // if the guard is loosened to `>=`, LastSeenAt (== Now after the first FinishAsync)
+        // wrongly "covers" the review session's CreatedAt (also == Now), and the boxes do not move.
         await using var db = await ArrangeAsync();
         var service = Service(db);
         var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
@@ -604,8 +604,8 @@ public class TrainingSessionServiceTests
 
         var afterReview = await db.WordProgresses.SingleAsync(p => p.WordPairId == wordId);
 
-        // += має накопичувати через сесії, а не перезаписувати: якби FinishAsync писав
-        // "=" замість "+=", тут було б знову NewBatchRepeats, а не сума обох сесій.
+        // += must accumulate across sessions, not overwrite: if FinishAsync wrote "="
+        // instead of "+=", this would be NewBatchRepeats again, not the sum of both sessions.
         Assert.Equal(TrainingSessionService.NewBatchRepeats + TrainingSessionService.ReviewRepeats, afterReview.CorrectCount);
         Assert.Equal(0, afterReview.WrongCount);
     }
@@ -692,7 +692,7 @@ public class TrainingSessionServiceTests
         await service.MarkKnownAsync(view.Question!.Id, Now);
 
         var next = await service.GetNextQuestionViewAsync(training.Id);
-        // Слово стоїть у черзі двічі — обидва його питання зникли.
+        // The word is in the queue twice — both of its questions are gone.
         Assert.Equal(8, next.Total);
         Assert.Equal(0, next.Answered);
     }
@@ -821,7 +821,7 @@ public class TrainingSessionServiceTests
         Assert.Equal(new long[] { 1, 2 }, wordIds.OrderBy(id => id));
     }
 
-    /// <summary>Без явних id батч має бути рівно тим, що показало б превью — інакше екран старту бреше.</summary>
+    /// <summary>Without explicit ids the batch must be exactly what the preview would show — otherwise the start screen lies.</summary>
     [Fact]
     public async Task StartNewBatch_WithoutIds_EqualsTopCandidates()
     {

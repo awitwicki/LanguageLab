@@ -35,7 +35,7 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
 
   useEffect(() => {
     let cancelled = false
-    // Скидаємо, щоб при перемиканні словника в сайдбарі не блимав попередній.
+    // Reset so the previous dictionary does not flash when switching in the sidebar.
     setDetail(null)
     setError(null)
     setReviewNotice(null)
@@ -65,7 +65,7 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
     try {
       const started = await api.startReview({ dictionaryId: id, chapterIds: chapter ? [chapter.id] : null })
 
-      // 204: між завантаженням екрана й кліком прострочені могли закритись іншою сесією.
+      // 204: another session may have closed the due words between loading the screen and the click.
       if (!started) {
         setReviewNotice('Nothing to review today.')
         return
@@ -177,7 +177,7 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
     return <p className="footnote">Loading…</p>
   }
 
-  // Смужка частоти — відносно лідера, щоб топ читався як гістограма, а не як таблиця.
+  // The frequency bar is relative to the leader, so the top reads as a histogram, not a table.
   const maxFrequency = detail.topWords[0]?.frequency ?? 1
   // The mini-list at the top: the same rows, only the starred ones, still in book order.
   const starred = detail.chapters.filter((c) => c.isStarred)

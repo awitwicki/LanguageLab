@@ -49,7 +49,7 @@ public class BookImportServiceTests
 
         var dictionary = await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId);
 
-        // abide, silo, cleaning — три унікальні, попри чотири рядки по главах.
+        // abide, silo, cleaning — three unique words despite four chapter rows.
         Assert.Equal(3, dictionary.WordsCount);
         Assert.Equal(3, result.TotalWords);
     }

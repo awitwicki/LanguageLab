@@ -3,7 +3,7 @@ using LanguageLab.Domain.Entities;
 namespace LanguageLab.Domain.Training;
 
 /// <summary>
-/// Будує чергу питань для однієї сесії. Чистий: увесь недетермінізм приходить у Random.
+/// Builds the question queue for one session. Pure: all non-determinism comes in through Random.
 /// </summary>
 public static class QuestionQueueBuilder
 {
@@ -22,7 +22,7 @@ public static class QuestionQueueBuilder
 
         if (repeats < 1)
         {
-            throw new ArgumentOutOfRangeException(nameof(repeats), repeats, "Повторів має бути щонайменше 1.");
+            throw new ArgumentOutOfRangeException(nameof(repeats), repeats, "There must be at least 1 repeat.");
         }
 
         if (targets.Count == 0)
@@ -39,7 +39,7 @@ public static class QuestionQueueBuilder
             {
                 DirectionPolicy.EnToUa => QuestionDirection.EnToUa,
                 DirectionPolicy.Random => rng.Next(2) == 0 ? QuestionDirection.EnToUa : QuestionDirection.UaToEn,
-                _ => throw new ArgumentOutOfRangeException(nameof(policy), policy, "Невідома політика напрямку.")
+                _ => throw new ArgumentOutOfRangeException(nameof(policy), policy, "Unknown direction policy.")
             };
 
             questions.Add(new PlannedQuestion(target.Id, direction, BuildOptions(target, distractorPool, rng)));
@@ -49,8 +49,8 @@ public static class QuestionQueueBuilder
     }
 
     /// <summary>
-    /// Розкладає слова так, щоб те саме слово не йшло двічі підряд: на кожному кроці
-    /// береться слово з найбільшим залишком повторів, окрім щойно поставленого.
+    /// Lays the words out so the same word never comes twice in a row: each step takes
+    /// the word with the most repeats left, except the one just placed.
     /// </summary>
     private static List<WordPair> BuildOrder(IReadOnlyList<WordPair> targets, int repeats, Random rng)
     {
@@ -88,7 +88,7 @@ public static class QuestionQueueBuilder
 
             if (candidates.Count == 0)
             {
-                // Лишилося тільки щойно поставлене слово — інакше чергу не заповнити.
+                // Only the word just placed is left — the queue cannot be filled otherwise.
                 for (var i = 0; i < targets.Count; i++)
                 {
                     if (left[i] > 0)
@@ -123,7 +123,7 @@ public static class QuestionQueueBuilder
                 continue;
             }
 
-            // Дистрактор із тим самим перекладом дав би дві правильні кнопки.
+            // A distractor with the same translation would make two correct buttons.
             if (string.Equals(candidate.Translation, target.Translation, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -140,7 +140,7 @@ public static class QuestionQueueBuilder
         if (valid.Count == 0)
         {
             throw new InvalidOperationException(
-                $"Немає жодного валідного дистрактора для слова '{target.Word}' (id {target.Id}).");
+                $"No valid distractor for the word '{target.Word}' (id {target.Id}).");
         }
 
         Shuffle(valid, rng);

@@ -6,8 +6,9 @@ using Microsoft.EntityFrameworkCore;
 namespace LanguageLab.Application.Services;
 
 /// <summary>
-/// Розклад слів скоупу по боксах Leitner. Boxes: індекс 0 = бокс 1, лише не вивчені слова;
-/// вивчені (IsLearned) — окремо в Learned. Total іде в JSON разом з усім — відсоток рахує клієнт.
+/// How a scope's words are spread across the Leitner boxes. Boxes: index 0 = box 1, unlearned
+/// words only; learned ones (IsLearned) sit apart in Learned. Total ships in the JSON with the
+/// rest — the client computes the percentage.
 /// </summary>
 public sealed record LearningProgress(int NotStarted, IReadOnlyList<int> Boxes, int Learned)
 {
@@ -17,10 +18,11 @@ public sealed record LearningProgress(int NotStarted, IReadOnlyList<int> Boxes, 
 }
 
 /// <summary>
-/// «Слова, які юзер вирішив вивчити» у скоупі: у словнику (і в котрійсь із заданих глав),
-/// з перекладом, не виключені, і або на полиці «не знаю», або вже з рядком WordProgress.
-/// NotStarted за побудовою дорівнює WordSelectionService.CountLearnableAsync того ж скоупу —
-/// той самий предикат мінус «уже має прогрес»; тест NotStarted_equals_CountLearnable пінить це.
+/// "Words the user decided to learn" within a scope: in the dictionary (and in one of the given
+/// chapters), translated, not excluded, and either on the "don't know" shelf or already holding
+/// a WordProgress row. By construction NotStarted equals WordSelectionService.CountLearnableAsync
+/// for the same scope — the same predicate minus "already has progress"; the
+/// NotStarted_equals_CountLearnable test pins that.
 /// </summary>
 public class LearningProgressService
 {
@@ -36,7 +38,7 @@ public class LearningProgressService
     {
         var tracked = TrackedWords(userId, dictionaryId);
 
-        // Скоуп по главах — як у WordSortingService.ScopedQuery: порожній список означає «вся книжка».
+        // Chapter scope as in WordSortingService.ScopedQuery: an empty list means "the whole book".
         if (chapterIds is { Count: > 0 })
         {
             var inChapters = _dbContext.ChapterWords
@@ -49,8 +51,8 @@ public class LearningProgressService
         var notStarted = await tracked
             .CountAsync(w => !_dbContext.WordProgresses.Any(p => p.UserId == userId && p.WordPairId == w.Id));
 
-        // Два прості запити замість left join + group by: рядок прогресу на слово щонайбільше один,
-        // тож групувати можна одразу WordProgresses, а «не почато» — окремий COUNT.
+        // Two plain queries instead of a left join + group by: there is at most one progress row
+        // per word, so WordProgresses can be grouped directly and "not started" is a separate COUNT.
         var rows = await _dbContext.WordProgresses
             .Where(p => p.UserId == userId)
             .Where(p => tracked.Any(w => w.Id == p.WordPairId))
@@ -61,7 +63,7 @@ public class LearningProgressService
         return Fold(notStarted, rows.Select(r => new BoxRow(r.Box, r.IsLearned, r.Count)));
     }
 
-    /// <summary>Усі глави словника: два запити на словник, а не на главу. Слово з двох глав рахується в кожній.</summary>
+    /// <summary>Every chapter of a dictionary: two queries per dictionary, not per chapter. A word in two chapters counts in each.</summary>
     public async Task<IReadOnlyDictionary<long, LearningProgress>> GetByChapterAsync(long userId, long dictionaryId)
     {
         var tracked = TrackedWords(userId, dictionaryId);

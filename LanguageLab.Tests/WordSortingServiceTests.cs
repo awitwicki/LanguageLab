@@ -17,8 +17,8 @@ public class WordSortingServiceTests
             .Options);
 
     /// <summary>
-    /// Книжка з двох глав і п'яти слів. Глава 1: silo(10), abide(3), cleaning(2).
-    /// Глава 2: silo(5), holston(7), jahns(1). Частоти по книжці — сума.
+    /// A two-chapter, five-word book. Chapter 1: silo(10), abide(3), cleaning(2).
+    /// Chapter 2: silo(5), holston(7), jahns(1). Book frequencies are the sum.
     /// </summary>
     private static async Task<ApplicationDbContext> ArrangeAsync()
     {
@@ -62,8 +62,8 @@ public class WordSortingServiceTests
     }
 
     /// <summary>
-    /// Словник із <paramref name="count"/> незапакованих слів — щоб довести стелю
-    /// MaxTake реальним надлишком даних, а не випадковим збігом через малу фікстуру.
+    /// A dictionary of <paramref name="count"/> unsorted words — to prove the MaxTake
+    /// ceiling with a real surplus of data, not a coincidence of a small fixture.
     /// </summary>
     private static async Task<ApplicationDbContext> ArrangeManyWordsAsync(int count)
     {
@@ -134,7 +134,7 @@ public class WordSortingServiceTests
 
         var queue = await service.GetQueueAsync(UserId, DictionaryId, chapterIds: [2], take: 50);
 
-        // Частота лишається книжковою (silo = 15), а склад — главним.
+        // Frequency stays the book's (silo = 15) while the membership is the chapter's.
         Assert.Equal(["silo", "holston", "jahns"], queue.Words.Select(w => w.Word));
         Assert.Equal(3, queue.Total);
         Assert.Equal(0, queue.Sorted);
@@ -154,10 +154,10 @@ public class WordSortingServiceTests
     [Fact]
     public async Task Queue_never_exceeds_MaxTake_even_when_more_words_are_unsorted()
     {
-        // На відміну від Take_is_clamped_to_max (де в словнику лише 5 слів,
-        // і Take(10_000) та Take(200) дають однаковий результат), тут
-        // незапакованих слів свідомо більше за MaxTake — інакше тест пройде
-        // навіть без Math.Clamp у реалізації.
+        // Unlike Take_is_clamped_to_max (where the dictionary has only 5 words,
+        // so Take(10_000) and Take(200) give the same result), here there are
+        // deliberately more unsorted words than MaxTake — otherwise the test
+        // would pass even without Math.Clamp in the implementation.
         await using var db = await ArrangeManyWordsAsync(WordSortingService.MaxTake + 50);
         var service = new WordSortingService(db);
 
@@ -177,7 +177,7 @@ public class WordSortingServiceTests
 
         var progress = await service.GetChapterProgressAsync(UserId, DictionaryId);
 
-        // silo є в обох главах, тож обидві просунулись на одиницю.
+        // silo is in both chapters, so both advanced by one.
         Assert.Equal([(1L, 3, 1), (2L, 3, 1)], progress.Select(p => (p.ChapterId, p.Total, p.Sorted)));
     }
 
@@ -227,8 +227,8 @@ public class WordSortingServiceTests
     }
 
     /// <summary>
-    /// Полиці взаємовиключні. Слово, що лежить водночас у KnownWords і UnknownWords,
-    /// назавжди випадає з навчання: LearnableQuery вимагає «є в unknown І немає в known».
+    /// The shelves are mutually exclusive. A word sitting in both KnownWords and UnknownWords
+    /// drops out of learning for good: LearnableQuery demands "in unknown AND not in known".
     /// </summary>
     [Fact]
     public async Task Mark_removes_the_word_from_the_other_two_shelves()
@@ -243,7 +243,7 @@ public class WordSortingServiceTests
         Assert.True(await db.KnownWords.AnyAsync(k => k.UserId == UserId && k.WordPairId == 1));
     }
 
-    /// <summary>Повторна та сама позначка не має підіймати слово вгору колонки «останні 10».</summary>
+    /// <summary>Repeating the same mark must not lift the word to the top of the "last 10" column.</summary>
     [Fact]
     public async Task Marking_the_same_shelf_twice_keeps_the_original_timestamp()
     {
@@ -306,7 +306,7 @@ public class WordSortingServiceTests
         Assert.Null(await service.UndoAsync(UserId));
     }
 
-    /// <summary>Undo відкочує позначки лише цього юзера.</summary>
+    /// <summary>Undo rolls back only this user's marks.</summary>
     [Fact]
     public async Task Undo_ignores_marks_of_other_users()
     {

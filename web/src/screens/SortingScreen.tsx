@@ -21,7 +21,7 @@ export function SortingScreen({ dictionaryId, dictionaryName, chapterIds, scopeT
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      // Стрілка вказує на колонку, в яку слово полетить.
+      // The arrow points at the column the word will fly into.
       if (event.key === 'ArrowLeft') mark('unknown')
       else if (event.key === 'ArrowRight') mark('known')
       else if (event.key === 'ArrowDown') mark('excluded')
@@ -55,13 +55,13 @@ export function SortingScreen({ dictionaryId, dictionaryName, chapterIds, scopeT
 
           {loaded && current && (
             <>
-              {/* key міняє вузол на кожному слові — так спрацьовує анімація появи. */}
+              {/* key swaps the node on every word — that is what triggers the appear animation. */}
               <p key={current.wordPairId} className="card-word">
                 {current.word}
               </p>
               <p className="card-translation">{current.translation}</p>
-              {/* Слово, повернуте через undo, приходить без частоти — краще не
-                  показати нічого, ніж збрехати «зустрічається 0 разів». */}
+              {/* A word brought back via undo arrives without a frequency — better to
+                  show nothing than to lie with "occurs 0 times". */}
               {current.frequency > 0 ? (
                 <p className="frequency num">
                   occurs {formatInt(current.frequency)}{' '}
@@ -114,7 +114,7 @@ function Column({ kind, title, words }: { kind: 'known' | 'unknown'; title: stri
       <h2>{title}</h2>
       <ol>
         {words.map((word, index) => (
-          // Найсвіжіше зверху й підсвічене: інакше undo відпрацьовує невидимо.
+          // Newest on top and highlighted: otherwise undo works invisibly.
           <li key={word.wordPairId} className={index === 0 ? 'newest' : undefined}>
             {word.word}
           </li>

@@ -34,9 +34,9 @@ public sealed record KnownRequest(long QuestionId);
 public sealed record KnownResult(string Word);
 
 /// <summary>
-/// Тонкий шар над TrainingSessionService: перевірка власності сесії, мапінг у DTO і коди
-/// відповідей — жодної логіки навчання. Черга питань живе в БД, тож клієнт може
-/// перезавантажитись посеред квізу, не втративши стан сесії.
+/// A thin layer over TrainingSessionService: session ownership checks, DTO mapping and
+/// response codes — no learning logic. The question queue lives in the DB, so the client
+/// can reload mid-quiz without losing the session state.
 /// </summary>
 public static class TrainingEndpoints
 {
@@ -44,8 +44,8 @@ public static class TrainingEndpoints
     {
         var group = app.MapGroup("/api/training").RequireAuthorization();
 
-        // Превью для екрана старту: шкала скоупу + топ кандидатів за частотою. Те, що тут показано,
-        // клієнт потім передає в new-batch явними id. Неіснуючий словник дає порожнє превью, як і new-batch дає 204.
+        // The start screen's preview: the scope's scale + the top candidates by frequency. What is shown
+        // here the client later passes to new-batch as explicit ids. A missing dictionary yields an empty preview, just as new-batch yields 204.
         group.MapGet("/preview", async (
             long dictionaryId,
             string? chapterIds,
@@ -169,7 +169,7 @@ public static class TrainingEndpoints
 
             var outcome = await sessions.AnswerAsync(request.QuestionId, request.PickedWordPairId, DateTime.UtcNow);
 
-            // null — питання вже відповідане (подвійний клік) або зникло: клієнт просто йде за наступним.
+            // null — the question is already answered (double click) or gone: the client just moves on to the next one.
             return outcome == null
                 ? Results.NoContent()
                 : Results.Ok(new AnswerResult(outcome.IsCorrect, outcome.Word.Id, outcome.Word.Word, outcome.Word.Translation));
@@ -222,8 +222,8 @@ public static class TrainingEndpoints
     }
 
     /// <summary>
-    /// Питання, якого вже немає (зняте кнопкою «Знаю»), — це не помилка клієнта, а гонка:
-    /// віддаємо сервісу, і він відповість null → 204. Чуже ж питання — 404.
+    /// A question that no longer exists (removed via the "Know" button) is a race, not a client
+    /// error: hand it to the service and it answers null → 204. Someone else's question is a 404.
     /// </summary>
     private static async Task<bool> BelongsToAnotherSessionAsync(ApplicationDbContext db, long questionId, long trainingId)
     {
@@ -242,7 +242,7 @@ public static class TrainingEndpoints
             return null;
         }
 
-        // Напрямок вирішує лише, який бік пари показати в питанні, а який — на кнопках.
+        // The direction only decides which side of the pair goes in the question and which on the buttons.
         var enToUa = question.Direction == QuestionDirection.EnToUa;
         var prompt = enToUa ? question.WordPair.Word : question.WordPair.Translation;
 

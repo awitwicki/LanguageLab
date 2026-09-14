@@ -178,20 +178,20 @@ builder.Services.AddScoped<PersonalDictionaryService>();
 
 builder.Services.AddRequestDecompression();
 
-// SortStatus їздить рядком («known»), а не числом: JSON має читатись очима.
-// CamelCase обов'язковий: без політики іменування серіалізація дала б «Known»,
-// а клієнт типізований під 'known' | 'unknown' | 'excluded'.
+// SortStatus travels as a string ("known"), not a number: the JSON should be readable by eye.
+// CamelCase is mandatory: without a naming policy serialization would produce "Known",
+// while the client is typed against 'known' | 'unknown' | 'excluded'.
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
-// Книжка на 6k слів — це 1-2 МБ JSON, дефолтні 30 МБ Kestrel лишаємо з запасом,
-// але явний ліміт краще, ніж сюрприз на великій книжці.
+// A 6k-word book is 1-2 MB of JSON; Kestrel's default 30 MB leaves plenty of headroom,
+// but an explicit limit beats a surprise on a big book.
 builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 64L * 1024 * 1024);
 
 var app = builder.Build();
 
-// Схему веде веб: MigrateAsync прибрано з бота, щоб дві точки входу
-// не намагались мігрувати одну базу одночасно.
+// The web app owns the schema: MigrateAsync was removed from the bot so that two
+// entry points never try to migrate the same database at once.
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -234,7 +234,7 @@ app.MapAdminEndpoints();
 app.MapIrregularVerbEndpoints();
 app.MapTranslationEndpoints();
 
-// SPA має власний роутинг: усе, що не /api і не файл, віддаємо index.html.
+// The SPA has its own routing: anything that is not /api and not a file gets index.html.
 app.MapFallbackToFile("index.html");
 
 app.Run();

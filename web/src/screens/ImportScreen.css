@@ -31,7 +31,7 @@
   color: var(--text);
 }
 
-/* Нативний input лишається доступним з клавіатури, але візуально його немає. */
+/* The native input stays keyboard-accessible but is visually gone. */
 .dropzone input {
   position: absolute;
   inset: 0;

@@ -1,7 +1,7 @@
 :root {
   color-scheme: light dark;
 
-  /* Палітра — світла тема (Apple HIG) */
+  /* Palette — light theme (Apple HIG) */
   --bg: #f5f5f7;
   --surface: #ffffff;
   --surface-2: #e8e8ed;
@@ -18,7 +18,7 @@
   --glass: rgba(255, 255, 255, 0.72);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
 
-  /* Типографіка — одна родина */
+  /* Typography — one family */
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Inter, 'Segoe UI', Roboto, sans-serif;
   --fs-caption: 12px;
   --lh-caption: 16px;
@@ -33,7 +33,7 @@
   --fs-large: 34px;
   --lh-large: 40px;
 
-  /* Геометрія й рух */
+  /* Geometry and motion */
   --r-sm: 6px;
   --r-md: 10px;
   --r-lg: 14px;
@@ -126,7 +126,7 @@ select {
   border-radius: var(--r-sm);
 }
 
-/* Типографічна шкала */
+/* Type scale */
 .large-title {
   font-size: var(--fs-large);
   line-height: var(--lh-large);
@@ -169,7 +169,7 @@ select {
   color: var(--danger);
 }
 
-/* Кнопки */
+/* Buttons */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -238,7 +238,7 @@ select {
   opacity: 0.6;
 }
 
-/* Поля */
+/* Fields */
 .field input,
 .field select {
   height: 36px;

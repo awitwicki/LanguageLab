@@ -1,4 +1,4 @@
-/** Відсоток посортованого, ціле 0–100. total = 0 дає 0, а не NaN. */
+/** The sorted percentage, an integer 0–100. total = 0 gives 0, not NaN. */
 export function percentOf(sorted: number, total: number): number {
   if (total <= 0) {
     return 0
@@ -7,7 +7,7 @@ export function percentOf(sorted: number, total: number): number {
   return Math.min(100, Math.round((sorted / total) * 100))
 }
 
-/** 1240 → «1 240». Звичайний пробіл, а не тонкий: так простіше і в тестах, і в пошуку по сторінці. */
+/** 1240 → "1 240". A regular space, not a thin one: simpler both in tests and in find-in-page. */
 export function formatInt(n: number): string {
   return String(Math.trunc(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')
 }
@@ -32,8 +32,8 @@ export function chaptersLabel(n: number): string {
 const DAY_MS = 86_400_000
 
 /**
- * Термін наступного показу для підсумку тренування. Порівнюємо UTC-доби, а не
- * локальні: Leitner ставить DueAt у UTC, і «завтра» має означати наступну добу сервера.
+ * The next showing's due date for the training summary. Compares UTC days, not local
+ * ones: Leitner sets DueAt in UTC, and "tomorrow" must mean the server's next day.
  */
 export function formatDue(dueAt: string | null, isLearned: boolean, now: Date): string {
   if (isLearned || dueAt === null) {

@@ -14,8 +14,8 @@ describe('decodeFb2', () => {
   })
 
   it('reads windows-1251 declared in the prolog', () => {
-    // "<?xml version='1.0' encoding='windows-1251'?><b>Ц</b>" — Ц у cp1251 це 0xD6,
-    // а в utf-8 той самий байт дав би заміну U+FFFD.
+    // "<?xml version='1.0' encoding='windows-1251'?><b>Ц</b>" — Ц is 0xD6 in cp1251,
+    // while in utf-8 the same byte would yield the U+FFFD replacement.
     const prolog = "<?xml version='1.0' encoding='windows-1251'?><b>"
     const bytes = [...prolog].map((c) => c.charCodeAt(0))
     bytes.push(0xd6)

@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Application.Services;
 
-/// <summary>Три полиці, на які юзер розкладає слово. Взаємовиключні.</summary>
+/// <summary>The three shelves a user sorts a word onto. Mutually exclusive.</summary>
 public enum SortStatus
 {
     Known = 0,
@@ -25,8 +25,8 @@ public sealed record RecentWord(long WordPairId, string Word);
 public sealed record RecentWords(IReadOnlyList<RecentWord> Known, IReadOnlyList<RecentWord> Unknown);
 
 /// <summary>
-/// Черга слів на сортування та операції над трьома полицями.
-/// «Посортоване» = лежить на будь-якій із них.
+/// The queue of words to sort and the operations on the three shelves.
+/// "Sorted" = sitting on any one of them.
 /// </summary>
 public class WordSortingService
 {
@@ -52,8 +52,8 @@ public class WordSortingService
         var remaining = await unsorted.CountAsync();
 
         var words = await unsorted
-            // ThenBy по id, щоб порядок був детермінований: інакше дозаливка буфера
-            // могла б віддати те саме слово двічі або пропустити інше.
+            // ThenBy id keeps the order deterministic: otherwise a buffer refill
+            // could hand out the same word twice or skip another.
             .OrderByDescending(dw => dw.Frequency)
             .ThenBy(dw => dw.WordPairId)
             .Take(take)
@@ -85,10 +85,10 @@ public class WordSortingService
     }
 
     /// <summary>
-    /// Кладе слово на одну полицю й прибирає з двох інших. Ексклюзивність тут
-    /// не формальність: унікальні індекси стоять на кожній полиці окремо, тож
-    /// без цього слово могло б опинитись і в KnownWords, і в UnknownWords —
-    /// і тихо випасти з навчання назавжди.
+    /// Puts a word on one shelf and removes it from the other two. Exclusivity is
+    /// not a formality here: the unique indexes sit on each shelf separately, so
+    /// without it a word could end up in both KnownWords and UnknownWords —
+    /// and silently drop out of learning for good.
     ///
     /// False for an unknown id or someone else's personal word — the two collapse into the
     /// same refusal so the endpoint can answer 404 either way, the same as
@@ -119,11 +119,11 @@ public class WordSortingService
             SortStatus.Known => known != null,
             SortStatus.Unknown => unknown != null,
             SortStatus.Excluded => excluded != null,
-            _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Невідома полиця.")
+            _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown shelf.")
         };
 
-        // Повторна та сама позначка — no-op: інакше слово підстрибнуло б угору
-        // колонки «останні 10» без жодної причини.
+        // Repeating the same mark is a no-op: otherwise the word would jump to the
+        // top of the "last 10" column for no reason.
         if (alreadyThere)
         {
             return true;
@@ -173,8 +173,8 @@ public class WordSortingService
     }
 
     /// <summary>
-    /// Знімає найсвіжішу позначку юзера, з якої б вона не була полиці.
-    /// Серверний, а не клієнтський, тому переживає перезавантаження сторінки.
+    /// Removes the user's most recent mark, whichever shelf it is on.
+    /// Server-side rather than client-side, so it survives a page reload.
     /// </summary>
     public async Task<UndoResult?> UndoAsync(long userId)
     {
@@ -229,8 +229,8 @@ public class WordSortingService
     }
 
     /// <summary>
-    /// Наповнення лівої та правої колонок. Виключені сюди не входять: це не
-    /// «результат сортування», а прибирання сміття.
+    /// The contents of the left and right columns. Excluded words are not part of
+    /// this: they are garbage removal, not a "sorting result".
     /// </summary>
     public async Task<RecentWords> GetRecentAsync(long userId, int take)
     {
@@ -254,8 +254,8 @@ public class WordSortingService
     }
 
     /// <summary>
-    /// Слова словника, за потреби звужені до обраних глав. Частота завжди
-    /// книжкова — вона й у главі означає «наскільки це слово взагалі поширене тут».
+    /// The dictionary's words, narrowed to the chosen chapters when asked. Frequency is
+    /// always the book's — even within a chapter it means "how common this word is here at all".
     /// </summary>
     private IQueryable<DictionaryWord> ScopedQuery(long dictionaryId, IReadOnlyList<long>? chapterIds)
     {

@@ -32,7 +32,7 @@ function deferred<T>(): Deferred<T> {
   return { promise, resolve, reject }
 }
 
-/// Фейковий сервер: словник із N слів і множина тих, чию позначку він уже записав.
+/// A fake server: a dictionary of N words and the set of those whose mark it has already recorded.
 let words: QueueWord[] = []
 let recorded = new Set<number>()
 let inFlight: { wordPairId: number; deferred: Deferred<null> }[] = []
@@ -46,8 +46,8 @@ function makeWords(count: number): QueueWord[] {
   }))
 }
 
-/// Кожен mark зависає, доки тест його явно не «доставить» — саме це дає змогу
-/// відтворити перегони між дозаливкою й позначкою, що ще летить.
+/// Every mark hangs until the test explicitly "delivers" it — that is what makes it
+/// possible to reproduce the race between a refill and a mark still in flight.
 function settleMark(index: number, outcome: 'ok' | 'fail') {
   const call = inFlight[index]
 
@@ -105,8 +105,8 @@ async function renderHook<T>(hook: () => T) {
   return result
 }
 
-/// Макрозадача пропускає вперед усю чергу мікрозадач — тобто весь ланцюжок
-/// mark → refill встигає доїхати до кінця, поки ми всередині act.
+/// A macrotask lets the whole microtask queue run ahead — i.e. the entire
+/// mark → refill chain gets to the end while we are inside act.
 async function flush() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -128,28 +128,28 @@ describe('useSortingQueue', () => {
   }
 
   it('a refill does not resurrect a word whose mark is still in flight', async () => {
-    // 21 слово = REFILL_AT + 1: перший же mark тягне дозаливку буфера.
+    // 21 words = REFILL_AT + 1: the very first mark triggers a buffer refill.
     const result = await arrange(21)
 
     expect(result.current.current?.wordPairId).toBe(1)
     expect(result.current.sorted).toBe(0)
 
-    await mark(result, 'known') // w1 полетів і завис
-    await mark(result, 'known') // w2 позначили, поки w1 ще в дорозі
+    await mark(result, 'known') // w1 sent and hanging
+    await mark(result, 'known') // w2 marked while w1 is still in flight
 
     expect(result.current.current?.wordPairId).toBe(3)
     expect(result.current.sorted).toBe(2)
 
-    // w1 доїхав → його робота тягне refill. Сервер у відповіді ще нічого не знає
-    // про w2, тож віддає його як непосортоване.
+    // w1 arrived → its completion triggers a refill. The server's response knows
+    // nothing about w2 yet, so it returns it as unsorted.
     settleMark(0, 'ok')
     await flush()
 
     expect(apiMock.getQueue).toHaveBeenCalledTimes(2)
     expect(inFlight.map((c) => c.wordPairId)).toEqual([1, 2])
 
-    // Оптимістичний стан w2 пережив дозаливку: картка не відкотилась на w2,
-    // прогрес не з'їхав назад на 1.
+    // w2's optimistic state survived the refill: the card did not roll back to w2,
+    // the progress did not slip back by 1.
     expect(result.current.current?.wordPairId).toBe(3)
     expect(result.current.sorted).toBe(2)
     expect(result.current.known.map((w) => w.wordPairId)).toEqual([2, 1])
@@ -157,12 +157,12 @@ describe('useSortingQueue', () => {
   })
 
   it('a failed mark rolls back only its own word, not a later one', async () => {
-    // 25 слів: жоден із трьох mark не опускає буфер до REFILL_AT, тож дозаливки
-    // тут немає й у грі лише відкат.
+    // 25 words: none of the three marks drops the buffer to REFILL_AT, so there is
+    // no refill here and only the rollback is in play.
     const result = await arrange(25)
 
     await mark(result, 'known') // w1
-    await mark(result, 'known') // w2, поки w1 ще летить
+    await mark(result, 'known') // w2, while w1 is still in flight
 
     expect(result.current.current?.wordPairId).toBe(3)
     expect(result.current.sorted).toBe(2)
@@ -176,7 +176,7 @@ describe('useSortingQueue', () => {
     expect(result.current.error).toContain('Could not save')
     expect(apiMock.getQueue).toHaveBeenCalledTimes(1)
 
-    // І w2 не повернулося в буфер: після w1 наступна картка — w3.
+    // And w2 did not return to the buffer: after w1 the next card is w3.
     await mark(result, 'known')
 
     expect(result.current.current?.wordPairId).toBe(3)
@@ -187,8 +187,8 @@ describe('useSortingQueue', () => {
     const result = await renderHook(() => useSortingQueue({ dictionaryId: 1, chapterIds: null }))
     await flush()
 
-    // Порожній словник: total=0, current=null — але це «завантажено й порожньо»,
-    // а не «ще вантажиться». Саме цю різницю екран показує по-різному.
+    // An empty dictionary: total=0, current=null — but that is "loaded and empty",
+    // not "still loading". The screen renders exactly that difference differently.
     expect(result.current.loaded).toBe(true)
     expect(result.current.current).toBeNull()
     expect(result.current.total).toBe(0)

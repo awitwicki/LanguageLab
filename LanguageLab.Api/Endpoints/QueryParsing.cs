@@ -2,7 +2,7 @@ namespace LanguageLab.Api.Endpoints;
 
 internal static class QueryParsing
 {
-    /// <summary>«1,2,3» → [1, 2, 3]. Порожній або кривий рядок означає «вся книжка».</summary>
+    /// <summary>"1,2,3" → [1, 2, 3]. An empty or malformed string means "the whole book".</summary>
     public static List<long>? ParseChapterIds(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))

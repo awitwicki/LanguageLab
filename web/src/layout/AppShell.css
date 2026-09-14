@@ -5,8 +5,8 @@
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
 }
 
-/* Sticky саме тут: containing block — уся .shell на висоту сторінки, тож
-   топбар їде з прокруткою. Усередині 52px-комірки він би не зрушив. */
+/* Sticky lives right here: the containing block is the whole page-high .shell, so
+   the top bar rides along with the scroll. Inside a 52px cell it would not budge. */
 .shell-topbar {
   grid-column: 1 / -1;
   position: sticky;

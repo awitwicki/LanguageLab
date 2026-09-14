@@ -6,8 +6,8 @@ namespace LanguageLab.Application.Services;
 public sealed record TopWord(long WordPairId, string Word, int Frequency);
 
 /// <summary>
-/// Цифри по словнику для екрана статистики. Окремо від WordSortingService:
-/// тут немає юзерських полиць, крім фільтра виключених слів нижче.
+/// The dictionary's numbers for the stats screen. Kept apart from WordSortingService:
+/// no user shelves here, except the excluded-words filter below.
 /// </summary>
 public class DictionaryStatsService
 {
@@ -22,9 +22,9 @@ public class DictionaryStatsService
     }
 
     /// <summary>
-    /// Найчастіші слова словника за книжковою частотою, без слів, які цей юзер
-    /// вже виключив (вони підмінюються наступними за частотою). При рівній
-    /// частоті — за алфавітом, щоб порядок був стабільним між запитами.
+    /// The dictionary's most frequent words by book frequency, minus the words this
+    /// user has already excluded (the next ones by frequency take their place). Ties
+    /// are broken alphabetically so the order is stable between requests.
     /// </summary>
     public async Task<IReadOnlyList<TopWord>> GetTopWordsAsync(long dictionaryId, long userId, int take = DefaultTopWords)
     {

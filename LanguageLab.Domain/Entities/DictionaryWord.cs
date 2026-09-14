@@ -1,9 +1,9 @@
 namespace LanguageLab.Domain.Entities;
 
 /// <summary>
-/// Join «словник × слово» з навантаженням. Таблиця називається так само, як
-/// раніше створювала конвенція (DictionaryWords), тому міграція лише додає
-/// колонку, а наявні рядки нікуди не переїжджають.
+/// The "dictionary × word" join with payload. The table keeps the name the
+/// convention used to generate (DictionaryWords), so the migration only adds
+/// a column and existing rows stay where they are.
 /// </summary>
 public class DictionaryWord
 {
@@ -14,10 +14,10 @@ public class DictionaryWord
     public long WordPairId { get; set; }
 
     /// <summary>
-    /// Сума Count по всіх главах. Зберігається, а не рахується запитом:
-    /// у пласких імпортів глав немає, і без цього поля черга сортування
-    /// мала б дві різні гілки замість однієї.
-    /// 0 означає «частота невідома» — так виглядають словники, залиті через бота.
+    /// The sum of Count over all chapters. Stored rather than computed by a query:
+    /// flat imports have no chapters, and without this field the sorting queue
+    /// would need two different branches instead of one.
+    /// 0 means "frequency unknown" — that is what dictionaries loaded through the bot look like.
     /// </summary>
     public int Frequency { get; set; }
 }

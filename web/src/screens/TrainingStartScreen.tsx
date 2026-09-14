@@ -59,7 +59,7 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
     try {
       const started = await api.startNewBatch(dictionaryId, chapterIds, batchSize, batchIds)
 
-      // 204: між відкриттям екрана й кліком слова могли скінчитись — це не помилка.
+      // 204: the words may have run out between opening the screen and the click — not an error.
       if (!started) {
         setNotice(NO_WORDS)
         return
@@ -73,7 +73,7 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
     }
   }
 
-  // Номер лише в активних рядках: викреслені в батч не входять.
+  // Numbers only on active rows: struck ones are not part of the batch.
   let rank = 0
 
   return (

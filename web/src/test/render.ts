@@ -4,11 +4,11 @@ import { afterEach } from 'vitest'
 
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-// Компоненти, змонтовані через render(), інколи вішають глобальні слухачі
-// (напр. window.addEventListener('keydown', …)) — без явного unmount() між тестами
-// вони лишаються живими між it() в межах файлу (document/window тут спільні) і
-// ловлять події з наступних тестів. Тому кожен render() трекається й автоматично
-// демонтується після відповідного тесту.
+// Components mounted through render() sometimes attach global listeners
+// (e.g. window.addEventListener('keydown', …)) — without an explicit unmount() between
+// tests they stay alive across it() blocks within a file (document/window are shared
+// here) and catch events from later tests. So every render() is tracked and unmounted
+// automatically after its test.
 const mounted = new Set<{ root: Root; container: HTMLElement }>()
 
 afterEach(async () => {
@@ -23,8 +23,8 @@ afterEach(async () => {
   }
 })
 
-/// Мінімальний рендер для тестів компонентів: без testing-library, на голому
-/// react-dom + act, у тому ж стилі, що й useSortingQueue.test.ts.
+/// Minimal render for component tests: no testing-library, bare
+/// react-dom + act, in the same style as useSortingQueue.test.ts.
 export async function render(element: ReactElement) {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -51,7 +51,7 @@ export async function render(element: ReactElement) {
   }
 }
 
-/// Пропускає макрозадачу: усі проміси api-моків і setState встигають доїхати.
+/// Skips a macrotask: every api-mock promise and setState gets through.
 export async function flush() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0))

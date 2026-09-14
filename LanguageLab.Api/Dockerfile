@@ -3,7 +3,7 @@ USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
 
-# SPA збирається окремим шаром: зміна C#-коду не має перезапускати npm install.
+# The SPA builds in its own layer: a C# change must not rerun npm install.
 FROM node:24-alpine AS spa
 WORKDIR /spa
 COPY web/package.json web/package-lock.json ./

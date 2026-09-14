@@ -9,14 +9,14 @@ const CAPTION =
 
 interface Props {
   progress: LearningProgress
-  /** compact — смуга + відсоток в один рядок (рядок глави, хедер); large — відсоток зверху, легенда знизу (екран старту). */
+  /** compact — bar + percentage on one line (chapter row, header); large — percentage on top, legend below (start screen). */
   size?: 'compact' | 'large'
   /** A footnote under the scale explaining the percent. Always on for large; the book header turns it on, chapter rows under it don't repeat it. */
   caption?: boolean
 }
 
 export function LeitnerScale({ progress, size = 'compact', caption = size === 'large' }: Props) {
-  // Немає слів «не знаю» — нема що показувати; викликач не резервує місця.
+  // No "don't know" words — nothing to show; the caller reserves no space.
   if (progress.total <= 0) {
     return null
   }

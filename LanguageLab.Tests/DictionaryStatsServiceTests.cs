@@ -13,8 +13,8 @@ public class DictionaryStatsServiceTests
             .Options);
 
     /// <summary>
-    /// Словник 1 («Wool»): silo(15), holston(7), abide(3), cleaning(2), jahns(1).
-    /// Словник 2 («Other»): dune(100) — має не протікати в статистику першого.
+    /// Dictionary 1 ("Wool"): silo(15), holston(7), abide(3), cleaning(2), jahns(1).
+    /// Dictionary 2 ("Other"): dune(100) — must not leak into the first one's stats.
     /// </summary>
     private static async Task<ApplicationDbContext> ArrangeAsync()
     {
