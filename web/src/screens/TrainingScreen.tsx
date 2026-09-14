@@ -23,7 +23,9 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
   // Сесія живе тут, а не в маршруті: «Повторити помилки» та «Ще один батч» починають
   // нову сесію на місці, без стрибка по екранах.
   const [session, setSession] = useState(started)
-  const [phase, setPhase] = useState<Phase>(started.mode === 'review' ? 'quiz' : 'cards')
+  // Every mode opens on the word list: a review's words may be long forgotten, and
+  // Enter skips the list at once for anyone who wants pure recall.
+  const [phase, setPhase] = useState<Phase>('cards')
   const [next, setNext] = useState<NextQuestion | null>(null)
   const [pickedId, setPickedId] = useState<number | null>(null)
   const [answer, setAnswer] = useState<AnswerResult | null>(null)
@@ -60,7 +62,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
 
   const restart = (nextSession: TrainingStarted) => {
     setSession(nextSession)
-    setPhase(nextSession.mode === 'review' ? 'quiz' : 'cards')
+    setPhase('cards')
     setNext(null)
     setPickedId(null)
     setAnswer(null)
@@ -73,8 +75,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
   // і старт повторення ідуть одним шляхом і не роблять подвійного запиту.
   const startQuiz = useCallback(() => setPhase('quiz'), [])
 
-  // Повторення стартує без карток — слова юзер уже бачив; той самий ефект підвантажує
-  // перше питання після «Почати квіз» і після перезапуску сесії.
+  // Той самий ефект підвантажує перше питання після «Почати квіз» і після перезапуску сесії.
   useEffect(() => {
     if (phase === 'quiz' && next === null && summary === null) {
       void Promise.resolve().then(() => loadNext())
@@ -231,7 +232,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
           <p className="footnote">
             {dictionaryName} · {scopeTitle}
           </p>
-          <h1 className="large-title">New words</h1>
+          <h1 className="large-title">{session.mode === 'review' ? 'Words to review' : 'New words'}</h1>
           <ul className="cards-list">
             {session.words.map((w) => (
               <li key={w.wordPairId} className="cards-row">

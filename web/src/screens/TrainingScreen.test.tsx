@@ -118,19 +118,28 @@ describe('TrainingScreen — cards', () => {
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('abide')
   })
 
-  it('a review skips the cards', async () => {
+  it('a review also shows the words first, under "Words to review"', async () => {
     const { container } = await render(screen({ started: { ...started, mode: 'review' }, batchSize: null }))
+
+    expect(container.textContent).toContain('Words to review')
+    expect(container.textContent).not.toContain('New words')
+    expect(container.textContent).toContain('abide')
+    expect(container.textContent).toContain('дотримуватися')
+    expect(apiMock.nextQuestion).not.toHaveBeenCalled()
+
+    await press('Enter')
     await flush()
 
-    expect(container.textContent).not.toContain('New words')
     expect(apiMock.nextQuestion).toHaveBeenCalledWith(5)
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('abide')
   })
 })
 
 describe('TrainingScreen — quiz', () => {
+  // A review opens on its word list too, so the quiz is one Enter away.
   async function openQuiz() {
     const result = await render(screen({ started: { ...started, mode: 'review' }, batchSize: null }))
+    await press('Enter')
     await flush()
     return result
   }
@@ -230,6 +239,7 @@ describe('TrainingScreen — summary', () => {
   async function openSummary(overrides: Partial<Parameters<typeof TrainingScreen>[0]> = {}) {
     apiMock.nextQuestion.mockResolvedValue(exhausted)
     const result = await render(screen({ started: { ...started, mode: 'review' }, batchSize: null, ...overrides }))
+    await press('Enter')
     await flush()
     return result
   }
