@@ -184,6 +184,76 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.ToTable("KnownWords");
                 });
 
+            modelBuilder.Entity("LanguageLab.Domain.Entities.PronunciationAttempt", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Accent")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Transcript")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Word")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "CreatedAt");
+
+                    b.ToTable("PronunciationAttempts");
+                });
+
+            modelBuilder.Entity("LanguageLab.Domain.Entities.PronunciationProgress", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("State")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Streak")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Word")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "Word")
+                        .IsUnique();
+
+                    b.ToTable("PronunciationProgresses");
+                });
+
             modelBuilder.Entity("LanguageLab.Domain.Entities.StarredChapter", b =>
                 {
                     b.Property<long>("Id")
@@ -737,6 +807,28 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.Navigation("User");
 
                     b.Navigation("WordPair");
+                });
+
+            modelBuilder.Entity("LanguageLab.Domain.Entities.PronunciationAttempt", b =>
+                {
+                    b.HasOne("LanguageLab.Domain.Entities.TelegramUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("LanguageLab.Domain.Entities.PronunciationProgress", b =>
+                {
+                    b.HasOne("LanguageLab.Domain.Entities.TelegramUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("LanguageLab.Domain.Entities.StarredChapter", b =>

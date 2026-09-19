@@ -5,6 +5,18 @@
   grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
 }
 
+.shell-no-sidebar {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.shell-no-sidebar .shell-content {
+  grid-column: 1;
+}
+
+.shell-no-sidebar .content {
+  margin: 0 auto;
+}
+
 /* Sticky lives right here: the containing block is the whole page-high .shell, so
    the top bar rides along with the scroll. Inside a 52px cell it would not budge. */
 .shell-topbar {
@@ -36,9 +48,14 @@
 }
 
 @media (max-width: 800px) {
+  /* The top bar wraps its tabs onto a second row here, so its height is no longer fixed. */
   .shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: var(--topbar-h) auto 1fr;
+    grid-template-rows: auto auto 1fr;
+  }
+
+  .shell-no-sidebar {
+    grid-template-rows: auto 1fr;
   }
 
   .shell-sidebar {
@@ -49,6 +66,10 @@
   .shell-content {
     grid-row: 3;
     grid-column: 1;
+  }
+
+  .shell-no-sidebar .shell-content {
+    grid-row: 2;
   }
 
   .content {

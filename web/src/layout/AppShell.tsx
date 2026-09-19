@@ -1,11 +1,15 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { CurrentUser } from '../api/client'
+import type { AppMode } from './mode'
 import { TopBar } from './TopBar'
 import './AppShell.css'
 
 interface Props {
-  sidebar: ReactNode
+  /** null collapses the shell to a single column — the modes without a sidebar. */
+  sidebar: ReactNode | null
   user: CurrentUser
+  mode: AppMode | null
+  onSelectMode: (mode: AppMode) => void
   /** Identifies the screen on show; a change moves focus to the main region. */
   screenKey: string
   onHome: () => void
@@ -15,7 +19,18 @@ interface Props {
   children: ReactNode
 }
 
-export function AppShell({ sidebar, user, screenKey, onHome, onAdmin, onSignOut, onDeleteAccount, children }: Props) {
+export function AppShell({
+  sidebar,
+  user,
+  mode,
+  onSelectMode,
+  screenKey,
+  onHome,
+  onAdmin,
+  onSignOut,
+  onDeleteAccount,
+  children,
+}: Props) {
   const mainRef = useRef<HTMLElement>(null)
   const shownKey = useRef(screenKey)
 
@@ -33,17 +48,19 @@ export function AppShell({ sidebar, user, screenKey, onHome, onAdmin, onSignOut,
   }, [screenKey])
 
   return (
-    <div className="shell">
+    <div className={sidebar === null ? 'shell shell-no-sidebar' : 'shell'}>
       <div className="shell-topbar">
         <TopBar
           user={user}
+          mode={mode}
+          onSelectMode={onSelectMode}
           onHome={onHome}
           onAdmin={onAdmin}
           onSignOut={onSignOut}
           onDeleteAccount={onDeleteAccount}
         />
       </div>
-      <div className="shell-sidebar">{sidebar}</div>
+      {sidebar !== null && <div className="shell-sidebar">{sidebar}</div>}
       <main ref={mainRef} className="shell-content" tabIndex={-1}>
         <div className="content">{children}</div>
       </main>

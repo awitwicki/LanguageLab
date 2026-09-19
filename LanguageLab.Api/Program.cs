@@ -164,6 +164,7 @@ builder.Services.AddScoped<StarredChapterService>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<VerbProgressService>();
+builder.Services.AddScoped<PronunciationProgressService>();
 builder.Services.AddScoped<VerbSessionService>();
 
 // MyMemory is keyless; the optional contact email only raises its daily quota.
@@ -232,6 +233,7 @@ app.MapSortingEndpoints();
 app.MapTrainingEndpoints();
 app.MapAdminEndpoints();
 app.MapIrregularVerbEndpoints();
+app.MapPronunciationEndpoints();
 app.MapTranslationEndpoints();
 
 // The SPA has its own routing: anything that is not /api and not a file gets index.html.

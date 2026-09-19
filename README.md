@@ -26,6 +26,11 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Irregular-verbs "My words" screen: every verb with a state/group filter and a way to un-flag or jump straight to reviewing it
 - [ ] Irregular-verbs statistics screen: mistakes by group, family and `ErrorKind` (`VerbAttempt` already logs everything needed)
 - [ ] Irregular-verbs response-time signal: `VerbAttempt.ResponseMs` is logged but not used by the (future) review scheduling
+- [ ] Pronunciation trainer: a manual "reset progress" action for a word (`PronunciationProgressService`)
+- [ ] Pronunciation trainer: minimal-pair discrimination exercises (hear two words, pick which was said)
+- [ ] Pronunciation trainer: a cross-family mixed review session
+- [ ] Pronunciation trainer: spaced-repetition scheduling for resurfacing mastered words (same idea as the irregular-verbs trainer's own deferred SM-2 item)
+- [ ] Pronunciation trainer: record-and-replay the learner's own attempt for self-comparison
 - [ ] Top-100/200/500/1000 English word dictionaries, public
 - [x] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
 - [x] Comment sweep: code comments are still Ukrainian in ~190 lines across `web/src` (plus `useBatchPreview.test.ts` test names), 36 backend `.cs` files (`Domain` mostly), `Program.cs` and the `Dockerfile` — comments only, no UI copy

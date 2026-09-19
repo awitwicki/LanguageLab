@@ -12,7 +12,8 @@ npm run build    # tsc -b && vite build → dist/
 
 ## Structure
 
-- `src/layout/` — `AppShell` (top bar + sidebar + content), `TopBar`, `Sidebar`.
+- `src/layout/` — `AppShell` (top bar + optional sidebar + content), `TopBar` (brand, the mode tabs Words · Pronunciation · Irregular verbs, account menu), `Sidebar` (Words mode only: personal dictionary, books, import), `mode.ts` (`modeOf(routeName)` — which tab a screen belongs to).
+- `src/pronunciation/` — the pronunciation trainer: `PronunciationFamiliesScreen` (sound families), `PronunciationFamilyScreen` (one word at a time: reference and attempt spectrograms, Record → `SpeechRecognition` → server-side score), `usePronunciationFamily`, `speechRecognition.ts`, `SpectrogramStrip` (canvas: frozen image, live scroll, playhead). `audio/` — `spectrogram.ts` (pure: Hann/FFT STFT, silence trimming, log-frequency image), `colormap.ts` (design-token colormap), `decodeClip.ts` (fetch + `decodeAudioData`, cached), `useClipAnalysis.ts` (a clip's spectrogram for a URL), `useMicCapture.ts` (`getUserMedia` + `AnalyserNode` for the live view + `MediaRecorder` for the decoded attempt).
 - `src/screens/` — screens: `HomeScreen`, `ImportScreen`, `DictionaryScreen`, `SortingScreen`, `TrainingStartScreen` (batch size), `TrainingScreen` (cards → quiz → summary).
 - `src/components/` — `ProgressBar`, `SortingProgress`, `LeitnerScale` (Leitner box scale + weighted percent).
 - `src/lib/` — number and label formatters (`format.ts`, `labels.ts`).

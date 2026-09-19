@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, type DictionaryListItem, type SessionStarted, type TrainingStarted } from './api/client'
 import { useAuth } from './auth/useAuth'
 import { AppShell } from './layout/AppShell'
+import { modeOf, type AppMode } from './layout/mode'
 import { Sidebar } from './layout/Sidebar'
 import { HomeScreen } from './screens/HomeScreen'
 import { ImportScreen } from './screens/ImportScreen'
@@ -16,6 +17,8 @@ import { PersonalDictionaryScreen } from './screens/PersonalDictionaryScreen'
 import { VerbGroupScreen } from './verbs/VerbGroupScreen'
 import { VerbSessionScreen } from './verbs/VerbSessionScreen'
 import { VerbsScreen } from './verbs/VerbsScreen'
+import { PronunciationFamiliesScreen } from './pronunciation/PronunciationFamiliesScreen'
+import { PronunciationFamilyScreen } from './pronunciation/PronunciationFamilyScreen'
 
 type Route =
   | { name: 'home' }
@@ -36,11 +39,19 @@ type Route =
   | { name: 'verbs' }
   | { name: 'verbs-group'; group: number }
   | { name: 'verbs-session'; sessionId: number }
+  | { name: 'pronunciation' }
+  | { name: 'pronunciation-family'; key: string }
   | { name: 'admin' }
 
 const REVIEW_TITLE = 'Review'
 const ALL_WORDS = 'All words'
 const ALL_DICTIONARIES = 'All dictionaries'
+
+const MODE_LANDING: Record<AppMode, Route> = {
+  words: { name: 'home' },
+  pronunciation: { name: 'pronunciation' },
+  verbs: { name: 'verbs' },
+}
 
 export default function App() {
   const { state, loginFailed, signOut, deleteAccount, dismissBanned } = useAuth()
@@ -48,7 +59,6 @@ export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' })
   const [dictionaries, setDictionaries] = useState<DictionaryListItem[] | null>(null)
   const [listError, setListError] = useState<string | null>(null)
-  const [verbsLearnedPercent, setVerbsLearnedPercent] = useState(0)
 
   const reload = useCallback(
     () =>
@@ -59,13 +69,6 @@ export default function App() {
           setListError(null)
         })
         .catch((e) => setListError(String(e))),
-    [],
-  )
-
-  // Best-effort: the sidebar caption just falls back to 0% if this fails, so a
-  // failure here should not surface as the dictionaries list's error banner.
-  const reloadVerbsProgress = useCallback(
-    () => api.getVerbsProgress().then((p) => setVerbsLearnedPercent(p.learnedPercent)).catch(() => {}),
     [],
   )
 
@@ -82,11 +85,10 @@ export default function App() {
     }
 
     void reload()
-    void reloadVerbsProgress()
-  }, [reload, reloadVerbsProgress, routeKey, state.status])
+  }, [reload, routeKey, state.status])
 
   const activeName = dictionaries?.find((d) => d.id === activeId)?.name ?? 'Dictionary'
-  const verbsActive = route.name === 'verbs' || route.name === 'verbs-group' || route.name === 'verbs-session'
+  const mode = modeOf(route.name)
 
   // The personal dictionary has its own screen: coming back from its exercises must land
   // there, not on the book screen.
@@ -130,26 +132,27 @@ export default function App() {
   return (
     <AppShell
       user={state.user}
+      mode={mode}
+      onSelectMode={(next) => setRoute(MODE_LANDING[next])}
       screenKey={routeKey}
       onHome={() => setRoute({ name: 'home' })}
       onAdmin={() => setRoute({ name: 'admin' })}
       onSignOut={() => void signOut()}
       onDeleteAccount={deleteAccount}
       sidebar={
-        <Sidebar
-          items={dictionaries}
-          error={listError}
-          activeId={activeId}
-          importActive={route.name === 'import'}
-          canImport={state.user.role === 'admin'}
-          onSelect={openDictionary}
-          onImport={() => setRoute({ name: 'import' })}
-          verbsLearnedPercent={verbsLearnedPercent}
-          verbsActive={verbsActive}
-          onOpenVerbs={() => setRoute({ name: 'verbs' })}
-          personalActive={route.name === 'personal'}
-          onOpenPersonal={() => setRoute({ name: 'personal' })}
-        />
+        mode === 'words' ? (
+          <Sidebar
+            items={dictionaries}
+            error={listError}
+            activeId={activeId}
+            importActive={route.name === 'import'}
+            canImport={state.user.role === 'admin'}
+            onSelect={openDictionary}
+            onImport={() => setRoute({ name: 'import' })}
+            personalActive={route.name === 'personal'}
+            onOpenPersonal={() => setRoute({ name: 'personal' })}
+          />
+        ) : null
       }
     >
       {route.name === 'home' && (
@@ -276,6 +279,18 @@ export default function App() {
           sessionId={route.sessionId}
           onBack={() => setRoute({ name: 'verbs' })}
           onRepeatErrors={startVerbSession}
+        />
+      )}
+
+      {route.name === 'pronunciation' && (
+        <PronunciationFamiliesScreen onOpenFamily={(key) => setRoute({ name: 'pronunciation-family', key })} />
+      )}
+
+      {route.name === 'pronunciation-family' && (
+        <PronunciationFamilyScreen
+          key={route.key}
+          familyKey={route.key}
+          onBack={() => setRoute({ name: 'pronunciation' })}
         />
       )}
     </AppShell>

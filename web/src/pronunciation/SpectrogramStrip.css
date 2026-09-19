@@ -1,0 +1,46 @@
+.spectrogram-strip {
+  text-align: left;
+}
+
+.spectrogram-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.spectrogram-strip-label {
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.spectrogram-strip-canvas,
+.spectrogram-strip-placeholder {
+  display: block;
+  width: 100%;
+  height: 96px;
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+
+.spectrogram-strip-placeholder {
+  display: grid;
+  place-items: center;
+  font-size: var(--fs-footnote);
+  color: var(--text-3);
+}
+
+.spectrogram-strip-duration {
+  margin-top: 4px;
+  font-size: var(--fs-caption);
+  color: var(--text-3);
+}
+
+@media (max-width: 800px) {
+  .spectrogram-strip-canvas,
+  .spectrogram-strip-placeholder {
+    height: 64px;
+  }
+}

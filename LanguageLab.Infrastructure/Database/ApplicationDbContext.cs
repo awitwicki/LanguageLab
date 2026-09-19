@@ -1,4 +1,5 @@
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Pronunciation;
 using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Infrastructure.Database;
@@ -17,6 +18,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<VerbSession> VerbSessions { get; set; }
     public DbSet<VerbTask> VerbTasks { get; set; }
     public DbSet<VerbAttempt> VerbAttempts { get; set; }
+    public DbSet<PronunciationProgress> PronunciationProgresses { get; set; }
+    public DbSet<PronunciationAttempt> PronunciationAttempts { get; set; }
     public DbSet<Chapter> Chapters { get; set; }
     public DbSet<ChapterWord> ChapterWords { get; set; }
     public DbSet<DictionaryWord> DictionaryWords { get; set; }
@@ -137,6 +140,14 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(a => a.TaskId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // The pronunciation trainer: one standing per user × word, and an append-only attempt log.
+        builder.Entity<PronunciationProgress>()
+            .HasIndex(p => new { p.UserId, p.Word })
+            .IsUnique();
+
+        builder.Entity<PronunciationAttempt>()
+            .HasIndex(a => new { a.UserId, a.CreatedAt });
 
         // The review selection: this user's words, not learned, with an overdue DueAt.
         builder.Entity<WordProgress>()

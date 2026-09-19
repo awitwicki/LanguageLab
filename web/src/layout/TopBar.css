@@ -22,6 +22,55 @@
   color: var(--text);
 }
 
+.mode-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.mode-tab {
+  padding: 5px 14px;
+  border-radius: var(--r-sm);
+  font-weight: 500;
+  color: var(--text-2);
+  white-space: nowrap;
+  transition:
+    background-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.mode-tab:hover {
+  color: var(--text);
+}
+
+.mode-tab[aria-current='page'] {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+@media (max-width: 800px) {
+  .topbar {
+    height: auto;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 8px 16px;
+  }
+
+  .mode-tabs {
+    order: 1;
+    width: 100%;
+  }
+
+  .mode-tab {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: var(--fs-footnote);
+  }
+}
+
 .account {
   width: 32px;
   height: 32px;

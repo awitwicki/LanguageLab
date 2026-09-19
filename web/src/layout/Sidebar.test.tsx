@@ -21,15 +21,12 @@ describe('Sidebar', () => {
         canImport
         onSelect={onSelect}
         onImport={() => {}}
-        verbsLearnedPercent={0}
-        verbsActive={false}
-        onOpenVerbs={() => {}}
         personalActive={false}
         onOpenPersonal={() => {}}
       />,
     )
 
-    const rows = [...container.querySelectorAll<HTMLButtonElement>('.sidebar-item:not(.program-item):not(.personal-item)')]
+    const rows = [...container.querySelectorAll<HTMLButtonElement>('.sidebar-item:not(.personal-item)')]
 
     expect(rows.map((r) => r.querySelector('.name')?.textContent)).toEqual(['Wool', 'Dune'])
     expect(rows.map((r) => r.querySelector('.pct')?.textContent)).toEqual(['25%', '100%'])
@@ -51,9 +48,6 @@ describe('Sidebar', () => {
         canImport
         onSelect={() => {}}
         onImport={() => {}}
-        verbsLearnedPercent={0}
-        verbsActive={false}
-        onOpenVerbs={() => {}}
         personalActive={false}
         onOpenPersonal={() => {}}
       />,
@@ -74,9 +68,6 @@ describe('Sidebar', () => {
         canImport
         onSelect={() => {}}
         onImport={onImport}
-        verbsLearnedPercent={0}
-        verbsActive={false}
-        onOpenVerbs={() => {}}
         personalActive={false}
         onOpenPersonal={() => {}}
       />,
@@ -101,9 +92,6 @@ describe('Sidebar', () => {
         canImport={false}
         onSelect={vi.fn()}
         onImport={vi.fn()}
-        verbsLearnedPercent={0}
-        verbsActive={false}
-        onOpenVerbs={() => {}}
         personalActive={false}
         onOpenPersonal={() => {}}
       />,
@@ -123,9 +111,6 @@ describe('Sidebar', () => {
         canImport={false}
         onSelect={() => {}}
         onImport={() => {}}
-        verbsLearnedPercent={0}
-        verbsActive={false}
-        onOpenVerbs={() => {}}
         personalActive
         onOpenPersonal={onOpenPersonal}
       />,
@@ -137,7 +122,7 @@ describe('Sidebar', () => {
     expect(personal.querySelector('.pct')?.textContent).toBe('12 words')
     expect(personal.getAttribute('aria-current')).toBe('page')
 
-    const books = [...container.querySelectorAll('.sidebar-item:not(.program-item):not(.personal-item) .name')]
+    const books = [...container.querySelectorAll('.sidebar-item:not(.personal-item) .name')]
     expect(books.map((b) => b.textContent)).toEqual(['Wool', 'Dune'])
 
     await click(personal)
@@ -155,9 +140,6 @@ describe('Sidebar', () => {
         canImport={false}
         onSelect={() => {}}
         onImport={() => {}}
-        verbsLearnedPercent={0}
-        verbsActive={false}
-        onOpenVerbs={() => {}}
         personalActive={false}
         onOpenPersonal={() => {}}
       />,
@@ -168,8 +150,8 @@ describe('Sidebar', () => {
   })
 })
 
-describe('the Programs section', () => {
-  it('shows the irregular-verbs entry with its step progress', async () => {
+describe('modes', () => {
+  it('has no Programs section — the modes live in the top bar', async () => {
     const { container } = await render(
       <Sidebar
         items={items}
@@ -179,45 +161,13 @@ describe('the Programs section', () => {
         canImport
         onSelect={() => {}}
         onImport={() => {}}
-        verbsLearnedPercent={25}
-        verbsActive={false}
-        onOpenVerbs={() => {}}
         personalActive={false}
         onOpenPersonal={() => {}}
       />,
     )
 
-    const entry = container.querySelector<HTMLButtonElement>('.program-item')!
-
-    expect(entry.textContent).toContain('Irregular verbs')
-    expect(entry.textContent).toContain('25% learned')
-    expect(entry.getAttribute('aria-current')).toBeNull()
-  })
-
-  it('marks the entry active and reports a click', async () => {
-    const onOpenVerbs = vi.fn()
-    const { container } = await render(
-      <Sidebar
-        items={items}
-        error={null}
-        activeId={null}
-        importActive={false}
-        canImport
-        onSelect={() => {}}
-        onImport={() => {}}
-        verbsLearnedPercent={0}
-        verbsActive
-        onOpenVerbs={onOpenVerbs}
-        personalActive={false}
-        onOpenPersonal={() => {}}
-      />,
-    )
-
-    const entry = container.querySelector<HTMLButtonElement>('.program-item')!
-    expect(entry.getAttribute('aria-current')).toBe('page')
-
-    await click(entry)
-
-    expect(onOpenVerbs).toHaveBeenCalledTimes(1)
+    expect(container.textContent).not.toContain('Programs')
+    expect(container.textContent).not.toContain('Irregular verbs')
+    expect(container.textContent).not.toContain('Pronunciation')
   })
 })

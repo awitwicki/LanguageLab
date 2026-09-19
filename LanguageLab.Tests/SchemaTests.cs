@@ -1,5 +1,6 @@
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.IrregularVerbs;
+using LanguageLab.Domain.Pronunciation;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -323,5 +324,38 @@ public class SchemaTests
 
         Assert.Empty(await db.StarredChapters.ToListAsync());
         Assert.Single(await db.Chapters.ToListAsync());
+    }
+
+    /// <summary>The trainer upserts a word's standing by user + word, so that key must be unique.</summary>
+    [Fact]
+    public void A_user_has_one_pronunciation_standing_per_word()
+    {
+        using var db = NewContext();
+        var index = db.Model
+            .FindEntityType(typeof(PronunciationProgress))!
+            .GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(["UserId", "Word"]));
+        Assert.True(index.IsUnique);
+    }
+
+    /// <summary>The pronunciation trainer's rows hang off the user like the other trainers' do: deleting the account deletes them all.</summary>
+    [Fact]
+    public async Task Deleting_a_user_removes_their_pronunciation_progress_and_attempts()
+    {
+        await using var db = NewContext();
+        var now = DateTime.UtcNow;
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = now });
+        db.PronunciationProgresses.Add(new PronunciationProgress { Id = 1, UserId = 1, Word = "ship", State = PronunciationState.Learning, LastSeenAt = now });
+        db.PronunciationAttempts.Add(new PronunciationAttempt { Id = 1, UserId = 1, Word = "ship", Accent = Accent.Us, Transcript = "ship", Score = 90, Outcome = PronunciationOutcome.Correct, CreatedAt = now });
+        await db.SaveChangesAsync();
+
+        await db.PronunciationProgresses.ToListAsync();
+        await db.PronunciationAttempts.ToListAsync();
+
+        db.Users.Remove(await db.Users.FirstAsync(u => u.Id == 1));
+        await db.SaveChangesAsync();
+
+        Assert.Empty(await db.PronunciationProgresses.ToListAsync());
+        Assert.Empty(await db.PronunciationAttempts.ToListAsync());
     }
 }

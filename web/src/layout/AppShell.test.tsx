@@ -6,12 +6,14 @@ import { AppShell } from './AppShell'
 
 const user: CurrentUser = { id: 1, telegramUserId: 1, displayName: 'Ada', username: null, photoUrl: null, role: 'user' }
 
-function shell(screenKey: string, children: ReactNode = 'content') {
+function shell(screenKey: string, children: ReactNode = 'content', sidebar: ReactNode = <nav />) {
   return (
     <AppShell
       user={user}
       screenKey={screenKey}
-      sidebar={<nav />}
+      sidebar={sidebar}
+      mode="words"
+      onSelectMode={() => {}}
       onHome={() => {}}
       onAdmin={() => {}}
       onSignOut={() => {}}
@@ -21,6 +23,22 @@ function shell(screenKey: string, children: ReactNode = 'content') {
     </AppShell>
   )
 }
+
+describe('AppShell — sidebar column', () => {
+  it('renders the sidebar column when a sidebar is given', async () => {
+    const { container } = await render(shell('home'))
+
+    expect(container.querySelector('.shell-sidebar')).not.toBeNull()
+    expect(container.querySelector('.shell')!.classList.contains('shell-no-sidebar')).toBe(false)
+  })
+
+  it('drops the column entirely when there is no sidebar', async () => {
+    const { container } = await render(shell('verbs', 'content', null))
+
+    expect(container.querySelector('.shell-sidebar')).toBeNull()
+    expect(container.querySelector('.shell')!.classList.contains('shell-no-sidebar')).toBe(true)
+  })
+})
 
 describe('AppShell — focus on screen change', () => {
   it('the first screen does not steal focus', async () => {

@@ -441,6 +441,52 @@ export interface ForgotResult {
   state: VerbLearnState
 }
 
+export type PronunciationState = 'new' | 'learning' | 'mastered'
+export type PronunciationFamilyStatus = 'locked' | 'available' | 'done'
+export type PronunciationOutcome = 'correct' | 'wrong'
+export type Accent = 'us' | 'uk'
+
+export interface PronunciationWordDto {
+  word: string
+  ipa: string
+  audioUs: string
+  audioUk: string
+  state: PronunciationState
+  streak: number
+}
+
+export interface PronunciationFamilyOverview {
+  key: string
+  title: string
+  targetSounds: string[]
+  total: number
+  mastered: number
+  status: PronunciationFamilyStatus
+}
+
+export interface PronunciationProgress {
+  families: PronunciationFamilyOverview[]
+}
+
+export interface PronunciationFamily {
+  key: string
+  title: string
+  targetSounds: string[]
+  words: PronunciationWordDto[]
+}
+
+export interface PronunciationNextWord {
+  word: PronunciationWordDto | null
+}
+
+export interface PronunciationAttemptResult {
+  outcome: PronunciationOutcome
+  score: number
+  state: PronunciationState
+  streak: number
+  familyDone: boolean
+}
+
 let unauthorizedHandler: () => void = () => {}
 
 /**
@@ -628,6 +674,23 @@ export const api = {
 
   forgotVerb: (v1: string) =>
     request<ForgotResult>(`/api/irregular-verbs/verbs/${v1}/forgot`, { method: 'POST' }) as Promise<ForgotResult>,
+
+  getPronunciationProgress: () =>
+    request<PronunciationProgress>('/api/pronunciation/progress') as Promise<PronunciationProgress>,
+
+  getPronunciationFamily: (key: string) =>
+    request<PronunciationFamily>(`/api/pronunciation/families/${encodeURIComponent(key)}`) as Promise<PronunciationFamily>,
+
+  nextPronunciationWord: (key: string, includeMastered: boolean) =>
+    request<PronunciationNextWord>(
+      `/api/pronunciation/families/${encodeURIComponent(key)}/next?includeMastered=${includeMastered}`,
+    ) as Promise<PronunciationNextWord>,
+
+  submitPronunciationAttempt: (word: string, accent: Accent, transcript: string) =>
+    request<PronunciationAttemptResult>(`/api/pronunciation/words/${encodeURIComponent(word)}/attempts`, {
+      method: 'POST',
+      body: JSON.stringify({ accent, transcript }),
+    }) as Promise<PronunciationAttemptResult>,
 
   // Raw fetch, not request(): 401 here means "not signed in yet", which is an answer, not a
   // dropped session.

@@ -11,9 +11,6 @@ interface Props {
   canImport: boolean
   onSelect: (id: number) => void
   onImport: () => void
-  verbsLearnedPercent: number
-  verbsActive: boolean
-  onOpenVerbs: () => void
   personalActive: boolean
   onOpenPersonal: () => void
 }
@@ -28,9 +25,6 @@ export function Sidebar({
   canImport,
   onSelect,
   onImport,
-  verbsLearnedPercent,
-  verbsActive,
-  onOpenVerbs,
   personalActive,
   onOpenPersonal,
 }: Props) {
@@ -77,21 +71,6 @@ export function Sidebar({
             </button>
           </li>
         ))}
-      </ul>
-
-      <p className="sidebar-heading">Programs</p>
-      <ul className="sidebar-list">
-        <li>
-          <button
-            type="button"
-            className="sidebar-item program-item"
-            aria-current={verbsActive ? 'page' : undefined}
-            onClick={onOpenVerbs}
-          >
-            <span className="name">Irregular verbs</span>
-            <span className="pct num">{verbsLearnedPercent}% learned</span>
-          </button>
-        </li>
       </ul>
 
       {canImport && (
