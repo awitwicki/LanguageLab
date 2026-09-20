@@ -21,20 +21,6 @@ public class VerbSessionServiceTests
         return (progress, new VerbSessionService(db, progress, new Random(seed)));
     }
 
-    /// <summary>Marks a family Learned so the next one on the path unlocks — most tests need "back" or "core" open.</summary>
-    private static async Task UnlockAfterAsync(ApplicationDbContext db, long userId, string familyKey, DateTime nowUtc)
-    {
-        var verbs = IrregularVerbCatalog.VerbsOf(familyKey);
-        var toLearn = (int)Math.Ceiling(verbs.Count * LearningPath.DoneShare);
-
-        foreach (var verb in verbs.Take(toLearn))
-        {
-            db.VerbProgresses.Add(new VerbProgress { UserId = userId, Verb = verb.V1, State = VerbState.Learned, LastSeenAt = nowUtc });
-        }
-
-        await db.SaveChangesAsync();
-    }
-
     [Fact]
     public async Task Start_learn_creates_a_full_queue_with_cards_first()
     {
@@ -50,15 +36,16 @@ public class VerbSessionServiceTests
     }
 
     [Fact]
-    public async Task Start_refuses_a_locked_family()
+    public async Task Start_opens_a_family_far_down_the_path_to_a_user_with_no_progress()
     {
         await using var db = NewContext();
         var (_, sessions) = Services(db);
 
         var result = await sessions.StartAsync(1, SessionMode.Learn, "ought", null, Now);
 
-        Assert.Null(result.Session);
-        Assert.Contains("Third form goes back to the first", result.Refusal);
+        Assert.NotNull(result.Session);
+        Assert.Null(result.Refusal);
+        Assert.Equal("ought", result.Session.Family);
     }
 
     [Fact]
@@ -92,7 +79,6 @@ public class VerbSessionServiceTests
     {
         await using var db = NewContext();
         var (_, sessions) = Services(db);
-        await UnlockAfterAsync(db, 1, "same", Now);
         var started = (await sessions.StartAsync(1, SessionMode.Learn, "back", null, Now)).Session!;
 
         var next = await sessions.NextAsync(started.Id);
@@ -107,7 +93,6 @@ public class VerbSessionServiceTests
     {
         await using var db = NewContext();
         var (_, sessions) = Services(db);
-        await UnlockAfterAsync(db, 1, "same", Now);
         var started = (await sessions.StartAsync(1, SessionMode.Learn, "back", null, Now)).Session!;
         var task = (await sessions.NextAsync(started.Id)).Task!;
 
@@ -126,7 +111,6 @@ public class VerbSessionServiceTests
     {
         await using var db = NewContext();
         var (_, sessions) = Services(db);
-        await UnlockAfterAsync(db, 1, "same", Now);
         var started = (await sessions.StartAsync(1, SessionMode.Learn, "back", null, Now)).Session!;
         var task = (await sessions.NextAsync(started.Id)).Task!;
 
@@ -218,7 +202,6 @@ public class VerbSessionServiceTests
     {
         await using var db = NewContext();
         var (_, sessions) = Services(db);
-        await UnlockAfterAsync(db, 1, "back", Now);
         var started = (await sessions.StartAsync(1, SessionMode.Learn, "ought", null, Now)).Session!;
         var matchTask = started.Tasks.First(t => t.Type == ExerciseType.Match);
         var payload = matchTask.GetPayload();
@@ -331,7 +314,6 @@ public class VerbSessionServiceTests
     {
         await using var db = NewContext();
         var (_, sessions) = Services(db);
-        await UnlockAfterAsync(db, 1, "same", Now);
         var started = (await sessions.StartAsync(1, SessionMode.Learn, "back", null, Now)).Session!;
 
         var first = await sessions.FinishAsync(started.Id, Now);

@@ -12,8 +12,8 @@ public sealed record FamilyDetailView(string Key, string Title, IReadOnlyList<st
 public sealed record AttemptResult(PronunciationOutcome Outcome, int Score, PronunciationState State, int Streak, bool FamilyDone);
 
 /// <summary>
-/// Per-user standing on the pronunciation catalog: family lock/unlock, per-word state,
-/// picking the next word to practice, and grading an attempt. Nothing is stored beyond
+/// Per-user standing on the pronunciation catalog: family status, per-word state, picking
+/// the next word to practice, and grading an attempt. Nothing is stored beyond
 /// PronunciationProgress/PronunciationAttempt — family status is recomputed every call,
 /// same as the verb trainer's LearningPath.
 /// </summary>
@@ -39,13 +39,12 @@ public class PronunciationProgressService
 
     public async Task<FamilyDetailView?> GetFamilyAsync(long userId, string familyKey)
     {
-        var status = await FamilyStatusAsync(userId, familyKey);
-        if (status is null or FamilyStatus.Locked)
+        var family = PronunciationCatalog.FamilyByKey(familyKey);
+        if (family is null)
         {
             return null;
         }
 
-        var family = PronunciationCatalog.FamilyByKey(familyKey)!;
         var catalogWords = PronunciationCatalog.WordsOf(familyKey);
         var progress = await ProgressByWordAsync(userId, catalogWords.Select(w => w.Word));
 
@@ -53,10 +52,10 @@ public class PronunciationProgressService
         return new FamilyDetailView(family.Key, family.Title, family.TargetSounds, words);
     }
 
-    public async Task<(bool FamilyAvailable, WordView? Word)> NextWordAsync(long userId, string familyKey, bool includeMastered)
+    /// <summary>FamilyExists is false only for a key the catalog does not know; a family with nothing left to serve is (true, null).</summary>
+    public async Task<(bool FamilyExists, WordView? Word)> NextWordAsync(long userId, string familyKey, bool includeMastered)
     {
-        var status = await FamilyStatusAsync(userId, familyKey);
-        if (status is null or FamilyStatus.Locked)
+        if (PronunciationCatalog.FamilyByKey(familyKey) is null)
         {
             return (false, null);
         }
@@ -120,13 +119,6 @@ public class PronunciationProgressService
             .First(f => f.Family.Key == catalogWord.FamilyKey).Status == FamilyStatus.Done;
 
         return new AttemptResult(outcome, score, progress.State, progress.Streak, familyDone);
-    }
-
-    private async Task<FamilyStatus?> FamilyStatusAsync(long userId, string familyKey)
-    {
-        var match = PronunciationLearningPath.Evaluate(await StatesAsync(userId))
-            .FirstOrDefault(f => f.Family.Key == familyKey);
-        return match?.Status;
     }
 
     private async Task<Dictionary<string, PronunciationState>> StatesAsync(long userId) =>

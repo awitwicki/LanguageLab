@@ -18,7 +18,6 @@ const progress: VerbsProgress = {
       title: 'All three forms alike',
       total: 9,
       learned: 0,
-      unlocked: true,
       families: [
         {
           key: 'same',
@@ -35,9 +34,8 @@ const progress: VerbsProgress = {
       title: 'First and third alike',
       total: 3,
       learned: 0,
-      unlocked: false,
       families: [
-        { key: 'back', title: 'Third form goes back to the first', status: 'locked', total: 3, learned: 0, verbs: [verb('come')] },
+        { key: 'back', title: 'Third form goes back to the first', status: 'available', total: 3, learned: 0, verbs: [verb('come')] },
       ],
     },
   ],
@@ -62,13 +60,14 @@ describe('VerbGroupScreen', () => {
     expect(node.querySelector('.btn')?.textContent).toBe('Start')
   })
 
-  it('shows a locked family with a disabled button and a hint', async () => {
+  it('lets a family further down the path start right away', async () => {
     const { container } = await render(<VerbGroupScreen group={2} onBack={() => {}} onStartSession={() => {}} />)
     await flush()
 
     const node = container.querySelector('.family-node')!
-    expect(node.querySelector('.btn')?.hasAttribute('disabled')).toBe(true)
-    expect(node.textContent).toContain('Locked')
+    expect(node.querySelector('.btn')?.hasAttribute('disabled')).toBe(false)
+    expect(node.querySelector('.btn')?.textContent).toBe('Start')
+    expect(node.textContent).not.toContain('Locked')
   })
 
   it('shows Continue once a family has started progress', async () => {

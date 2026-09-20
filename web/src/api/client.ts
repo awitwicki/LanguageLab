@@ -267,7 +267,7 @@ export interface TrainingStats {
 
 export type VerbLearnState = 'new' | 'learning1' | 'learning2' | 'learning3' | 'learned' | 'mastered' | 'forgotten'
 
-export type FamilyStatus = 'locked' | 'available' | 'done'
+export type FamilyStatus = 'available' | 'done'
 
 export type SessionMode = 'learn' | 'errorsOnly' | 'mixed'
 
@@ -304,7 +304,6 @@ export interface GroupView {
   title: string
   total: number
   learned: number
-  unlocked: boolean
   families: FamilyView[]
 }
 
@@ -445,7 +444,7 @@ export interface ForgotResult {
 }
 
 export type PronunciationState = 'new' | 'learning' | 'mastered'
-export type PronunciationFamilyStatus = 'locked' | 'available' | 'done'
+export type PronunciationFamilyStatus = 'available' | 'done'
 export type PronunciationOutcome = 'correct' | 'wrong'
 export type Accent = 'us' | 'uk'
 
@@ -655,7 +654,7 @@ export const api = {
 
   getVerbsProgress: () => request<VerbsProgress>('/api/irregular-verbs/progress') as Promise<VerbsProgress>,
 
-  /** 409 (a locked family, or nothing to train) throws with the server's message. */
+  /** 409 (an unknown family, or nothing to train) throws with the server's message. */
   startVerbSession: (body: { mode: SessionMode; family?: string; fromSessionId?: number }) =>
     request<SessionStarted>('/api/irregular-verbs/sessions', {
       method: 'POST',

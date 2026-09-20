@@ -79,13 +79,8 @@ export function VerbsScreen({ onOpenGroup, onStartSession }: Props) {
             <p className="footnote num group-tile-caption">
               {formatInt(group.learned)} of {formatInt(group.total)} learned
             </p>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={!group.unlocked}
-              onClick={() => onOpenGroup(group.group)}
-            >
-              {group.unlocked ? 'Open' : 'Locked'}
+            <button type="button" className="btn btn-secondary" onClick={() => onOpenGroup(group.group)}>
+              Open
             </button>
           </section>
         ))}

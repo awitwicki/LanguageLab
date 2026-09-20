@@ -71,15 +71,6 @@ public class VerbSessionService
                     return new StartResult(null, "That family does not exist.");
                 }
 
-                var path = LearningPath.Evaluate(rows.ToDictionary(p => p.Key, p => p.Value.State, StringComparer.Ordinal));
-                var index = IrregularVerbCatalog.FamilyIndex(known.Key);
-
-                if (path[index].Status == FamilyStatus.Locked)
-                {
-                    var previous = path[index - 1].Family;
-                    return new StartResult(null, $"Finish \"{previous.Title}\" before this one — {LearningPath.DoneShare:P0} of its verbs must be learned.");
-                }
-
                 group = known.Group;
                 break;
 

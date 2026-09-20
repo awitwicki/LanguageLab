@@ -12,7 +12,6 @@ function group(overrides: Partial<VerbsProgress['groups'][number]> = {}) {
     title: 'All three forms alike',
     total: 9,
     learned: 0,
-    unlocked: true,
     families: [],
     ...overrides,
   }
@@ -22,9 +21,9 @@ const progress: VerbsProgress = {
   learnedPercent: 10,
   groups: [
     group(),
-    group({ group: 2, title: 'First and third alike', total: 3, learned: 3, unlocked: true }),
-    group({ group: 3, title: 'Second and third alike', total: 29, unlocked: false }),
-    group({ group: 4, title: 'All three forms differ', total: 27, unlocked: false }),
+    group({ group: 2, title: 'First and third alike', total: 3, learned: 3 }),
+    group({ group: 3, title: 'Second and third alike', total: 29 }),
+    group({ group: 4, title: 'All three forms differ', total: 27 }),
   ],
   mixedAvailable: false,
   errorsAvailable: false,
@@ -38,15 +37,15 @@ beforeEach(() => {
 })
 
 describe('VerbsScreen', () => {
-  it('shows four group tiles, locked ones disabled', async () => {
+  it('shows four group tiles, every one open from the start', async () => {
     const { container } = await render(<VerbsScreen onOpenGroup={() => {}} onStartSession={() => {}} />)
     await flush()
 
     const tiles = [...container.querySelectorAll('.group-tile')]
     expect(tiles).toHaveLength(4)
     expect(tiles[0].textContent).toContain('All three forms alike')
-    expect(tiles[2].querySelector('.btn')?.hasAttribute('disabled')).toBe(true)
-    expect(tiles[2].textContent).toContain('Locked')
+    expect(tiles.map((t) => t.querySelector('.btn')?.textContent)).toEqual(['Open', 'Open', 'Open', 'Open'])
+    expect(tiles.some((t) => t.querySelector('.btn')?.hasAttribute('disabled'))).toBe(false)
   })
 
   it('opens a group when its tile is clicked', async () => {

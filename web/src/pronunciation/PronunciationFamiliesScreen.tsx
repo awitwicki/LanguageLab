@@ -54,13 +54,8 @@ export function PronunciationFamiliesScreen({ onOpenFamily }: Props) {
             <p className="footnote num family-tile-caption">
               {formatInt(family.mastered)} of {formatInt(family.total)} mastered
             </p>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              disabled={family.status === 'locked'}
-              onClick={() => onOpenFamily(family.key)}
-            >
-              {family.status === 'locked' ? 'Locked' : 'Open'}
+            <button type="button" className="btn btn-secondary" onClick={() => onOpenFamily(family.key)}>
+              Open
             </button>
           </section>
         ))}

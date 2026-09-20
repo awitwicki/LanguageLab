@@ -16,7 +16,7 @@ public class VerbProgressServiceTests
             .Options);
 
     [Fact]
-    public async Task An_empty_user_has_only_the_first_family_available_and_nothing_active()
+    public async Task An_empty_user_has_every_family_available_and_nothing_active()
     {
         await using var db = NewContext();
         var view = await new VerbProgressService(db).GetAsync(1);
@@ -26,14 +26,10 @@ public class VerbProgressServiceTests
         Assert.False(view.ErrorsAvailable);
         Assert.Null(view.ActiveSession);
 
+        Assert.Equal(4, view.Groups.Count);
+        Assert.All(view.Groups.SelectMany(g => g.Families), f => Assert.Equal(FamilyStatus.Available, f.Status));
+
         var group1 = view.Groups.Single(g => g.Group == 1);
-        Assert.True(group1.Unlocked);
-        Assert.Equal(FamilyStatus.Available, group1.Families.Single(f => f.Key == "same").Status);
-
-        var group2 = view.Groups.Single(g => g.Group == 2);
-        Assert.False(group2.Unlocked);
-        Assert.All(group2.Families, f => Assert.Equal(FamilyStatus.Locked, f.Status));
-
         var cut = group1.Families.Single(f => f.Key == "same").Verbs.Single(v => v.V1 == "cut");
         Assert.Equal(VerbState.New, cut.State);
         Assert.False(cut.Flagged);

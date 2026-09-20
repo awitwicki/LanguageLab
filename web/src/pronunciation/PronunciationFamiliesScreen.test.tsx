@@ -25,12 +25,12 @@ describe('PronunciationFamiliesScreen', () => {
     expect(apiMock.getPronunciationProgress).not.toHaveBeenCalled()
   })
 
-  it('renders locked, available, and done tiles', async () => {
+  it('renders done and untouched families alike, every tile open', async () => {
     apiMock.getPronunciationProgress.mockResolvedValue({
       families: [
         { key: 'a', title: 'Family A', targetSounds: ['x'], total: 5, mastered: 5, status: 'done' },
         { key: 'b', title: 'Family B', targetSounds: ['y'], total: 5, mastered: 1, status: 'available' },
-        { key: 'c', title: 'Family C', targetSounds: ['z'], total: 5, mastered: 0, status: 'locked' },
+        { key: 'c', title: 'Family C', targetSounds: ['z'], total: 5, mastered: 0, status: 'available' },
       ],
     } satisfies PronunciationProgress)
 
@@ -40,9 +40,9 @@ describe('PronunciationFamiliesScreen', () => {
     expect(container.textContent).toContain('Family A')
     expect(container.textContent).toContain('Family B')
     expect(container.textContent).toContain('Family C')
-    const lockedButton = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Locked')
-    expect(lockedButton).toBeDefined()
-    expect(lockedButton?.hasAttribute('disabled')).toBe(true)
+    const buttons = [...container.querySelectorAll('.family-tile .btn')]
+    expect(buttons.map((b) => b.textContent)).toEqual(['Open', 'Open', 'Open'])
+    expect(buttons.some((b) => b.hasAttribute('disabled'))).toBe(false)
   })
 
   it('calls onOpenFamily when an available tile is opened', async () => {

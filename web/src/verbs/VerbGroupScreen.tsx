@@ -20,9 +20,9 @@ function actionLabel(family: FamilyView): string {
   return started ? 'Continue' : 'Start'
 }
 
-/// One group's families laid out as a path: locked ones ahead, the current one
-/// ready to train, done ones open for a refresher. The only table outside a
-/// session lives here, behind a per-family toggle.
+/// One group's families laid out as a path, every one open to train — done ones
+/// offer a refresher. The only table outside a session lives here, behind a
+/// per-family toggle.
 export function VerbGroupScreen({ group, onBack, onStartSession }: Props) {
   const [progress, setProgress] = useState<VerbsProgress | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -80,10 +80,7 @@ export function VerbGroupScreen({ group, onBack, onStartSession }: Props) {
       <h1 className="large-title">{groupView.title}</h1>
 
       <div className="group-path">
-        {groupView.families.map((family, index) => {
-          const locked = family.status === 'locked'
-          const previous = groupView.families[index - 1]
-
+        {groupView.families.map((family) => {
           return (
             <section key={family.key} className="family-node" data-status={family.status}>
               <div className="family-node-head">
@@ -92,10 +89,10 @@ export function VerbGroupScreen({ group, onBack, onStartSession }: Props) {
                   <button
                     type="button"
                     className="btn btn-primary"
-                    disabled={locked || busy === family.key}
+                    disabled={busy === family.key}
                     onClick={() => void start(family)}
                   >
-                    {locked ? 'Locked' : actionLabel(family)}
+                    {actionLabel(family)}
                   </button>
                   <button
                     type="button"
@@ -112,10 +109,6 @@ export function VerbGroupScreen({ group, onBack, onStartSession }: Props) {
               <p className="footnote num">
                 {formatInt(family.learned)} of {formatInt(family.total)} learned
               </p>
-
-              {locked && previous && (
-                <p className="footnote family-locked-hint">Finish "{previous.title}" first.</p>
-              )}
 
               {expanded.has(family.key) && (
                 <table className="family-table">

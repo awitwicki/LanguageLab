@@ -12,10 +12,6 @@
   gap: 10px;
 }
 
-.family-node[data-status='locked'] {
-  opacity: 0.6;
-}
-
 .family-node-head {
   display: flex;
   flex-wrap: wrap;
@@ -36,10 +32,6 @@
   display: flex;
   gap: 8px;
   align-items: center;
-}
-
-.family-locked-hint {
-  color: var(--text-3);
 }
 
 .family-table {

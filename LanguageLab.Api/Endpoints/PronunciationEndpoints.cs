@@ -38,8 +38,8 @@ public static class PronunciationEndpoints
         group.MapGet("/families/{key}/next", async (string key, PronunciationProgressService service, ICurrentUserContext currentUser, bool includeMastered = false) =>
         {
             var (userId, _) = currentUser.Require();
-            var (available, word) = await service.NextWordAsync(userId, key, includeMastered);
-            return available ? Results.Ok(new NextWordDto(word is null ? null : ToDto(word))) : Results.NotFound();
+            var (exists, word) = await service.NextWordAsync(userId, key, includeMastered);
+            return exists ? Results.Ok(new NextWordDto(word is null ? null : ToDto(word))) : Results.NotFound();
         });
 
         group.MapPost("/words/{word}/attempts", async (string word, AttemptRequest request, PronunciationProgressService service, ICurrentUserContext currentUser) =>

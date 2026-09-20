@@ -16,30 +16,27 @@ public class PronunciationProgressServiceTests
             .Options);
 
     [Fact]
-    public async Task An_empty_user_has_only_the_first_family_available()
+    public async Task An_empty_user_has_every_family_available()
     {
         await using var db = NewContext();
         var view = await new PronunciationProgressService(db).GetOverviewAsync(1);
 
         Assert.Equal(PronunciationCatalog.Families.Count, view.Families.Count);
-        Assert.Equal(FamilyStatus.Available, view.Families[0].Status);
+        Assert.All(view.Families, f => Assert.Equal(FamilyStatus.Available, f.Status));
     }
 
     [Fact]
-    public async Task GetFamilyAsync_returns_null_for_a_locked_family()
+    public async Task GetFamilyAsync_opens_the_last_family_to_a_user_with_no_progress()
     {
-        if (PronunciationCatalog.Families.Count < 2)
-        {
-            return;
-        }
-
         await using var db = NewContext();
         var service = new PronunciationProgressService(db);
-        var lockedKey = PronunciationCatalog.Families[1].Key;
+        var lastKey = PronunciationCatalog.Families[^1].Key;
 
-        var view = await service.GetFamilyAsync(1, lockedKey);
+        var view = await service.GetFamilyAsync(1, lastKey);
 
-        Assert.Null(view);
+        Assert.NotNull(view);
+        Assert.Equal(lastKey, view.Key);
+        Assert.All(view.Words, w => Assert.Equal(PronunciationState.New, w.State));
     }
 
     [Fact]
@@ -52,33 +49,28 @@ public class PronunciationProgressServiceTests
     }
 
     [Fact]
-    public async Task NextWordAsync_returns_the_first_new_word_in_family_order()
+    public async Task NextWordAsync_returns_the_first_new_word_in_family_order_for_any_family()
     {
         await using var db = NewContext();
         var service = new PronunciationProgressService(db);
-        var familyKey = PronunciationCatalog.Families[0].Key;
+        var familyKey = PronunciationCatalog.Families[^1].Key;
         var expected = PronunciationCatalog.WordsOf(familyKey)[0].Word;
 
-        var (available, word) = await service.NextWordAsync(1, familyKey, includeMastered: false);
+        var (exists, word) = await service.NextWordAsync(1, familyKey, includeMastered: false);
 
-        Assert.True(available);
+        Assert.True(exists);
         Assert.Equal(expected, word!.Word);
     }
 
     [Fact]
-    public async Task NextWordAsync_reports_unavailable_for_a_locked_family()
+    public async Task NextWordAsync_reports_an_unknown_family()
     {
-        if (PronunciationCatalog.Families.Count < 2)
-        {
-            return;
-        }
-
         await using var db = NewContext();
         var service = new PronunciationProgressService(db);
 
-        var (available, word) = await service.NextWordAsync(1, PronunciationCatalog.Families[1].Key, includeMastered: false);
+        var (exists, word) = await service.NextWordAsync(1, "not-a-real-family-xyz", includeMastered: false);
 
-        Assert.False(available);
+        Assert.False(exists);
         Assert.Null(word);
     }
 

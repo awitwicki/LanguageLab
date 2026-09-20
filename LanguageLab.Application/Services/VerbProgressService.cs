@@ -10,7 +10,7 @@ public sealed record VerbRowView(string V1, string V2, string V3, string Transla
 public sealed record FamilyView(
     string Key, string Title, FamilyStatus Status, int Total, int Learned, IReadOnlyList<VerbRowView> Verbs);
 
-public sealed record GroupView(int Group, string Title, int Total, int Learned, bool Unlocked, IReadOnlyList<FamilyView> Families);
+public sealed record GroupView(int Group, string Title, int Total, int Learned, IReadOnlyList<FamilyView> Families);
 
 public sealed record ActiveSessionView(long Id, SessionMode Mode, int? Group, string? Family, int Answered, int Total);
 
@@ -65,7 +65,6 @@ public class VerbProgressService
                     IrregularVerbCatalog.GroupTitle(group),
                     families.Sum(f => f.Total),
                     families.Sum(f => f.Learned),
-                    families.Any(f => f.Status != FamilyStatus.Locked),
                     families);
             })
             .ToList();
