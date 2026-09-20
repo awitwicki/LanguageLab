@@ -176,13 +176,82 @@ describe('TrainingScreen — quiz', () => {
   })
 
   it('a right answer shows "Correct"', async () => {
-    apiMock.answer.mockResolvedValue({ isCorrect: true, correctWordPairId: 1, word: 'abide', translation: 'дотримуватися' })
     const { container } = await openQuiz()
 
     await click([...container.querySelectorAll<HTMLButtonElement>('.option')][1])
     await flush()
 
     expect(container.querySelector('.quiz-result')?.textContent).toBe('Correct')
+  })
+
+  it('the result shows at once — before the server has answered — and the next question is fetched behind it', async () => {
+    let recordAnswer: (value: null) => void = () => {}
+    apiMock.answer.mockReturnValue(new Promise<null>((resolve) => (recordAnswer = resolve)))
+    apiMock.nextQuestion.mockResolvedValueOnce(questionOne).mockResolvedValueOnce(questionTwo)
+    const { container } = await openQuiz()
+
+    const options = [...container.querySelectorAll<HTMLButtonElement>('.option')]
+    await click(options[0]) // силос — wrong; the request is still in flight
+
+    expect(options[0].classList.contains('is-wrong')).toBe(true)
+    expect(options[1].classList.contains('is-correct')).toBe(true)
+    expect(container.querySelector('.quiz-result')?.textContent).toBe('abide — дотримуватися')
+    expect(apiMock.nextQuestion).toHaveBeenCalledTimes(1)
+
+    // "Next" is live while the answer is still being recorded.
+    const nextButton = buttons(container).find((b) => b.textContent?.includes('Next'))!
+    expect(nextButton.disabled).toBe(false)
+
+    await act(async () => recordAnswer(null))
+    await flush()
+
+    expect(apiMock.nextQuestion).toHaveBeenCalledTimes(2)
+
+    await click(nextButton)
+    await flush()
+
+    expect(container.querySelector('.quiz-prompt')?.textContent).toBe('silo')
+    expect(apiMock.nextQuestion).toHaveBeenCalledTimes(2)
+  })
+
+  it('a question answered in the other direction grades from its own prompt and labels', async () => {
+    apiMock.nextQuestion.mockResolvedValueOnce({
+      ...questionOne,
+      question: {
+        ...questionOne.question!,
+        direction: 'uaToEn',
+        prompt: 'дотримуватися',
+        options: [
+          { wordPairId: 2, label: 'silo' },
+          { wordPairId: 1, label: 'abide' },
+        ],
+      },
+    })
+    const { container } = await openQuiz()
+
+    await click([...container.querySelectorAll<HTMLButtonElement>('.option')][0])
+
+    expect(container.querySelector('.quiz-result')?.textContent).toBe('abide — дотримуватися')
+  })
+
+  it('a failed answer request shows the error; "Next" asks the server afresh and clears it', async () => {
+    apiMock.answer.mockRejectedValue(new Error('offline'))
+    apiMock.nextQuestion.mockResolvedValueOnce(questionOne).mockResolvedValueOnce(questionTwo)
+    const { container } = await openQuiz()
+
+    await click([...container.querySelectorAll<HTMLButtonElement>('.option')][0])
+    await flush()
+
+    expect(container.querySelector('.quiz-result')?.textContent).toBe('abide — дотримуватися')
+    expect(container.querySelector('.error')?.textContent).toContain('offline')
+    expect(apiMock.nextQuestion).toHaveBeenCalledTimes(1)
+
+    await click(buttons(container).find((b) => b.textContent?.includes('Next'))!)
+    await flush()
+
+    expect(apiMock.nextQuestion).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('.quiz-prompt')?.textContent).toBe('silo')
+    expect(container.querySelector('.error')).toBeNull()
   })
 
   it('keys: 1 picks the first option, Enter is "Next"; digits are ignored after answering', async () => {
@@ -202,12 +271,17 @@ describe('TrainingScreen — quiz', () => {
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('silo')
   })
 
-  it('204 on an answer (a repeated click) — just the next question', async () => {
+  it('204 on an answer (the question was already gone) — the local result stands, "Next" moves on', async () => {
     apiMock.answer.mockResolvedValue(null)
     apiMock.nextQuestion.mockResolvedValueOnce(questionOne).mockResolvedValueOnce(questionTwo)
     const { container } = await openQuiz()
 
     await click([...container.querySelectorAll<HTMLButtonElement>('.option')][0])
+    await flush()
+
+    expect(container.querySelector('.quiz-result')?.textContent).toBe('abide — дотримуватися')
+
+    await click(buttons(container).find((b) => b.textContent?.includes('Next'))!)
     await flush()
 
     expect(container.querySelector('.quiz-prompt')?.textContent).toBe('silo')

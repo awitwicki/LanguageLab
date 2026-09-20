@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api, type AnswerResult, type NextQuestion, type TrainingStarted, type TrainingSummary } from '../api/client'
+import { api, type NextQuestion, type TrainingStarted, type TrainingSummary } from '../api/client'
 import { SortingProgress } from '../components/SortingProgress'
 import { formatDue, percentOf } from '../lib/format'
 import './TrainingScreen.css'
 
 type Phase = 'cards' | 'quiz' | 'summary'
+
+/** The verdict on the current question, worked out in the browser the moment an option is picked. */
+interface Verdict {
+  isCorrect: boolean
+  word: string
+  translation: string
+}
 
 interface Props {
   /** null for a review across every book: it starts from the home screen and goes back there. */
@@ -28,19 +35,21 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
   const [phase, setPhase] = useState<Phase>('cards')
   const [next, setNext] = useState<NextQuestion | null>(null)
   const [pickedId, setPickedId] = useState<number | null>(null)
-  const [answer, setAnswer] = useState<AnswerResult | null>(null)
+  const [answer, setAnswer] = useState<Verdict | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [summary, setSummary] = useState<TrainingSummary | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const nextButtonRef = useRef<HTMLButtonElement>(null)
+  // The question after the one on screen, fetched as soon as the answer is recorded; null
+  // once that fetch failed, so "Next" knows to ask the server itself.
+  const pendingNext = useRef<Promise<NextQuestion | null> | null>(null)
 
-  const loadNext = useCallback(async () => {
-    setBusy(true)
+  const question = next?.question ?? null
 
-    try {
-      const n = await api.nextQuestion(session.trainingId)
-
+  // Puts a fetched question on screen, or ends the session once the queue is empty.
+  const show = useCallback(
+    async (n: NextQuestion) => {
       if (n.question === null) {
         // Do not keep the note ("Know" / "won't show up again") from the previous question —
         // it referred to the quiz card, not the summary screen.
@@ -53,12 +62,22 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
       setNext(n)
       setPickedId(null)
       setAnswer(null)
+      setError(null)
+    },
+    [session.trainingId],
+  )
+
+  const loadNext = useCallback(async () => {
+    setBusy(true)
+
+    try {
+      await show(await api.nextQuestion(session.trainingId))
     } catch (e) {
       setError(String(e))
     } finally {
       setBusy(false)
     }
-  }, [session.trainingId])
+  }, [session.trainingId, show])
 
   const restart = (nextSession: TrainingStarted) => {
     setSession(nextSession)
@@ -69,6 +88,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
     setNotice(null)
     setSummary(null)
     setError(null)
+    pendingNext.current = null
   }
 
   // Only switches the phase: the effect below fetches the first question — so "Start quiz"
@@ -91,52 +111,68 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
   }, [answer])
 
   const pick = useCallback(
-    async (wordPairId: number) => {
-      if (!next?.question || answer || busy) {
+    (wordPairId: number) => {
+      if (!question || answer || busy) {
         return
       }
 
+      const enToUa = question.direction === 'enToUa'
+      const correctLabel = question.options.find((o) => o.wordPairId === question.wordPairId)?.label ?? ''
+
+      // Graded right here: the question carries its own answer, and a round trip between the
+      // click and the colour is exactly the delay a learner feels on a slow link.
       setNotice(null)
       setPickedId(wordPairId)
-      setBusy(true)
+      setAnswer({
+        isCorrect: wordPairId === question.wordPairId,
+        word: enToUa ? question.prompt : correctLabel,
+        translation: enToUa ? correctLabel : question.prompt,
+      })
 
-      try {
-        const result = await api.answer(session.trainingId, next.question.id, wordPairId)
-
-        // 204: the question is already answered or gone — nothing to highlight, move on.
-        if (!result) {
-          await loadNext()
-          return
-        }
-
-        setAnswer(result)
-      } catch (e) {
-        setError(String(e))
-      } finally {
-        setBusy(false)
-      }
+      // The server still records the answer — it grades the session at the end — and the
+      // following question is fetched right behind it, so "Next" finds it ready. A failure is
+      // shown at once, and "Next" then asks the server afresh instead of trusting a prefetch
+      // that never came. A 204 (the question was already gone) changes nothing here.
+      pendingNext.current = api
+        .answer(session.trainingId, question.id, wordPairId)
+        .then(() => api.nextQuestion(session.trainingId))
+        .catch((e) => {
+          setError(String(e))
+          return null
+        })
     },
-    [next, answer, busy, session.trainingId, loadNext],
+    [question, answer, busy, session.trainingId],
   )
 
-  const goNext = useCallback(() => {
+  const goNext = useCallback(async () => {
     if (!answer || busy) {
       return
     }
 
     setNotice(null)
-    void loadNext()
-  }, [answer, busy, loadNext])
+    setBusy(true)
+
+    try {
+      // Usually resolved long ago — the learner has been reading the result.
+      const prefetched = await pendingNext.current
+      pendingNext.current = null
+      await show(prefetched ?? (await api.nextQuestion(session.trainingId)))
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }, [answer, busy, session.trainingId, show])
 
   const markKnown = async () => {
-    if (!next?.question || busy) {
+    if (!question || busy) {
       return
     }
 
     setBusy(true)
 
     try {
-      const known = await api.markKnown(session.trainingId, next.question.id)
+      const known = await api.markKnown(session.trainingId, question.id)
       setNotice(known ? `${known.word} won’t come up again` : null)
       await loadNext()
     } catch (e) {
@@ -199,10 +235,10 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
       if (phase === 'cards' && event.key === 'Enter') {
         startQuiz()
       } else if (phase === 'quiz' && event.key === 'Enter' && answer && !busy) {
-        goNext()
+        void goNext()
       } else if (phase === 'quiz' && !answer && !busy && event.key >= '1' && event.key <= '6') {
-        const option = next?.question?.options[Number(event.key) - 1]
-        if (option) void pick(option.wordPairId)
+        const option = question?.options[Number(event.key) - 1]
+        if (option) pick(option.wordPairId)
         else handled = false
       } else {
         handled = false
@@ -215,7 +251,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, next, answer, busy, startQuiz, goNext, pick])
+  }, [phase, question, answer, busy, startQuiz, goNext, pick])
 
   return (
     <>
@@ -249,7 +285,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
         </section>
       )}
 
-      {phase === 'quiz' && next?.question && (
+      {phase === 'quiz' && next && question && (
         <>
           <SortingProgress
             scope={dictionaryName}
@@ -262,13 +298,13 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
           {notice && <p className="footnote quiz-notice">{notice}</p>}
 
           <div className="quiz-card">
-            <p key={next.question.id} className="quiz-prompt">
-              {next.question.prompt}
+            <p key={question.id} className="quiz-prompt">
+              {question.prompt}
             </p>
 
             <div className="options">
-              {next.question.options.map((option, index) => {
-                const isCorrect = answer !== null && option.wordPairId === answer.correctWordPairId
+              {question.options.map((option, index) => {
+                const isCorrect = answer !== null && option.wordPairId === question.wordPairId
                 const isWrong = answer !== null && option.wordPairId === pickedId && !answer.isCorrect
                 const state = isCorrect ? ' is-correct' : isWrong ? ' is-wrong' : ''
 
@@ -278,7 +314,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
                     type="button"
                     className={`btn btn-secondary option${state}`}
                     disabled={answer !== null || busy}
-                    onClick={() => void pick(option.wordPairId)}
+                    onClick={() => pick(option.wordPairId)}
                   >
                     <kbd>{index + 1}</kbd>
                     <span className="option-label">{option.label}</span>
@@ -298,7 +334,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
                     type="button"
                     className="btn btn-primary btn-lg"
                     disabled={busy}
-                    onClick={goNext}
+                    onClick={() => void goNext()}
                   >
                     Next <kbd>Enter</kbd>
                   </button>
@@ -315,7 +351,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
         </>
       )}
 
-      {phase === 'quiz' && !next?.question && !error && <p className="footnote">Loading…</p>}
+      {phase === 'quiz' && !question && !error && <p className="footnote">Loading…</p>}
 
       {phase === 'summary' && summary && (
         <section className="summary">

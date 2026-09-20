@@ -169,6 +169,9 @@ public static class TrainingEndpoints
 
             var outcome = await sessions.AnswerAsync(request.QuestionId, request.PickedWordPairId, DateTime.UtcNow);
 
+            // The SPA grades in the browser — the question DTO carries its own wordPairId — and
+            // posts here only so the answer is on record for the session's Leitner grading; it
+            // reads nothing from this response. The verdict is still returned for any other client.
             // null — the question is already answered (double click) or gone: the client just moves on to the next one.
             return outcome == null
                 ? Results.NoContent()
