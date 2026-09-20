@@ -1,3 +1,4 @@
+import type { ChangeEvent } from 'react'
 import type { DictionaryListItem } from '../api/client'
 import { ProgressBar } from '../components/ProgressBar'
 import { percentOf, wordsLabel } from '../lib/format'
@@ -17,6 +18,9 @@ interface Props {
 
 const PERSONAL_NAME = 'My words'
 
+/** The picker's value for the personal entry: it is listed before the dictionaries have loaded, when its id is still unknown. */
+const PERSONAL_VALUE = 'personal'
+
 export function Sidebar({
   items,
   error,
@@ -33,15 +37,49 @@ export function Sidebar({
   const personal = items?.find((item) => item.isPersonal) ?? null
   const books = items?.filter((item) => !item.isPersonal)
 
+  // The personal dictionary's own screen has no id in the route, its exercises carry the id
+  // without the flag — the user is "in" it either way.
+  const personalCurrent = personalActive || (personal !== null && personal.id === activeId)
+  const personalLabel = `${personal?.name ?? PERSONAL_NAME} · ${wordsLabel(personal?.wordsCount ?? 0)}`
+
+  // An empty value keeps the placeholder on the screens that belong to no dictionary.
+  const picked = personalCurrent ? PERSONAL_VALUE : String(activeId ?? '')
+
+  const pick = (event: ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value
+
+    if (value === PERSONAL_VALUE) {
+      onOpenPersonal()
+    } else {
+      onSelect(Number(value))
+    }
+  }
+
   return (
     <nav className="sidebar" aria-label="Dictionaries">
+      {/* Phones show this one picker in place of the lists below; the swap is in the stylesheet.
+          A native select opens the system picker there, which a row of chips could not match. */}
+      <div className="sidebar-picker">
+        <select aria-label="Dictionary" value={picked} onChange={pick}>
+          <option value="" disabled>
+            Choose a dictionary
+          </option>
+          <option value={PERSONAL_VALUE}>{personalLabel}</option>
+          {books?.map((item) => (
+            <option key={item.id} value={String(item.id)}>
+              {`${item.name} · ${percentOf(item.sortedCount, item.wordsCount)}%`}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <p className="sidebar-heading">{PERSONAL_NAME}</p>
       <ul className="sidebar-list">
         <li>
           <button
             type="button"
             className="sidebar-item personal-item"
-            aria-current={personalActive ? 'page' : undefined}
+            aria-current={personalCurrent ? 'page' : undefined}
             onClick={onOpenPersonal}
           >
             <span className="name">{personal?.name ?? PERSONAL_NAME}</span>
@@ -78,9 +116,12 @@ export function Sidebar({
           <button
             type="button"
             className={`btn ${importActive ? 'btn-primary' : 'btn-secondary'}`}
+            aria-label="Import a book"
             onClick={onImport}
           >
-            Import a book
+            {/* The short label is what a phone shows: it shares the row with the picker. */}
+            <span className="import-label">Import a book</span>
+            <span className="import-label-short">Import</span>
           </button>
         </div>
       )}
