@@ -45,10 +45,17 @@ Everything in the project — code, comments, docs, UI copy — is English. The 
 
 ### Docker / .env
 
-`compose.yaml` brings up Postgres and `LanguageLab.Api` together. Env vars:
+`compose.yaml` brings up `LanguageLab.Api` and the Telegram bot `LanguageLab.TgBot` (Postgres is
+commented out there; see Run below). Both read `.env`, with keys in the ASP.NET Core `__`
+spelling:
 
-* `POSTGRES_PASSWORD={password}` - Postgres password, referenced by `compose.yaml` for both the database container and the API's connection string
-* `TELEGRAM_CLIENT_ID` / `TELEGRAM_CLIENT_SECRET` - OpenID Connect credentials, passed through to `Telegram:ClientId` / `Telegram:ClientSecret` (see Accounts, below)
+* `POSTGRES_PASSWORD={password}` - Postgres password, referenced by `compose.yaml` for the
+  database container and the API's connection string
+* `Telegram__ClientId` / `Telegram__ClientSecret` - the API's OpenID Connect credentials (see
+  Accounts, below)
+* `Telegram__BotToken` - the bot token from @BotFather. The bot talks to Telegram with it, and
+  the API validates Mini App sign-ins with it (see Accounts → Inside Telegram)
+* `WebApp__Url` - the public `https://` address of the app, which the bot's button opens
 * `Translation__MyMemoryEmail` - optional; any contact email raises MyMemory's free
   translation quota from 5 000 to 50 000 characters a day per server IP (see Translation, below)
 
@@ -64,6 +71,10 @@ Everything in the project — code, comments, docs, UI copy — is English. The 
   @BotFather → your bot → **Login Widget**. Required outside Development, where the app
   refuses to start without them. In Development they are optional: the app starts with a
   warning and Telegram sign-in fails, but the local dev sign-in below still works.
+* `Telegram:BotToken` - the bot token from @BotFather. The Mini App sign-in
+  (`POST /api/auth/telegram/webapp`) checks Telegram's launch parameters against it. Required
+  outside Development, like the credentials above; in Development it is optional, and without
+  it signing in from inside Telegram answers 503.
 * `Translation:MyMemoryEmail` - optional. Auto-translation for the personal dictionary uses
   MyMemory (api.mymemory.translated.net), which needs no key; the email only raises the daily
   quota. Leave it empty to run anonymously.
@@ -71,7 +82,23 @@ Everything in the project — code, comments, docs, UI copy — is English. The 
 For a local run, fill in `LanguageLab.Api/appsettings.Development.json` (see the example
 below). In Docker the same values are passed via env vars using the standard
 ASP.NET Core convention (`__` instead of `:`): `ConnectionStrings__DefaultConnection`,
-`Telegram__ClientId`, `Telegram__ClientSecret`.
+`Telegram__ClientId`, `Telegram__ClientSecret`, `Telegram__BotToken`.
+
+### LanguageLab.TgBot
+
+A `/start`-only bot: it answers every private message with the bot's name, a line on what the
+app does and an **Open LanguageLab** button that opens the app inside Telegram, and it sets the
+chat's menu button to the same page. It long-polls, keeps no state and never touches the
+database — the app itself signs the user in (see Accounts → Inside Telegram). Configuration:
+
+* `Telegram:BotToken` - the bot token from @BotFather; required
+* `WebApp:Url` - the public address the button opens; required, and must be `https://`, since
+  Telegram does not open a Mini App over plain http
+
+Locally either export them (`Telegram__BotToken=… WebApp__Url=… dotnet run --project
+LanguageLab.TgBot`) or put them in `LanguageLab.TgBot/appsettings.Development.json` (gitignored)
+and run with `DOTNET_ENVIRONMENT=Development`. A local bot has to point at an `https://` app —
+the deployed one, or a tunnel — so the usual local loop is the API plus Vite, without the bot.
 
 ### Accounts
 
@@ -103,6 +130,25 @@ written by a separate bot process:
 ```sql
 SELECT "TelegramUserId", count(*) FROM "Users" GROUP BY 1 HAVING count(*) > 1;
 ```
+
+**Inside Telegram (Mini App).** The bot's **Open LanguageLab** button (and the chat's menu
+button) opens the app in Telegram's own web view. Telegram hands that page signed launch
+parameters — `window.Telegram.WebApp.initData`, a query string whose `hash` is an HMAC-SHA256
+over the other fields keyed by the bot token — and the SPA posts them to
+`POST /api/auth/telegram/webapp`. The server recomputes the hash
+(`LanguageLab.Api/Auth/WebAppInitData.cs`), refuses launches older than 24 hours, and then runs
+the same login as the OIDC callback: first login registers, the first account is the admin, a
+ban answers 403, and the session is the same `ll_session` cookie. There is no login screen on
+that path; the OIDC flow is only for a browser.
+
+At boot the SPA asks `/api/auth/me` first and posts the launch parameters only on a 401, so a
+web view kept open past the 24-hour window keeps working on its cookie. If the sign-in is
+refused, the login screen shows a **Sign in with Telegram** button that retries it, and a
+message asking to reopen the app from the bot.
+
+Telegram Web (web.telegram.org in a desktop browser) opens Mini Apps in an iframe, and the
+`SameSite=Lax` session cookie is not sent from a cross-site iframe — so that client does not
+work; iOS, Android and Desktop do. Supporting it would mean `SameSite=None` on the cookie.
 
 **Allowed URLs.** In the same @BotFather *Login Widget* section, register every callback the
 app is reached through — the flow is refused for any URL that is not listed:
@@ -177,8 +223,8 @@ train them like any book. Provider results are not cached (see TODO).
 docker-compose up --build -d
 ```
 
-Brings up Postgres and `LanguageLab.Api` (which also serves the web app at `http://localhost:5080`)
-in one move.
+Brings up `LanguageLab.Api` (which also serves the web app at `http://localhost:5080`) and the
+Telegram bot in one move; Postgres is commented out in `compose.yaml` and runs on its own.
 
 ### Locally, without Docker (dotnet + npm)
 
@@ -206,7 +252,8 @@ not committed to git):
   },
   "Telegram": {
     "ClientId": "{your bot's OpenID Connect client id}",
-    "ClientSecret": "{your bot's OpenID Connect client secret}"
+    "ClientSecret": "{your bot's OpenID Connect client secret}",
+    "BotToken": "{your bot token}"
   }
 }
 ```
@@ -216,6 +263,9 @@ dotnet run --project LanguageLab.Api
 ```
 
 Comes up at `http://localhost:5080`.
+
+**Bot** (optional, separate terminal) — see Development → LanguageLab.TgBot for its two
+settings; it needs an `https://` app URL to point at.
 
 **Web app** (separate terminal; Vite with a proxy to the API, needed for frontend development):
 

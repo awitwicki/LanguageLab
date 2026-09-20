@@ -28,6 +28,17 @@
     networks:
       - kodzuverse
 
+  languagelab.tgbot:
+    image: languagelab.tgbot
+    container_name: languagelab.tgbot-container
+    build:
+      context: .
+      dockerfile: LanguageLab.TgBot/Dockerfile
+    env_file:
+      - .env
+    networks:
+      - kodzuverse
+
 networks:
   kodzuverse:
     name: kodzuverse_network

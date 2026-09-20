@@ -20,9 +20,10 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   `GET /api/training/stats` — the user's global Leitner standing (per-box counts, learned, due), rendered on the home screen.
   `/api/chapters` — `GET /starred` (the home screen's starred chapters, ordered by book name then chapter order), `PUT|DELETE /{id}/star` (204; 404 for a chapter of an invisible book, or nothing to unstar).
   `Auth/` (claims, session validation, the OIDC event handlers), `/api/auth/*`
-  (telegram/start, the handler-owned telegram/callback, me, logout), `/api/admin/users*`
+  (telegram/start, the handler-owned telegram/callback, telegram/webapp, me, logout), `/api/admin/users*`
   (list, ban, unban, role, delete);
   `GET /api/dictionaries/personal`, `POST|DELETE /api/dictionaries/personal/words[/{id}]` — the personal dictionary; `GET /api/translate?word=` — a translation suggestion.
+- `LanguageLab.TgBot/` — the Telegram bot: a Generic Host console app on `Telegram.Bot` (long polling), no database, no project references. `/start` (any private message) answers with the bot name, a description and an **Open LanguageLab** `web_app` button; the chat menu button is set to the same URL at startup. Config `Telegram:BotToken`, `WebApp:Url` (`BotOptions`); copy and keyboard in `StartMessage`; polling in `BotService`. Own Dockerfile and compose service.
 - `web/` — React + Vite SPA: fb2 import in the browser, dictionary stats, word sorting. `src/layout/` (shell: top bar + sidebar), `src/screens/`, `src/components/`, `src/lib/` (formatters), tests `*.test.ts(x)` next to the code (vitest + jsdom, helper `src/test/render.ts`). Details in [web/README.md](web/README.md).
 - `extract.py` — Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictionaries under `dictionaries/`.
 
@@ -41,6 +42,13 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   three times over (`#if DEBUG` + Release publish, `IsDevelopment()`, `import.meta.env.DEV`) —
   see `LanguageLab.Api/Auth/DevLogin.cs`; weakening any fence is a security change.
   Telegram credentials are therefore optional in Development and required everywhere else.
+- Mini App sign-in: opened inside Telegram, the SPA posts `window.Telegram.WebApp.initData` to
+  `POST /api/auth/telegram/webapp`; `LanguageLab.Api/Auth/WebAppInitData.cs` checks the
+  HMAC-SHA256 against `Telegram:BotToken` (required outside Development, like the OIDC
+  credentials), refuses launches older than 24 h, and issues the same `ll_session` cookie via
+  `UserLoginService`. The SPA asks `/api/auth/me` first and posts only on a 401
+  (`web/src/auth/useAuth.ts`; `web/src/auth/telegram.ts` is the only file touching
+  `window.Telegram`). Telegram Web (browser iframe) is unsupported: `SameSite=Lax`.
 - Dictionaries have an owner and an `IsPublic` flag: import, delete and visibility changes are
   admin-only, and regular users see public dictionaries plus their own.
 - Personal dictionary: one private `Dictionary` per user (`IsPersonal`, created on first use by

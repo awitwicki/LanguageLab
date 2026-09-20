@@ -54,7 +54,7 @@ const MODE_LANDING: Record<AppMode, Route> = {
 }
 
 export default function App() {
-  const { state, loginFailed, signOut, deleteAccount, dismissBanned } = useAuth()
+  const { state, loginFailed, insideTelegram, signInWithTelegram, signOut, deleteAccount, dismissBanned } = useAuth()
 
   const [route, setRoute] = useState<Route>({ name: 'home' })
   const [dictionaries, setDictionaries] = useState<DictionaryListItem[] | null>(null)
@@ -126,7 +126,12 @@ export default function App() {
   }
 
   if (state.status === 'anonymous') {
-    return <LoginScreen loginFailed={loginFailed} />
+    return (
+      <LoginScreen
+        loginFailed={loginFailed}
+        onTelegramSignIn={insideTelegram ? () => void signInWithTelegram() : null}
+      />
+    )
   }
 
   return (

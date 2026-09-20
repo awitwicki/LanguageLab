@@ -27,6 +27,12 @@ function respond(routes: Record<string, { status: number; body?: unknown }>) {
   )
 }
 
+// Telegram's bridge script defines window.Telegram before any module runs; the stub goes in
+// before the import for the same reason. unstubAllGlobals in afterEach takes it out again.
+function insideTelegram(initData = 'auth_date=1&hash=abc') {
+  vi.stubGlobal('Telegram', { WebApp: { initData, ready: vi.fn(), expand: vi.fn() } })
+}
+
 beforeEach(() => {
   window.history.replaceState({}, '', '/')
   vi.resetModules()
@@ -251,5 +257,132 @@ describe('useAuth', () => {
     // Should remain banned, not be overwritten to anonymous by the second invocation's getMe()
     expect(container.textContent).toBe('banned')
     expect(window.location.search).toBe('')
+  })
+
+  it('signs in through the launch parameters when opened inside Telegram', async () => {
+    insideTelegram('auth_date=1&hash=abc')
+    const { useAuth } = await import('./useAuth')
+    respond({ '/api/auth/me': { status: 401 }, '/api/auth/telegram/webapp': { status: 200, body: user } })
+    const seen: AuthState[] = []
+
+    function Probe() {
+      const { state } = useAuth()
+      seen.push(state)
+      return <span>{state.status}</span>
+    }
+
+    await render(<Probe />)
+    await flush()
+
+    expect(seen.at(-1)).toEqual({ status: 'signed-in', user })
+
+    const post = vi.mocked(fetch).mock.calls.find(([path]) => path === '/api/auth/telegram/webapp')
+    expect(post?.[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ initData: 'auth_date=1&hash=abc' }) })
+  })
+
+  it('lands on the banned screen when the Telegram sign-in is refused for a suspension', async () => {
+    insideTelegram()
+    const { useAuth } = await import('./useAuth')
+    respond({ '/api/auth/me': { status: 401 }, '/api/auth/telegram/webapp': { status: 403 } })
+
+    function Probe() {
+      const { state } = useAuth()
+      return <span>{state.status}</span>
+    }
+
+    const { container } = await render(<Probe />)
+    await flush()
+
+    expect(container.textContent).toBe('banned')
+  })
+
+  it('falls back to the login screen when the Telegram sign-in fails', async () => {
+    insideTelegram()
+    const { useAuth } = await import('./useAuth')
+    respond({ '/api/auth/me': { status: 401 }, '/api/auth/telegram/webapp': { status: 401 } })
+
+    function FailProbe() {
+      const { state, loginFailed } = useAuth()
+      return <span>{`${state.status}:${loginFailed}`}</span>
+    }
+
+    const { container } = await render(<FailProbe />)
+    await flush()
+
+    expect(container.textContent).toBe('anonymous:true')
+  })
+
+  // A web view kept open past the 24-hour window still has a cookie: that must be enough.
+  it('prefers a live session over the launch parameters', async () => {
+    insideTelegram()
+    const { useAuth } = await import('./useAuth')
+    respond({ '/api/auth/me': { status: 200, body: user } })
+
+    function Probe() {
+      const { state } = useAuth()
+      return <span>{state.status}</span>
+    }
+
+    const { container } = await render(<Probe />)
+    await flush()
+
+    expect(container.textContent).toBe('signed-in')
+    expect(vi.mocked(fetch).mock.calls.map(([path]) => path)).toEqual(['/api/auth/me'])
+  })
+
+  it('does not post launch parameters outside Telegram', async () => {
+    const { useAuth } = await import('./useAuth')
+    respond({ '/api/auth/me': { status: 401 } })
+
+    function Probe() {
+      const { state, insideTelegram } = useAuth()
+      return <span>{`${state.status}:${insideTelegram}`}</span>
+    }
+
+    const { container } = await render(<Probe />)
+    await flush()
+
+    expect(container.textContent).toBe('anonymous:false')
+    expect(vi.mocked(fetch).mock.calls.map(([path]) => path)).toEqual(['/api/auth/me'])
+  })
+
+  // The login screen's button inside Telegram: the same sign-in the boot made, on demand.
+  it('repeats the Telegram sign-in from the login screen', async () => {
+    insideTelegram()
+    const { useAuth } = await import('./useAuth')
+    let attempts = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((path: string) => {
+        const route =
+          path === '/api/auth/me' ? { status: 401 }
+          : path === '/api/auth/telegram/webapp' ? (attempts++ === 0 ? { status: 401 } : { status: 200, body: user })
+          : { status: 404 }
+
+        return Promise.resolve({
+          ok: route.status >= 200 && route.status < 300,
+          status: route.status,
+          json: () => Promise.resolve(route.body),
+        } as Response)
+      }),
+    )
+
+    function Probe() {
+      const { state, loginFailed, insideTelegram, signInWithTelegram } = useAuth()
+      return (
+        <button type="button" onClick={() => void signInWithTelegram()}>
+          {`${state.status}:${loginFailed}:${insideTelegram}`}
+        </button>
+      )
+    }
+
+    const { container } = await render(<Probe />)
+    await flush()
+    expect(container.textContent).toBe('anonymous:true:true')
+
+    await click(container.querySelector('button')!)
+    await flush()
+
+    expect(container.textContent).toBe('signed-in:false:true')
   })
 })

@@ -48,6 +48,26 @@ if (!telegram.IsConfigured)
 }
 
 builder.Services.AddSingleton(telegram);
+
+var webApp = new TelegramWebAppOptions(builder.Configuration["Telegram:BotToken"] ?? string.Empty);
+
+// The same rule as the OIDC credentials above: outside Development a Mini App sign-in that
+// cannot work is a deployment mistake to fail on now, not at somebody's first open.
+if (!webApp.IsConfigured)
+{
+    const string problem =
+        "Telegram:BotToken is not set (Telegram__BotToken in Docker). It is the bot's token " +
+        "from @BotFather, and the Mini App sign-in validates Telegram's launch parameters with it.";
+
+    if (!builder.Environment.IsDevelopment())
+    {
+        throw new InvalidOperationException(problem);
+    }
+
+    Console.WriteLine($"warn: {problem} Signing in from inside Telegram is disabled.");
+}
+
+builder.Services.AddSingleton(webApp);
 builder.Services.AddSingleton<ServerSideStateFormat>();
 
 var authentication = builder.Services

@@ -19,8 +19,21 @@ public sealed record TelegramLoginOptions(string ClientId, string ClientSecret)
         !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret);
 }
 
+/// <summary>
+/// The bot token from @BotFather. Telegram signs a Mini App's launch parameters with it, so it
+/// is what POST /api/auth/telegram/webapp checks them against. It never leaves the server.
+/// </summary>
+public sealed record TelegramWebAppOptions(string BotToken)
+{
+    /// <summary>False only in Development — Program.cs refuses to start without the token anywhere else.</summary>
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(BotToken);
+}
+
 public sealed record CurrentUserView(
     long Id, long TelegramUserId, string DisplayName, string? Username, string? PhotoUrl, UserRole Role);
+
+/// <summary>The body of POST /api/auth/telegram/webapp: window.Telegram.WebApp.initData, verbatim.</summary>
+public sealed record WebAppLoginRequest(string? InitData);
 
 public static class AuthEndpoints
 {
@@ -37,6 +50,8 @@ public static class AuthEndpoints
                 "Telegram sign-in is not configured: Telegram:ClientId and Telegram:ClientSecret " +
                 "are unset. Only possible in Development — use the local dev sign-in instead.",
                 statusCode: StatusCodes.Status503ServiceUnavailable));
+
+        group.MapPost("/telegram/webapp", SignInFromWebAppAsync);
 
         group.MapGet("/me", async (ICurrentUserContext currentUser, ApplicationDbContext db) =>
         {
@@ -101,6 +116,46 @@ public static class AuthEndpoints
             });
         }
 #endif
+    }
+
+    /// <summary>
+    /// The Mini App sign-in. The SPA, opened inside Telegram's web view, posts the launch
+    /// parameters Telegram signed for it; a valid signature is as good as a validated id_token,
+    /// and the session it earns is the same cookie the OIDC callback issues. This is a fetch,
+    /// not a redirect, so every refusal is a status code with a message.
+    /// </summary>
+    private static async Task<IResult> SignInFromWebAppAsync(
+        WebAppLoginRequest body, HttpContext http, TelegramWebAppOptions webApp, UserLoginService login)
+    {
+        if (!webApp.IsConfigured)
+        {
+            return Results.Problem(
+                "Signing in from inside Telegram is not configured: Telegram:BotToken is unset. " +
+                "Only possible in Development — use the local dev sign-in instead.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        var launch = WebAppInitData.Validate(body.InitData, webApp.BotToken, DateTimeOffset.UtcNow);
+
+        if (!launch.IsValid)
+        {
+            return Results.Json(new AdminError(launch.Error), statusCode: StatusCodes.Status401Unauthorized);
+        }
+
+        var result = await login.LoginAsync(launch.Identity, DateTime.UtcNow);
+
+        if (result.Outcome == LoginOutcome.Banned)
+        {
+            return Results.Json(
+                new AdminError("An administrator has suspended this account."),
+                statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        await http.SignInAsync(
+            PrincipalFactory.Scheme,
+            PrincipalFactory.Create(result.User.Id, result.User.Role));
+
+        return Results.Ok(ToView(result.User));
     }
 
     // DisplayName is computed on the entity (Task 1) so the admin list gives the same answer.

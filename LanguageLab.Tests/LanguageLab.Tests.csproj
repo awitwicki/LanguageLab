@@ -25,6 +25,7 @@
     <ProjectReference Include="..\LanguageLab.Infrastructure\LanguageLab.Infrastructure.csproj" />
     <ProjectReference Include="..\LanguageLab.Application\LanguageLab.Application.csproj" />
     <ProjectReference Include="..\LanguageLab.Api\LanguageLab.Api.csproj" />
+    <ProjectReference Include="..\LanguageLab.TgBot\LanguageLab.TgBot.csproj" />
   </ItemGroup>
 
 </Project>

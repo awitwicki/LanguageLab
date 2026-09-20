@@ -15,6 +15,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LanguageLab.Application", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LanguageLab.Api", "LanguageLab.Api\LanguageLab.Api.csproj", "{C4F5EDE5-DE41-4E4F-9DDA-9EC27823410D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LanguageLab.TgBot", "LanguageLab.TgBot\LanguageLab.TgBot.csproj", "{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -85,6 +87,18 @@ Global
 		{C4F5EDE5-DE41-4E4F-9DDA-9EC27823410D}.Release|x64.Build.0 = Release|Any CPU
 		{C4F5EDE5-DE41-4E4F-9DDA-9EC27823410D}.Release|x86.ActiveCfg = Release|Any CPU
 		{C4F5EDE5-DE41-4E4F-9DDA-9EC27823410D}.Release|x86.Build.0 = Release|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Debug|x64.Build.0 = Debug|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Debug|x86.Build.0 = Debug|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Release|x64.ActiveCfg = Release|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Release|x64.Build.0 = Release|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Release|x86.ActiveCfg = Release|Any CPU
+		{57FC6D1D-10BC-4F72-90AE-812DF6587EBB}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

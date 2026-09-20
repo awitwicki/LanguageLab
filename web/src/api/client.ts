@@ -23,6 +23,9 @@ export interface AdminUserPage {
   pageSize: number
 }
 
+/** What a Mini App sign-in came back with. 'failed' covers a stale or bad launch and any server error. */
+export type WebAppLogin = { status: 'signed-in'; user: CurrentUser } | { status: 'banned' } | { status: 'failed' }
+
 export interface DictionaryListItem {
   id: number
   name: string
@@ -706,6 +709,22 @@ export const api = {
     }
 
     return (await response.json()) as CurrentUser
+  },
+
+  // Raw fetch for the same reason as getMe: a refusal here is a boot-time answer, not a
+  // session that died under the app.
+  telegramWebAppLogin: async (initData: string): Promise<WebAppLogin> => {
+    const response = await fetch('/api/auth/telegram/webapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData }),
+    })
+
+    if (response.ok) {
+      return { status: 'signed-in', user: (await response.json()) as CurrentUser }
+    }
+
+    return { status: response.status === 403 ? 'banned' : 'failed' }
   },
 
   logout: () => request<null>('/api/auth/logout', { method: 'POST' }),
