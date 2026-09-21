@@ -5,6 +5,7 @@ WORKDIR /app
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
+COPY ["Directory.Build.props", "./"]
 COPY ["LanguageLab.TgBot/LanguageLab.TgBot.csproj", "LanguageLab.TgBot/"]
 RUN dotnet restore "LanguageLab.TgBot/LanguageLab.TgBot.csproj"
 # The bot references no other project, so only its own folder goes in: a change to the API

@@ -22,6 +22,15 @@
   color: var(--text);
 }
 
+/* The build number: a quiet caption inline after the name, so it shares its baseline. */
+.brand-version {
+  margin-left: 6px;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  letter-spacing: 0;
+  color: var(--text-3);
+}
+
 .mode-tabs {
   display: flex;
   gap: 2px;

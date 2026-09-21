@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CurrentUser } from '../api/client'
+import { appVersion } from '../lib/version'
 import { click, render } from '../test/render'
 import type { AppMode } from './mode'
 import { TopBar } from './TopBar'
@@ -23,6 +24,17 @@ function topBar(mode: AppMode | null, onSelectMode: (mode: AppMode) => void = ()
 function tabs(container: HTMLElement) {
   return [...container.querySelectorAll<HTMLButtonElement>('.mode-tab')]
 }
+
+describe('TopBar — brand', () => {
+  it('shows the build version next to the app name', async () => {
+    const { container } = await render(topBar(null))
+
+    const version = container.querySelector('.brand .brand-version')
+    expect(version?.textContent).toBe(appVersion)
+    // The number comes from Directory.Build.props; TeamCity appends a fourth part.
+    expect(appVersion).toMatch(/^\d+\.\d+\.\d+(\.\d+)?$/)
+  })
+})
 
 describe('TopBar — mode tabs', () => {
   it('offers the three modes in order and marks the current one', async () => {

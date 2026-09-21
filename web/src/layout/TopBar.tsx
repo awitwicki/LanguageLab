@@ -1,4 +1,5 @@
 import type { CurrentUser } from '../api/client'
+import { appVersion } from '../lib/version'
 import { AccountMenu } from './AccountMenu'
 import { MODES, type AppMode } from './mode'
 import './TopBar.css'
@@ -18,7 +19,12 @@ export function TopBar({ user, mode, onSelectMode, onHome, onAdmin, onSignOut, o
     <header className="topbar">
       <button type="button" className="brand" onClick={onHome}>
         <img src="/favicon.svg" alt="" width={22} height={22} />
-        LanguageLab
+        <span>
+          LanguageLab
+          <span className="brand-version num" title="Build version">
+            {appVersion}
+          </span>
+        </span>
       </button>
 
       <nav className="mode-tabs" aria-label="Mode">

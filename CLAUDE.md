@@ -77,6 +77,11 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   (Firefox, Safari) — no degraded fallback mode.
 - Training requires a non-empty `WordPair.Translation` (both for batch words and distractors). Translations for the "don't know" shelf were backfilled once on 2026-09-07 (`result/translations.txt`, local); auto-translation is in the README TODO.
 - Batch = the scope's most frequent learnable words (chapter or book frequency), deterministic; the web app shows a preview and passes `wordPairIds` explicitly.
+- Version: one place, the `<Version>` element of `Directory.Build.props` at the repo root. MSBuild
+  applies it to every project; `web/vite.config.ts` reads the same element and bakes it into the
+  SPA as `__APP_VERSION__`, read only through `web/src/lib/version.ts` and shown next to the logo
+  in the top bar. CI rewrites that element to `0.0.0.N` before the docker build — README →
+  Versioning. Both Dockerfiles copy the file into their build stages; keep it that way.
 
 ## Adding a migration
 

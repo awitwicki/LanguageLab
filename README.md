@@ -44,6 +44,36 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 
 Everything in the project — code, comments, docs, UI copy — is English. The one exception: the vocabulary translation shown to the learner (`WordPair.Translation`, the Ukrainian meaning of each English word) stays Ukrainian, since that's the point of the app. See `CLAUDE.md` → Frontend conventions.
 
+### Versioning
+
+The version lives in one place: the `<Version>` element of `Directory.Build.props` at the repo
+root. MSBuild applies it to every project (assembly, file and informational version of the API,
+the bot and the tests), and `web/vite.config.ts` reads the same element at build time and bakes
+it into the SPA (`src/lib/version.ts`), which shows it next to the logo in the top bar. Bump it
+there by hand for a release; nothing else needs to change. `dotnet build /p:Version=…` would
+override only the .NET side — the file is the contract, so edit the file.
+
+CI (TeamCity) turns `0.0.0` into `0.0.0.N`, `N` being the build counter, with the **File
+Content Replacer** build feature, which patches the file before the first step and restores it
+after the build (nothing is ever committed):
+
+| Field | Value |
+|---|---|
+| Process files | `Directory.Build.props` |
+| Find what | `<Version>(\d+\.\d+\.\d+)</Version>` |
+| Regex mode | Regex, match case |
+| Replace with | `<Version>$1.%build.counter%</Version>` |
+
+`%build.counter%` rather than `%build.number%`: the counter is always a bare integer, so the
+result does not depend on the configuration's build number format. Both Dockerfiles copy the
+patched file into their build stages, so the assemblies and the SPA pick it up. To make
+TeamCity itself show `0.0.0.N` as the build number, add a Command Line step in front of the
+`docker compose build` — the replacer has already run by then:
+
+```bash
+echo "##teamcity[buildNumber '$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)']"
+```
+
 ### Docker / .env
 
 `compose.yaml` brings up `LanguageLab.Api` and the Telegram bot `LanguageLab.TgBot` (Postgres is
