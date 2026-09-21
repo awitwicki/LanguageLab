@@ -87,3 +87,10 @@
   align-items: center;
   gap: 8px;
 }
+
+/* Same width as the fields above it, so the bar reads as part of the form. */
+.import-status {
+  display: grid;
+  gap: 8px;
+  max-width: 420px;
+}

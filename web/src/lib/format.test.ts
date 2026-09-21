@@ -1,5 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { chaptersLabel, formatDue, formatInt, formatProgress, percentOf, plural, wordsLabel } from './format'
+import { chaptersLabel, formatBytes, formatDue, formatInt, formatProgress, percentOf, plural, wordsLabel } from './format'
+
+describe('formatBytes', () => {
+  it('bytes under a kilobyte stay bytes', () => {
+    expect(formatBytes(0)).toBe('0 B')
+    expect(formatBytes(512)).toBe('512 B')
+  })
+
+  it('kilobytes are whole numbers', () => {
+    expect(formatBytes(1536)).toBe('2 kB')
+    expect(formatBytes(820 * 1024)).toBe('820 kB')
+  })
+
+  it('megabytes keep one decimal', () => {
+    expect(formatBytes(1_468_006)).toBe('1.4 MB')
+    expect(formatBytes(12 * 1024 * 1024)).toBe('12.0 MB')
+  })
+})
 
 describe('percentOf', () => {
   it('0 of 0 is 0%, not NaN', () => {

@@ -17,7 +17,7 @@ npm run build    # tsc -b && vite build → dist/
 - `src/screens/` — screens: `HomeScreen`, `ImportScreen`, `DictionaryScreen`, `SortingScreen`, `TrainingStartScreen` (batch size), `TrainingScreen` (cards → quiz → summary).
 - `src/components/` — `ProgressBar`, `SortingProgress`, `LeitnerScale` (Leitner box scale + weighted percent).
 - `src/lib/` — number and label formatters (`format.ts`, `labels.ts`).
-- `src/fb2/`, `src/worker/` — fb2 parsing and lemmatization in the browser.
+- `src/fb2/`, `src/worker/` — fb2 parsing and lemmatization in the browser. The worker reports progress per chapter (`{ kind: 'progress' }`), the import screen shows it as a bar, then the upload's bytes sent (`api.importDictionary` goes over `XMLHttpRequest` for that), then "Saving on the server…". A worker that fails to load or crashes rejects the pending request instead of hanging the screen.
 - `src/sorting/useSortingQueue.ts` — sorting-queue buffer with optimistic marks.
 - `src/training/useBatchPreview.ts` — batch preview for the start screen: candidates by frequency, "know" cross-out / "bring back", pure `reconcileRows`.
 - `src/api/client.ts` — API response types and fetch wrappers.

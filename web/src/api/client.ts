@@ -537,6 +537,71 @@ async function request<T>(path: string, init?: RequestInit): Promise<T | null> {
   return (await response.json()) as T
 }
 
+export type UploadProgress = (sent: number, total: number) => void
+
+/**
+ * A POST with upload progress. fetch cannot report bytes sent, and a book is a megabyte or
+ * two of JSON that a phone on mobile data pushes slowly enough for a bare "Uploading…" to
+ * look stuck — so this one request goes over XMLHttpRequest. Failures are named: the
+ * server's own message when it sends one, a size hint for a 413 (the proxy in front of the
+ * API refuses big bodies, not the API), and a dropped connection instead of silence.
+ */
+function uploadJson<T>(path: string, payload: unknown, onProgress?: UploadProgress): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+
+    xhr.open('POST', path)
+    xhr.setRequestHeader('Content-Type', 'application/json')
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(event.loaded, event.total)
+      }
+    }
+
+    xhr.onerror = () =>
+      reject(new Error('The connection dropped while uploading. Check the network and try again.'))
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          resolve(JSON.parse(xhr.responseText) as T)
+        } catch {
+          reject(new Error(`POST ${path} → ${xhr.status}, unreadable response`))
+        }
+
+        return
+      }
+
+      if (xhr.status === 401) {
+        unauthorizedHandler()
+      }
+
+      reject(new Error(uploadErrorMessage(xhr.status, xhr.responseText, path)))
+    }
+
+    xhr.send(JSON.stringify(payload))
+  })
+}
+
+function uploadErrorMessage(status: number, body: string, path: string): string {
+  try {
+    const parsed = JSON.parse(body) as { message?: string }
+
+    if (parsed?.message) {
+      return parsed.message
+    }
+  } catch {
+    // Not a JSON body — a proxy error page, most likely.
+  }
+
+  if (status === 413) {
+    return 'The server refused the upload as too large (HTTP 413). Try a book with fewer chapters, or a lower chapter level.'
+  }
+
+  return `POST ${path} → ${status}`
+}
+
 export const api = {
   listDictionaries: () => request<DictionaryListItem[]>('/api/dictionaries') as Promise<DictionaryListItem[]>,
 
@@ -567,16 +632,16 @@ export const api = {
       body: JSON.stringify({ words }),
     }) as Promise<BulkWordOutcome[]>,
 
-  importDictionary: (payload: {
-    name: string
-    chapters?: ImportChapter[]
-    words?: ImportWord[]
-    isPublic?: boolean
-  }) =>
-    request<ImportResult>('/api/dictionaries/import', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }) as Promise<ImportResult>,
+  /** onUploadProgress gets the bytes sent so far and the body size, as the browser pushes the book out. */
+  importDictionary: (
+    payload: {
+      name: string
+      chapters?: ImportChapter[]
+      words?: ImportWord[]
+      isPublic?: boolean
+    },
+    onUploadProgress?: UploadProgress,
+  ) => uploadJson<ImportResult>('/api/dictionaries/import', payload, onUploadProgress),
 
   getQueue: (dictionaryId: number, chapterIds: number[] | null, take = 50) => {
     const params = new URLSearchParams({ dictionaryId: String(dictionaryId), take: String(take) })

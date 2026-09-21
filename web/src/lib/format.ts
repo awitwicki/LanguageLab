@@ -16,6 +16,21 @@ export function formatProgress(sorted: number, total: number): string {
   return `${formatInt(sorted)} of ${formatInt(total)}`
 }
 
+/** A byte count for the eye: whole kilobytes, megabytes with one decimal. */
+export function formatBytes(bytes: number): string {
+  const kilobyte = 1024
+
+  if (bytes < kilobyte) {
+    return `${Math.trunc(bytes)} B`
+  }
+
+  if (bytes < kilobyte * kilobyte) {
+    return `${Math.round(bytes / kilobyte)} kB`
+  }
+
+  return `${(bytes / kilobyte / kilobyte).toFixed(1)} MB`
+}
+
 /** English plural: exactly 1 takes the singular, everything else (0, 2+, negatives) the plural. */
 export function plural(n: number, one: string, many: string): string {
   return Math.abs(n) === 1 ? one : many

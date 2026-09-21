@@ -9,20 +9,30 @@ import { aggregate, type AggregatedChapter } from '../fb2/aggregate'
 // book's vocabulary, stays here, off the main thread.
 export type WorkerRequest = { kind: 'aggregate'; sections: SectionNode[]; mode: ChapterMode }
 
+/**
+ * 'progress' arrives after every lemmatized chapter (and once, at 0, as soon as the request is
+ * picked up — the screen learns the worker is alive before the first chapter is done);
+ * 'aggregated' or 'error' closes the request.
+ */
 export type WorkerResponse =
+  | { kind: 'progress'; done: number; total: number }
   | { kind: 'aggregated'; chapters: AggregatedChapter[] }
   | { kind: 'error'; message: string }
 
+function post(response: WorkerResponse) {
+  self.postMessage(response)
+}
+
 self.onmessage = (event: MessageEvent<WorkerRequest>) => {
   try {
-    const chapters = aggregate(flattenChapters(event.data.sections, event.data.mode))
-    const response: WorkerResponse = { kind: 'aggregated', chapters }
-    self.postMessage(response)
+    const chapters = flattenChapters(event.data.sections, event.data.mode)
+
+    post({ kind: 'progress', done: 0, total: chapters.length })
+
+    const aggregated = aggregate(chapters, (done, total) => post({ kind: 'progress', done, total }))
+
+    post({ kind: 'aggregated', chapters: aggregated })
   } catch (error) {
-    const response: WorkerResponse = {
-      kind: 'error',
-      message: error instanceof Error ? error.message : String(error),
-    }
-    self.postMessage(response)
+    post({ kind: 'error', message: error instanceof Error ? error.message : String(error) })
   }
 }

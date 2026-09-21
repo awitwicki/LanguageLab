@@ -160,10 +160,19 @@ public static class DictionaryEndpoints
         group.MapPost("/import", async (
             ImportRequest request, BookImportService import, ICurrentUserContext currentUser) =>
         {
-            var result = await import.ImportAsync(
-                request, currentUser.Require().Id, request.IsPublic ?? true);
+            try
+            {
+                var result = await import.ImportAsync(
+                    request, currentUser.Require().Id, request.IsPublic ?? true);
 
-            return Results.Ok(result);
+                return Results.Ok(result);
+            }
+            catch (ArgumentException e)
+            {
+                // An empty name or a book with no words is the importer's mistake, and the
+                // message says which: a bare 500 would leave them staring at a status code.
+                return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
         }).RequireAuthorization(AuthPolicies.Importer);
 
         group.MapDelete("/{id:long}", async (long id, ApplicationDbContext db) =>

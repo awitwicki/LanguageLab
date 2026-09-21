@@ -3,6 +3,8 @@ import { decodeFb2 } from '../fb2/decode'
 import { flattenChapters, parseBook, type ChapterMode, type SectionNode } from '../fb2/chapters'
 import type { WorkerRequest, WorkerResponse } from '../worker/parseBook.worker'
 import { api } from '../api/client'
+import { ProgressBar } from '../components/ProgressBar'
+import { formatBytes, formatInt, percentOf } from '../lib/format'
 import './ImportScreen.css'
 
 interface Props {
@@ -10,6 +12,18 @@ interface Props {
 }
 
 type Stage = 'idle' | 'parsing' | 'preview' | 'aggregating' | 'uploading'
+
+/** The request the worker is answering: settled by its final message, or by its failure. */
+interface Pending {
+  resolve: (response: WorkerResponse) => void
+  reject: (error: Error) => void
+}
+
+/** Chapters lemmatized so far; null until the worker has picked the request up. */
+type Extraction = { done: number; total: number } | null
+
+/** Bytes of the JSON body the browser has pushed out; null until it reports the first chunk. */
+type Upload = { sent: number; total: number } | null
 
 export function ImportScreen({ onImported }: Props) {
   const [stage, setStage] = useState<Stage>('idle')
@@ -19,9 +33,11 @@ export function ImportScreen({ onImported }: Props) {
   const [maxDepth, setMaxDepth] = useState(1)
   const [mode, setMode] = useState<ChapterMode>('leaf')
   const [isPublic, setIsPublic] = useState(true)
+  const [extraction, setExtraction] = useState<Extraction>(null)
+  const [upload, setUpload] = useState<Upload>(null)
 
   const worker = useRef<Worker | null>(null)
-  const pending = useRef<((response: WorkerResponse) => void) | null>(null)
+  const pending = useRef<Pending | null>(null)
 
   // The chapter preview is computed from the already parsed tree, so switching
   // the nesting level is instant — the file is not parsed a second time.
@@ -34,7 +50,40 @@ export function ImportScreen({ onImported }: Props) {
       type: 'module',
     })
 
-    instance.onmessage = (event: MessageEvent<WorkerResponse>) => pending.current?.(event.data)
+    const settle = (outcome: (request: Pending) => void) => {
+      const request = pending.current
+      pending.current = null
+
+      if (request) {
+        outcome(request)
+      }
+    }
+
+    instance.onmessage = (event: MessageEvent<WorkerResponse>) => {
+      if (event.data.kind === 'progress') {
+        setExtraction({ done: event.data.done, total: event.data.total })
+        return
+      }
+
+      settle((request) => request.resolve(event.data))
+    }
+
+    // A worker that never loads (a stale bundle after a deploy, a download that broke off on
+    // mobile data) or dies mid-book (memory, on phones) never answers. Without these two
+    // handlers the screen would say "Extracting words…" forever, with nothing to act on.
+    instance.onerror = (event) => {
+      const detail = event.message ? ` (${event.message})` : ''
+
+      settle((request) =>
+        request.reject(new Error(`The word extractor failed${detail}. Reload the app and try again.`)),
+      )
+    }
+
+    instance.onmessageerror = () =>
+      settle((request) =>
+        request.reject(new Error('The word extractor sent an unreadable reply. Reload the app and try again.')),
+      )
+
     worker.current = instance
 
     return () => instance.terminate()
@@ -43,10 +92,10 @@ export function ImportScreen({ onImported }: Props) {
   // A single slot, because the UI does not allow two operations at once:
   // the buttons are disabled until the stage returns to 'preview'.
   const ask = useCallback(
-    (request: WorkerRequest, transfer: Transferable[] = []) =>
-      new Promise<WorkerResponse>((resolve) => {
-        pending.current = resolve
-        worker.current!.postMessage(request, transfer)
+    (request: WorkerRequest) =>
+      new Promise<WorkerResponse>((resolve, reject) => {
+        pending.current = { resolve, reject }
+        worker.current!.postMessage(request)
       }),
     [],
   )
@@ -82,7 +131,17 @@ export function ImportScreen({ onImported }: Props) {
     // Lemmatization runs in the worker and only here — after the chapter level
     // is chosen. Doing it on every level switch would be unbearably slow.
     setStage('aggregating')
-    const response = await ask({ kind: 'aggregate', sections, mode })
+    setExtraction(null)
+
+    let response: WorkerResponse
+
+    try {
+      response = await ask({ kind: 'aggregate', sections, mode })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setStage('preview')
+      return
+    }
 
     if (response.kind !== 'aggregated') {
       setError(response.kind === 'error' ? response.message : 'Unexpected response from the worker.')
@@ -91,17 +150,21 @@ export function ImportScreen({ onImported }: Props) {
     }
 
     setStage('uploading')
+    setUpload(null)
 
     try {
-      const result = await api.importDictionary({
-        name,
-        isPublic,
-        chapters: response.chapters.map((c) => ({
-          order: c.order,
-          title: c.title,
-          words: c.words,
-        })),
-      })
+      const result = await api.importDictionary(
+        {
+          name,
+          isPublic,
+          chapters: response.chapters.map((c) => ({
+            order: c.order,
+            title: c.title,
+            words: c.words,
+          })),
+        },
+        (sent, total) => setUpload({ sent, total }),
+      )
 
       onImported(result.dictionaryId)
     } catch (e) {
@@ -109,6 +172,8 @@ export function ImportScreen({ onImported }: Props) {
       setStage('preview')
     }
   }, [ask, sections, mode, name, isPublic, onImported])
+
+  const working = stage === 'aggregating' || stage === 'uploading'
 
   return (
     <section className="import">
@@ -185,8 +250,62 @@ export function ImportScreen({ onImported }: Props) {
               {stage === 'preview' && 'Import'}
             </button>
           </div>
+
+          {working && (
+            <ImportStatus stage={stage} extraction={extraction} upload={upload} />
+          )}
         </>
       )}
     </section>
   )
+}
+
+interface StatusProps {
+  stage: 'aggregating' | 'uploading'
+  extraction: Extraction
+  upload: Upload
+}
+
+/**
+ * Where the import is right now. A whole book takes a phone a while to lemmatize and then to
+ * push out over mobile data — without this the button label alone reads as "stuck".
+ */
+function ImportStatus({ stage, extraction, upload }: StatusProps) {
+  const { text, done, total } = describeStatus(stage, extraction, upload)
+
+  return (
+    <div className="import-status" role="status">
+      <p className="footnote">{text}</p>
+      <ProgressBar sorted={done} total={total} showLabel={false} />
+    </div>
+  )
+}
+
+function describeStatus(stage: StatusProps['stage'], extraction: Extraction, upload: Upload) {
+  if (stage === 'aggregating') {
+    if (!extraction) {
+      return { text: 'Starting the word extractor…', done: 0, total: 1 }
+    }
+
+    return {
+      text: `Extracting words: chapter ${formatInt(extraction.done)} of ${formatInt(extraction.total)}…`,
+      done: extraction.done,
+      total: extraction.total,
+    }
+  }
+
+  if (!upload) {
+    return { text: 'Uploading…', done: 0, total: 1 }
+  }
+
+  if (upload.sent < upload.total) {
+    return {
+      text: `Uploading ${formatBytes(upload.total)}: ${percentOf(upload.sent, upload.total)}%`,
+      done: upload.sent,
+      total: upload.total,
+    }
+  }
+
+  // Every byte is out; what remains is the server writing the book down.
+  return { text: 'Saving on the server…', done: upload.total, total: upload.total }
 }

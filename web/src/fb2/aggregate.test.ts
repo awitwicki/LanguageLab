@@ -50,6 +50,27 @@ describe('aggregate', () => {
     expect(chapters.map((c) => c.title)).toEqual(['Real'])
   })
 
+  it('reports progress once per chapter, in order, ending at the total', () => {
+    const seen: [number, number][] = []
+
+    aggregate(
+      [
+        { title: 'One', text: 'silo silo' },
+        { title: 'Empty', text: 'the and of' },
+        { title: 'Three', text: 'holston' },
+      ],
+      (done, total) => seen.push([done, total]),
+    )
+
+    // Every chapter counts, including one that yields no words: the progress is about the
+    // work done, not the chapters kept.
+    expect(seen).toEqual([
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ])
+  })
+
   it('never synthesizes a hyphen-stripped concatenation for compounds compromise leaves as one token', () => {
     const [chapter] = aggregate([
       {
