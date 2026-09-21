@@ -3,6 +3,7 @@ import { decodeFb2 } from '../fb2/decode'
 import { flattenChapters, parseBook, type ChapterMode, type SectionNode } from '../fb2/chapters'
 import type { WorkerRequest, WorkerResponse } from '../worker/parseBook.worker'
 import { api } from '../api/client'
+import { openOutsideTelegram, telegramInitData } from '../auth/telegram'
 import { ProgressBar } from '../components/ProgressBar'
 import { formatBytes, formatInt, percentOf } from '../lib/format'
 import './ImportScreen.css'
@@ -175,13 +176,34 @@ export function ImportScreen({ onImported }: Props) {
 
   const working = stage === 'aggregating' || stage === 'uploading'
 
+  // Inside Telegram's webview the word extractor never starts: the request is posted and
+  // nothing comes back, no progress, no error. Rather than let the screen hang, send the
+  // importer to a real browser. The README backlog holds the open question of why.
+  const insideTelegram = telegramInitData() !== null
+
   return (
     <section className="import">
       <h1 className="large-title">Import a book</h1>
 
       {error && <p className="error">{error}</p>}
 
-      {stage === 'idle' && (
+      {stage === 'idle' && insideTelegram && (
+        <div className="import-notice">
+          <p>
+            Importing a book works in a regular browser, not inside Telegram: the word
+            extractor does not start here. Open LanguageLab in your browser and import from there.
+          </p>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => openOutsideTelegram(window.location.href)}
+          >
+            Open in browser
+          </button>
+        </div>
+      )}
+
+      {stage === 'idle' && !insideTelegram && (
         <label className="dropzone">
           <input
             type="file"

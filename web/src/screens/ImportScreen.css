@@ -88,6 +88,19 @@
   gap: 8px;
 }
 
+/* Stands where the dropzone would be: a card, not an error — nothing went wrong yet. */
+.import-notice {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  max-width: 560px;
+  padding: 20px 24px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  color: var(--text-2);
+}
+
 /* Same width as the fields above it, so the bar reads as part of the form. */
 .import-status {
   display: grid;

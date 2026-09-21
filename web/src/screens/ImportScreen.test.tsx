@@ -97,6 +97,27 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('ImportScreen', () => {
+  // The word extractor never starts inside Telegram's webview — the screen would hang at
+  // "Starting the word extractor…" — so there the import is not offered at all.
+  it('inside Telegram, says to import from a browser instead of offering the file picker', async () => {
+    const openLink = vi.fn()
+    vi.stubGlobal('Telegram', {
+      WebApp: { initData: 'auth_date=1&hash=abc', ready: vi.fn(), expand: vi.fn(), openLink },
+    })
+
+    const { container } = await render(<ImportScreen onImported={() => {}} />)
+
+    expect(container.querySelector('input[type="file"]')).toBeNull()
+
+    const notice = container.querySelector('.import-notice')
+
+    expect(notice?.textContent).toContain('browser')
+
+    await click(notice!.querySelector('button')!)
+
+    expect(openLink).toHaveBeenCalledWith(window.location.href)
+  })
+
   it('parses the chosen book into a chapter preview', async () => {
     const { container } = await preview()
 

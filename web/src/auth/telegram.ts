@@ -8,6 +8,8 @@ interface TelegramWebApp {
   initData: string
   ready(): void
   expand(): void
+  /** Opens the URL in the phone's own browser, outside Telegram. */
+  openLink(url: string): void
 }
 
 declare global {
@@ -36,4 +38,15 @@ export function markTelegramReady(): void {
 
   webApp.ready()
   webApp.expand()
+}
+
+/** Hands the URL to the phone's browser, leaving the Mini App. Nothing happens outside Telegram. */
+export function openOutsideTelegram(url: string): void {
+  const webApp = window.Telegram?.WebApp
+
+  if (!webApp || !telegramInitData()) {
+    return
+  }
+
+  webApp.openLink(url)
 }
