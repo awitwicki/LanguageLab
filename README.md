@@ -50,8 +50,10 @@ The version lives in one place: the `<Version>` element of `Directory.Build.prop
 root. MSBuild applies it to every project (assembly, file and informational version of the API,
 the bot and the tests), and `web/vite.config.ts` reads the same element at build time and bakes
 it into the SPA (`src/lib/version.ts`), which shows it next to the logo in the top bar. Bump it
-there by hand for a release; nothing else needs to change. `dotnet build /p:Version=…` would
-override only the .NET side — the file is the contract, so edit the file.
+there by hand, following the commit subjects: a `feat` commit raises the minor part and resets
+the patch, a `fix` or `perf` raises the patch, anything else leaves it alone; the major part
+stays 0 while the app is pre-release. `dotnet build /p:Version=…` would override only the .NET
+side — the file is the contract, so edit the file.
 
 CI (TeamCity) turns `0.0.0` into `0.0.0.N`, `N` being the build counter, with the **File
 Content Replacer** build feature, which patches the file before the first step and restores it
