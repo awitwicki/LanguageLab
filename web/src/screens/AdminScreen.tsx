@@ -162,25 +162,30 @@ export function AdminScreen({ meId }: Props) {
                   <td className="num">{formatDate(user.createdAt)}</td>
                   <td className="num">{formatDate(user.lastLoginAt)}</td>
                   <td className="actions">
-                    <button
-                      type="button"
-                      className="btn btn-quiet ban"
-                      disabled={isMe}
-                      onClick={() =>
-                        void run(() => (user.isBanned ? api.unbanUser(user.id) : api.banUser(user.id)))
-                      }
-                    >
-                      {user.isBanned ? 'Unban' : 'Ban'}
-                    </button>
+                    {/* The flex row lives on a wrapper, not the cell: a `td` with `display: flex`
+                        stops being a table cell, so it no longer stretches to the row height and
+                        its bottom border drifts away from the neighbouring cells'. */}
+                    <div className="action-buttons">
+                      <button
+                        type="button"
+                        className="btn btn-quiet ban"
+                        disabled={isMe}
+                        onClick={() =>
+                          void run(() => (user.isBanned ? api.unbanUser(user.id) : api.banUser(user.id)))
+                        }
+                      >
+                        {user.isBanned ? 'Unban' : 'Ban'}
+                      </button>
 
-                    <button
-                      type="button"
-                      className="btn btn-quiet delete"
-                      disabled={isMe}
-                      onClick={() => remove(user)}
-                    >
-                      {confirming === user.id ? 'Confirm' : 'Delete'}
-                    </button>
+                      <button
+                        type="button"
+                        className="btn btn-quiet delete"
+                        disabled={isMe}
+                        onClick={() => remove(user)}
+                      >
+                        {confirming === user.id ? 'Confirm' : 'Delete'}
+                      </button>
+                    </div>
                   </td>
                 </tr>
               )
