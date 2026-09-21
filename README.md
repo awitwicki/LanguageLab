@@ -110,9 +110,11 @@ internal user id and a role, never Telegram's claims.
 
 The first person to sign in successfully becomes the administrator; everyone after them is a
 regular user. Regular users can use the dictionaries an admin made public but cannot import,
-delete or re-publish one. Admins additionally get **Users** in the account menu, where they can
-promote, ban and delete accounts. A ban takes effect on the banned user's next request, not at
-their next login. Anyone can delete their own account from the account menu
+delete or re-publish one. An **uploader** is a regular user who may also import books — an
+admin grants the role from **Users** in the account menu, where admins pick each account's
+role (user, uploader, admin) and ban or delete accounts. Uploaders choose whether an import is
+public, but re-publishing or deleting it afterwards stays with admins. A ban takes effect on
+the banned user's next request, not at their next login. Anyone can delete their own account from the account menu
 (`DELETE /api/auth/me`) — a hard delete that takes their shelves and progress with it, while
 dictionaries they imported stay behind without an owner. The one exception is the last
 administrator, who is refused until someone else has been promoted.

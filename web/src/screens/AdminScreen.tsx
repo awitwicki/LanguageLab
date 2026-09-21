@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, type AdminUser, type AdminUserPage } from '../api/client'
+import { api, type AdminUser, type AdminUserPage, type UserRole } from '../api/client'
+import { ROLES, roleLabel } from '../auth/roles'
 import { formatInt, plural } from '../lib/format'
 import './AdminScreen.css'
 
@@ -140,31 +141,27 @@ export function AdminScreen({ meId }: Props) {
                     <span className="user-name">{user.displayName}</span>
                     {user.username && <span className="caption">@{user.username}</span>}
                   </th>
-                  <td className="role">{user.role === 'admin' ? 'Admin' : 'User'}</td>
+                  <td className="role">
+                    <label className="field role-field">
+                      <select
+                        className="role-select"
+                        aria-label={`Role of ${user.displayName}`}
+                        value={user.role}
+                        disabled={isMe}
+                        onChange={(e) => void run(() => api.setUserRole(user.id, e.target.value as UserRole))}
+                      >
+                        {ROLES.map((role) => (
+                          <option key={role} value={role}>
+                            {roleLabel(role)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </td>
                   <td className="status">{user.isBanned ? 'Banned' : 'Active'}</td>
                   <td className="num">{formatDate(user.createdAt)}</td>
                   <td className="num">{formatDate(user.lastLoginAt)}</td>
                   <td className="actions">
-                    {user.role === 'admin' ? (
-                      <button
-                        type="button"
-                        className="btn btn-quiet demote"
-                        disabled={isMe}
-                        onClick={() => void run(() => api.setUserRole(user.id, 'user'))}
-                      >
-                        Demote
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="btn btn-quiet promote"
-                        disabled={isMe}
-                        onClick={() => void run(() => api.setUserRole(user.id, 'admin'))}
-                      >
-                        Promote
-                      </button>
-                    )}
-
                     <button
                       type="button"
                       className="btn btn-quiet ban"

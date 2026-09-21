@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LanguageLab.Api;
@@ -6,7 +5,6 @@ using LanguageLab.Api.Auth;
 using LanguageLab.Api.Endpoints;
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
-using LanguageLab.Domain.Entities;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -169,8 +167,7 @@ if (telegram.IsConfigured)
         .Configure<ServerSideStateFormat>((options, state) => options.StateDataFormat = state);
 }
 
-builder.Services.AddAuthorization(options =>
-    options.AddPolicy("Admin", policy => policy.RequireClaim(ClaimTypes.Role, nameof(UserRole.Admin))));
+builder.Services.AddAuthorization(AuthPolicies.Configure);
 
 builder.Services.AddScoped<BookImportService>();
 builder.Services.AddScoped<WordSortingService>();

@@ -45,6 +45,18 @@
   color: var(--danger);
 }
 
+/* The role picker sits in a table cell, so it stays compact and, on your own row, as
+   inert as the disabled buttons beside it. */
+.role-field select {
+  height: 32px;
+  padding: 0 8px;
+}
+
+.role-field select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .actions {
   display: flex;
   gap: 4px;

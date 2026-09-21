@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CurrentUser } from '../api/client'
+import { roleLabel } from '../auth/roles'
 import './AccountMenu.css'
 
 interface Props {
@@ -112,7 +113,7 @@ function AccountPanel({ user, onAdmin, onSignOut, onDeleteAccount }: Props) {
       <div className="account-identity">
         <p className="account-name headline">{user.displayName}</p>
         {user.username && <p className="caption">@{user.username}</p>}
-        {user.role === 'admin' && <span className="role-badge caption">Admin</span>}
+        {user.role !== 'user' && <span className="role-badge caption">{roleLabel(user.role)}</span>}
       </div>
 
       {user.role === 'admin' && (

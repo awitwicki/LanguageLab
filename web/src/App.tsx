@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type DictionaryListItem, type SessionStarted, type TrainingStarted } from './api/client'
+import { canImport } from './auth/roles'
 import { useAuth } from './auth/useAuth'
 import { AppShell } from './layout/AppShell'
 import { modeOf, type AppMode } from './layout/mode'
@@ -151,7 +152,7 @@ export default function App() {
             error={listError}
             activeId={activeId}
             importActive={route.name === 'import'}
-            canImport={state.user.role === 'admin'}
+            canImport={canImport(state.user.role)}
             onSelect={openDictionary}
             onImport={() => setRoute({ name: 'import' })}
             personalActive={route.name === 'personal'}

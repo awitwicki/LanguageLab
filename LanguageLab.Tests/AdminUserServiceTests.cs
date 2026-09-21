@@ -187,6 +187,29 @@ public class AdminUserServiceTests
     }
 
     [Fact]
+    public async Task A_member_can_be_made_an_uploader()
+    {
+        await using var db = await SeedAsync();
+
+        var result = await new AdminUserService(db).SetRoleAsync(AdminId, MemberId, UserRole.Uploader);
+
+        Assert.Equal(AdminActionResult.Ok, result);
+        Assert.Equal(UserRole.Uploader, (await db.Users.FirstAsync(u => u.Id == MemberId)).Role);
+    }
+
+    /// <summary>Uploader is not admin: moving the only admin there would leave nobody to manage users.</summary>
+    [Fact]
+    public async Task The_last_admin_cannot_be_moved_to_uploader()
+    {
+        await using var db = await SeedAsync();
+
+        var result = await new AdminUserService(db).SetRoleAsync(MemberId, AdminId, UserRole.Uploader);
+
+        Assert.Equal(AdminActionResult.LastAdmin, result);
+        Assert.Equal(UserRole.Admin, (await db.Users.FirstAsync(u => u.Id == AdminId)).Role);
+    }
+
+    [Fact]
     public async Task Deleting_a_member_removes_the_row()
     {
         await using var db = await SeedAsync();

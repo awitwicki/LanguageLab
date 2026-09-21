@@ -14,6 +14,7 @@ const member: CurrentUser = {
 }
 
 const admin: CurrentUser = { ...member, id: 1, displayName: 'Ada Vance', role: 'admin' }
+const uploader: CurrentUser = { ...member, id: 3, displayName: 'Cy Park', role: 'uploader' }
 
 type Handlers = Partial<Pick<Parameters<typeof AccountMenu>[0], 'onAdmin' | 'onSignOut' | 'onDeleteAccount'>>
 
@@ -53,6 +54,21 @@ describe('AccountMenu', () => {
     await click(container.querySelector('.account')!)
 
     expect(container.querySelector('.to-admin')).toBeNull()
+  })
+
+  it('wears a badge for any role above user', async () => {
+    const plain = await mount(member)
+    await click(plain.container.querySelector('.account')!)
+    expect(plain.container.querySelector('.role-badge')).toBeNull()
+
+    const trusted = await mount(uploader)
+    await click(trusted.container.querySelector('.account')!)
+    expect(trusted.container.querySelector('.role-badge')?.textContent).toBe('Uploader')
+    expect(trusted.container.querySelector('.to-admin')).toBeNull()
+
+    const curator = await mount(admin)
+    await click(curator.container.querySelector('.account')!)
+    expect(curator.container.querySelector('.role-badge')?.textContent).toBe('Admin')
   })
 
   it('offers the admin panel to an admin', async () => {

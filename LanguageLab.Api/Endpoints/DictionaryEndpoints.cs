@@ -1,3 +1,4 @@
+using LanguageLab.Api.Auth;
 using LanguageLab.Application.Services;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
@@ -163,7 +164,7 @@ public static class DictionaryEndpoints
                 request, currentUser.Require().Id, request.IsPublic ?? true);
 
             return Results.Ok(result);
-        }).RequireAuthorization("Admin");
+        }).RequireAuthorization(AuthPolicies.Importer);
 
         group.MapDelete("/{id:long}", async (long id, ApplicationDbContext db) =>
         {
@@ -183,7 +184,7 @@ public static class DictionaryEndpoints
             await db.SaveChangesAsync();
 
             return Results.NoContent();
-        }).RequireAuthorization("Admin");
+        }).RequireAuthorization(AuthPolicies.Admin);
 
         group.MapPatch("/{id:long}", async (long id, VisibilityRequest request, ApplicationDbContext db) =>
         {
@@ -199,6 +200,6 @@ public static class DictionaryEndpoints
             await db.SaveChangesAsync();
 
             return Results.NoContent();
-        }).RequireAuthorization("Admin");
+        }).RequireAuthorization(AuthPolicies.Admin);
     }
 }

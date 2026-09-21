@@ -49,8 +49,13 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   `UserLoginService`. The SPA asks `/api/auth/me` first and posts only on a 401
   (`web/src/auth/useAuth.ts`; `web/src/auth/telegram.ts` is the only file touching
   `window.Telegram`). Telegram Web (browser iframe) is unsupported: `SameSite=Lax`.
-- Dictionaries have an owner and an `IsPublic` flag: import, delete and visibility changes are
-  admin-only, and regular users see public dictionaries plus their own.
+- Roles (`UserRole`: `User`, `Admin`, `Uploader` — appended, the column is an int): an uploader
+  may import books and nothing more. The named policies live in
+  `LanguageLab.Api/Auth/AuthPolicies.cs` (`Admin`, `Importer` = admin or uploader); the SPA
+  mirrors them in `web/src/auth/roles.ts` (`canImport`, `roleLabel`). Admins set a user's role
+  from the admin screen's picker.
+- Dictionaries have an owner and an `IsPublic` flag: import is for admins and uploaders, delete
+  and visibility changes are admin-only, and non-admins see public dictionaries plus their own.
 - Personal dictionary: one private `Dictionary` per user (`IsPersonal`, created on first use by
   `GET /api/dictionaries`), words are `WordPair` rows with `OwnerId` set (unique on `(Word, OwnerId)`,
   `NULLS NOT DISTINCT`), shelved "don't know" on add. Shared vocabulary = `OwnerId IS NULL`; any

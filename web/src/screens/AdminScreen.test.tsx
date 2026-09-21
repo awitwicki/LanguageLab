@@ -45,6 +45,14 @@ function setValue(input: HTMLInputElement, value: string) {
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
+/** Picks an option the way a user would: React hears a select through its change event. */
+function choose(select: HTMLSelectElement, value: string) {
+  return act(async () => {
+    select.value = value
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.useRealTimers()
@@ -61,8 +69,47 @@ describe('AdminScreen', () => {
 
     expect(rows).toHaveLength(2)
     expect(rows[0].querySelector('.user-name')?.textContent).toBe('Ada Vance')
-    expect(rows[0].querySelector('.role')?.textContent).toBe('Admin')
-    expect(rows[1].querySelector('.role')?.textContent).toBe('User')
+    expect(rows[0].querySelector<HTMLSelectElement>('.role-select')?.value).toBe('admin')
+    expect(rows[1].querySelector<HTMLSelectElement>('.role-select')?.value).toBe('user')
+  })
+
+  it('offers every role in the picker, least trusted first', async () => {
+    respond(() => ({ status: 200, body: page(users) }))
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    const options = [...container.querySelectorAll('tbody tr')[1].querySelectorAll('.role-select option')]
+
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual(['user', 'uploader', 'admin'])
+    expect(options.map((o) => o.textContent)).toEqual(['User', 'Uploader', 'Admin'])
+  })
+
+  it('changes a role through the picker and reloads the list', async () => {
+    let role = 'user'
+
+    respond((path, method) => {
+      if (path === '/api/admin/users/2/role' && method === 'POST') {
+        role = 'uploader'
+        return { status: 204 }
+      }
+
+      return {
+        status: 200,
+        body: page(users.map((u) => (u.id === 2 ? { ...u, role: role as AdminUser['role'] } : u))),
+      }
+    })
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    await choose(container.querySelectorAll('tbody tr')[1].querySelector<HTMLSelectElement>('.role-select')!, 'uploader')
+    await flush()
+
+    const sent = vi.mocked(fetch).mock.calls.find(([path]) => path === '/api/admin/users/2/role')
+
+    expect(sent?.[1]?.body).toBe(JSON.stringify({ role: 'uploader' }))
+    expect(container.querySelectorAll('tbody tr')[1].querySelector<HTMLSelectElement>('.role-select')?.value).toBe('uploader')
   })
 
   // The server refuses these anyway; disabling them keeps the user from discovering that
@@ -74,8 +121,10 @@ describe('AdminScreen', () => {
     await flush()
 
     const own = container.querySelectorAll('tbody tr')[0]
+    const controls = [...own.querySelectorAll<HTMLButtonElement | HTMLSelectElement>('button, select')]
 
-    expect([...own.querySelectorAll('button')].every((b) => b.disabled)).toBe(true)
+    expect(controls.length).toBeGreaterThan(0)
+    expect(controls.every((c) => c.disabled)).toBe(true)
   })
 
   it('bans a user and reloads the list', async () => {
@@ -113,7 +162,7 @@ describe('AdminScreen', () => {
     const { container } = await render(<AdminScreen meId={99} />)
     await flush()
 
-    await click(container.querySelectorAll('tbody tr')[0].querySelector('.demote')!)
+    await choose(container.querySelectorAll('tbody tr')[0].querySelector<HTMLSelectElement>('.role-select')!, 'user')
     await flush()
 
     expect(container.querySelector('.error')?.textContent).toBe(

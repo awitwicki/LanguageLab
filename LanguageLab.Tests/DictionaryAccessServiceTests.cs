@@ -55,6 +55,20 @@ public class DictionaryAccessServiceTests
         Assert.Equal(new long[] { 10, 20, 30, 40 }, ids);
     }
 
+    /// <summary>An uploader curates nothing: their view is a regular user's, own imports included.</summary>
+    [Fact]
+    public async Task An_uploader_sees_their_own_imports_but_not_other_peoples_private_dictionaries()
+    {
+        await using var db = await SeedAsync();
+        var access = new DictionaryAccessService(db);
+
+        var ownIds = await access.Visible(Owner, UserRole.Uploader).Select(d => d.Id).OrderBy(id => id).ToListAsync();
+        var strangerIds = await access.Visible(Stranger, UserRole.Uploader).Select(d => d.Id).OrderBy(id => id).ToListAsync();
+
+        Assert.Equal(new long[] { 10, 20, 30, 40 }, ownIds);
+        Assert.Equal(new long[] { 10, 30 }, strangerIds);
+    }
+
     [Fact]
     public async Task An_admin_sees_everything_including_other_peoples_private_dictionaries()
     {

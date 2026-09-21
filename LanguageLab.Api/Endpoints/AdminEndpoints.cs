@@ -1,3 +1,4 @@
+using LanguageLab.Api.Auth;
 using LanguageLab.Application.Services;
 using LanguageLab.Domain.Entities;
 
@@ -12,7 +13,7 @@ public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/admin").RequireAuthorization("Admin");
+        var group = app.MapGroup("/api/admin").RequireAuthorization(AuthPolicies.Admin);
 
         // Optional query: ?search=&page=&pageSize=. The service clamps whatever arrives.
         group.MapGet("/users", async (
