@@ -343,7 +343,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
             ) : (
               <div className="quiz-actions">
                 <button type="button" className="btn btn-quiet" disabled={busy} onClick={markKnown}>
-                  Know
+                  I know this word
                 </button>
               </div>
             )}

@@ -73,7 +73,6 @@ export function Sidebar({
         </select>
       </div>
 
-      <p className="sidebar-heading">{PERSONAL_NAME}</p>
       <ul className="sidebar-list">
         <li>
           <button

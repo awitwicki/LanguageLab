@@ -245,7 +245,7 @@ describe('HomeScreen — starred chapters', () => {
     expect(container.querySelector('.error')).toBeNull()
   })
 
-  it('the main area sorts the chapter in its book; "Exercise" trains it', async () => {
+  it('the main area sorts the chapter in its book; "Learn" trains it', async () => {
     respond({ status: 200, body: untouched }, undefined, { status: 200, body: starredChapters })
     const onSort = vi.fn()
     const onTrain = vi.fn()

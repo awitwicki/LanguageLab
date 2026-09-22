@@ -80,7 +80,7 @@ beforeEach(() => {
 })
 
 describe('DictionaryScreen — chapters', () => {
-  it('clicking a chapter title sorts only it; "Exercise" trains only it', async () => {
+  it('clicking a chapter title sorts only it; "Learn" trains only it', async () => {
     const onSort = vi.fn()
     const onTrain = vi.fn()
     const { container } = await render(screen({ onSort, onTrain }))
@@ -89,8 +89,7 @@ describe('DictionaryScreen — chapters', () => {
     const rows = [...container.querySelectorAll('.chapter-row')]
     expect(rows).toHaveLength(4)
     expect(rows[0].querySelector('.chapter-title')?.textContent).toBe('Holston')
-    expect(rows[0].querySelector('.chapter-sub')?.textContent).toBe('300 words · 42 to learn')
-    expect(rows[0].querySelector('.chapter-pct')?.textContent).toBe('50%')
+    expect(rows[0].querySelector('.chapter-sub')?.textContent).toBe('300 words · 50% sorted · 42 to learn')
     expect(container.querySelector('input[type="checkbox"]')).toBeNull()
 
     await click(rows[0].querySelector('.chapter-main')!)
@@ -100,7 +99,7 @@ describe('DictionaryScreen — chapters', () => {
     expect(onTrain).toHaveBeenCalledWith([11], 'Holston')
   })
 
-  it('an untitled chapter is numbered; "Exercise" is disabled with nothing to learn', async () => {
+  it('an untitled chapter is numbered; "Learn" is disabled with nothing to learn', async () => {
     const onSort = vi.fn()
     const { container } = await render(screen({ onSort }))
     await flush()
@@ -130,7 +129,7 @@ describe('DictionaryScreen — chapters', () => {
     const rows = [...container.querySelectorAll('.chapter-row')]
     const scale = rows[0].querySelector('.chapter-learning .leitner')!
     expect(scale).not.toBeNull()
-    expect(scale.querySelector('.leitner-percent')?.textContent).toBe('26%')
+    expect(scale.querySelector('.leitner-percent')?.textContent).toBe('26% learned')
     // The scale sits outside the sort button: its aria-label must not pollute the button's name.
     expect(rows[0].querySelector('.chapter-main .leitner')).toBeNull()
     expect(rows[1].querySelector('.chapter-learning')).toBeNull()
@@ -155,7 +154,7 @@ describe('DictionaryScreen — chapter review', () => {
     await flush()
 
     const juliette = row(container, 2)
-    expect(juliette.querySelector('.chapter-sub')?.textContent).toBe('80 words · 5 to review')
+    expect(juliette.querySelector('.chapter-sub')?.textContent).toBe('80 words · all sorted · 5 to review')
 
     const button = juliette.querySelector<HTMLButtonElement>('.chapter-train')!
     expect(button.textContent).toBe('Review')
@@ -180,14 +179,14 @@ describe('DictionaryScreen — chapter review', () => {
     await flush()
 
     const lukas = row(container, 3)
-    expect(lukas.querySelector('.chapter-sub')?.textContent).toBe('60 words · 8 in progress · next review tomorrow')
+    expect(lukas.querySelector('.chapter-sub')?.textContent).toBe('60 words · all sorted · 8 in progress · next review tomorrow')
 
     const button = lukas.querySelector<HTMLButtonElement>('.chapter-train')!
-    expect(button.textContent).toBe('Exercise')
+    expect(button.textContent).toBe('Learn')
     expect(button.disabled).toBe(true)
   })
 
-  it('a chapter with new words keeps "Exercise" even when some of its words are due', async () => {
+  it('a chapter with new words keeps "Learn" even when some of its words are due', async () => {
     apiMock.getDictionary.mockResolvedValue({
       ...detail,
       chapters: [{ ...detail.chapters[0], dueCount: 3 }],
@@ -195,8 +194,8 @@ describe('DictionaryScreen — chapter review', () => {
     const { container } = await render(screen())
     await flush()
 
-    expect(row(container, 0).querySelector('.chapter-sub')?.textContent).toBe('300 words · 42 to learn')
-    expect(row(container, 0).querySelector('.chapter-train')?.textContent).toBe('Exercise')
+    expect(row(container, 0).querySelector('.chapter-sub')?.textContent).toBe('300 words · 50% sorted · 42 to learn')
+    expect(row(container, 0).querySelector('.chapter-train')?.textContent).toBe('Learn')
   })
 })
 
@@ -211,12 +210,12 @@ describe('DictionaryScreen — actions', () => {
     expect(onSort).toHaveBeenCalledWith(null, 'Whole book')
   })
 
-  it('"Start exercise" → onTrain(null, "Whole book")', async () => {
+  it('"Learn new words" → onTrain(null, "Whole book")', async () => {
     const onTrain = vi.fn()
     const { container } = await render(screen({ onTrain }))
     await flush()
 
-    const start = buttons(container).find((b) => b.textContent?.includes('Start exercise'))!
+    const start = buttons(container).find((b) => b.textContent?.includes('Learn new words'))!
     expect(start.disabled).toBe(false)
 
     await click(start)
@@ -224,12 +223,12 @@ describe('DictionaryScreen — actions', () => {
     expect(onTrain).toHaveBeenCalledWith(null, 'Whole book')
   })
 
-  it('with nothing to learn, "Start exercise" is disabled and a hint is shown', async () => {
+  it('with nothing to learn, "Learn new words" is disabled and a hint is shown', async () => {
     apiMock.getDictionary.mockResolvedValue({ ...detail, learnableCount: 0 })
     const { container } = await render(screen())
     await flush()
 
-    expect(buttons(container).find((b) => b.textContent?.includes('Start exercise'))!.disabled).toBe(true)
+    expect(buttons(container).find((b) => b.textContent?.includes('Learn new words'))!.disabled).toBe(true)
     expect(container.textContent).toContain('No words to learn yet')
   })
 
@@ -255,21 +254,33 @@ describe('DictionaryScreen — actions', () => {
     expect(header.find((b) => b.textContent?.startsWith('Review'))).toBeUndefined()
   })
 
-  it('the header carries the book scale captioned "Learned"; absent without "don\'t know" words', async () => {
+  it('the header stacks the sorted bar and the learned scale on one grid, with the caption below', async () => {
     const { container } = await render(screen())
     await flush()
 
-    expect(container.querySelector('.dict-header .dict-learning .leitner-percent')?.textContent).toBe('26%')
-    expect(container.querySelector('.dict-learning')?.textContent).toContain('Learned')
+    const header = container.querySelector('.dict-header .scope-progress')!
+    expect([...header.querySelectorAll('.scope-label')].map((l) => l.textContent)).toEqual(['Sorted', 'Learned'])
+    expect(header.querySelector('.scope-value')?.textContent).toBe('25%')
+    expect(header.querySelector('.leitner-percent')?.textContent).toBe('26%')
     // The caption explains the book's scale once; the identical chapter scales below don't repeat it.
-    expect(container.querySelector('.dict-learning .leitner-caption')?.textContent).toContain('Leitner')
+    expect(header.querySelector('.scope-caption:last-child')?.textContent).toContain('box 1')
     expect(container.querySelector('.chapter-learning .leitner-caption')).toBeNull()
 
     apiMock.getDictionary.mockResolvedValue({ ...detail, learning: noLearning })
     const empty = await render(screen())
     await flush()
 
-    expect(empty.container.querySelector('.dict-learning')).toBeNull()
+    expect(empty.container.querySelector('.dict-header .leitner')).toBeNull()
+  })
+
+  it('a fully sorted book hides "Sort the whole book" and makes "Learn new words" the primary action', async () => {
+    apiMock.getDictionary.mockResolvedValue({ ...detail, sortedCount: detail.wordsCount })
+    const { container } = await render(screen())
+    await flush()
+
+    expect(buttons(container).find((b) => b.textContent?.includes('Sort the whole book'))).toBeUndefined()
+    const learn = buttons(container).find((b) => b.textContent?.includes('Learn new words'))!
+    expect(learn.classList.contains('btn-primary')).toBe(true)
   })
 
   it('a review with no words (204) → a notice, onReview not called', async () => {

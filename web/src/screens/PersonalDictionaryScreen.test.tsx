@@ -218,12 +218,12 @@ describe('PersonalDictionaryScreen', () => {
     expect([...container.querySelectorAll('.personal-word .word')].map((w) => w.textContent)).toEqual(['apple'])
   })
 
-  it('Start exercise is disabled with nothing to learn and otherwise opens the scope', async () => {
+  it('Learn new words is disabled with nothing to learn and otherwise opens the scope', async () => {
     const onTrain = vi.fn()
     const { container, rerender } = await render(screen({ onTrain }))
     await flush()
 
-    const button = () => [...container.querySelectorAll<HTMLButtonElement>('.btn')].find((b) => b.textContent === 'Start exercise')!
+    const button = () => [...container.querySelectorAll<HTMLButtonElement>('.btn')].find((b) => b.textContent === 'Learn new words')!
 
     expect(button().disabled).toBe(true)
     expect(container.textContent).toContain('Add a word to start')

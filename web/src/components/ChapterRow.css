@@ -5,12 +5,11 @@
   overflow: hidden;
 }
 
-/* Three separate buttons, no nesting: the main area (sort), the side action, the star. */
+/* The main area (sort) and, beside it, the row of labelled actions — no nested buttons. */
 .chapter-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 4px;
   padding-right: 8px;
 }
 
@@ -18,17 +17,14 @@
   border-top: 1px solid var(--hairline);
 }
 
-/* The third line: the Leitner scale under all three buttons. */
+/* The third line: the Leitner scale under the main area and the actions alike. */
 .chapter-learning {
   grid-column: 1 / -1;
   padding: 0 16px 12px;
 }
 
 .chapter-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 16px;
+  display: block;
   width: 100%;
   padding: 12px 16px;
   text-align: left;
@@ -46,8 +42,7 @@
 
 /* The list clips its overflow — draw the focus ring inwards. */
 .chapter-main:focus-visible,
-.chapter-train:focus-visible,
-.chapter-star:focus-visible {
+.chapter-actions .btn:focus-visible {
   outline-offset: -2px;
 }
 
@@ -64,21 +59,21 @@
   white-space: nowrap;
 }
 
-.chapter-sub,
-.chapter-pct {
+.chapter-sub {
   font-size: var(--fs-footnote);
   color: var(--text-2);
 }
 
-.chapter-row.done .chapter-pct {
+/* A finished chapter says so in the shelf's own colour; the sorted share otherwise stays quiet. */
+.chapter-row.done .chapter-sorted {
   color: var(--known);
   font-weight: 600;
 }
 
-.chevron {
-  font-size: 20px;
-  line-height: 1;
-  color: var(--text-3);
+.chapter-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* Quiet until set: an empty outline in the tertiary text color, a filled accent star once on. */
@@ -91,4 +86,25 @@
 
 .chapter-star[aria-pressed='true'] {
   color: var(--accent);
+}
+
+@media (max-width: 800px) {
+  /* Three text buttons do not fit beside a title on a phone: the actions drop under it. */
+  .chapter-row {
+    grid-template-columns: minmax(0, 1fr);
+    padding-right: 0;
+  }
+
+  .chapter-main {
+    padding-bottom: 4px;
+  }
+
+  .chapter-row.compact .chapter-main {
+    padding-bottom: 2px;
+  }
+
+  .chapter-actions {
+    justify-content: flex-end;
+    padding: 0 8px 6px;
+  }
 }

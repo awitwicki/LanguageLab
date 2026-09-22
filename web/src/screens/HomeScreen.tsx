@@ -203,7 +203,8 @@ export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrai
 
       {hasDictionaries ? (
         <p className="welcome-hint">
-          Your dictionaries are in the sidebar. Open one to see its stats and start sorting.
+          Your dictionaries are <span className="hint-desktop">in the sidebar</span>
+          <span className="hint-phone">in the picker above</span>. Open one to see its chapters and start sorting.
         </p>
       ) : (
         <>

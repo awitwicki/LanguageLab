@@ -291,7 +291,7 @@ describe('TrainingScreen — quiz', () => {
     apiMock.nextQuestion.mockResolvedValueOnce(questionOne).mockResolvedValueOnce(questionTwo)
     const { container } = await openQuiz()
 
-    await click(buttons(container).find((b) => b.textContent?.includes('Know'))!)
+    await click(buttons(container).find((b) => b.textContent?.includes('I know this word'))!)
     await flush()
 
     expect(apiMock.markKnown).toHaveBeenCalledWith(5, 100)

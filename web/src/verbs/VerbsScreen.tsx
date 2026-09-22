@@ -104,6 +104,10 @@ export function VerbsScreen({ onOpenGroup, onStartSession }: Props) {
           Mixed session
         </button>
       </div>
+      <p className="footnote session-hint">
+        Errors only repeats the verbs you got wrong. Mixed session draws ten tasks from every verb you have started,
+        once two families are done.
+      </p>
 
       <div className="verbs-notes footnote">
         <p>

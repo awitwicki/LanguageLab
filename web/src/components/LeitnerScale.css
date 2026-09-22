@@ -4,8 +4,10 @@
   min-width: 0;
 }
 
+/* The percent column is at least as wide as ProgressBar's in ScopeProgress, so a "Sorted"
+   track above this one ends on the same pixel. */
 .leitner-compact {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(44px, auto);
   align-items: center;
   gap: 12px;
 }
@@ -57,6 +59,7 @@
 
 .leitner-compact .leitner-percent {
   color: var(--text-2);
+  text-align: right;
 }
 
 .leitner-large .leitner-percent {

@@ -99,24 +99,35 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
         </>
       )}
 
-      <div className="segment" role="radiogroup" aria-label="Batch size">
-        {BATCH_SIZES.map((size, index) => (
-          <button
-            key={size}
-            ref={(el) => {
-              radioRefs.current[index] = el
-            }}
-            type="button"
-            role="radio"
-            aria-checked={size === batchSize}
-            tabIndex={size === batchSize ? 0 : -1}
-            className={`segment-item num${size === batchSize ? ' is-active' : ''}`}
-            onClick={() => setBatchSize(size)}
-            onKeyDown={onRadioKey}
-          >
-            {size}
-          </button>
-        ))}
+      {/* The choice and the go button side by side: no scrolling past the preview to start. */}
+      <div className="training-start-controls">
+        <div className="segment" role="radiogroup" aria-label="Batch size">
+          {BATCH_SIZES.map((size, index) => (
+            <button
+              key={size}
+              ref={(el) => {
+                radioRefs.current[index] = el
+              }}
+              type="button"
+              role="radio"
+              aria-checked={size === batchSize}
+              tabIndex={size === batchSize ? 0 : -1}
+              className={`segment-item num${size === batchSize ? ' is-active' : ''}`}
+              onClick={() => setBatchSize(size)}
+              onKeyDown={onRadioKey}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary btn-lg"
+          disabled={busy || preview === null || batchIds.length === 0}
+          onClick={start}
+        >
+          Start
+        </button>
       </div>
 
       {learnableCount > 0 && learnableCount < batchSize && (
@@ -125,9 +136,11 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
 
       {preview && learnableCount === 0 && <p className="footnote training-start-notice">{NO_WORDS}</p>}
 
+      {notice && <p className="footnote training-start-notice">{notice}</p>}
+
       {rows.length > 0 && (
         <div className="batch-preview">
-          <p className="footnote">Batch words · frequency in the {inChapter ? 'chapter' : 'book'}</p>
+          <p className="footnote">Words in this batch · how often each occurs in the {inChapter ? 'chapter' : 'book'}</p>
           <ol className="batch-preview-list">
             {rows.map((row) => {
               const { wordPairId, word, translation, frequency } = row.candidate
@@ -155,11 +168,11 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
                       type="button"
                       className="btn btn-quiet batch-know"
                       aria-label={`Know: ${word}`}
-                      title="I know this word"
+                      title="I already know this word — take it out of the batch"
                       disabled={pendingId !== null}
                       onClick={() => crossOut(wordPairId)}
                     >
-                      ×
+                      Know
                     </button>
                   )}
                 </li>
@@ -169,18 +182,6 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
         </div>
       )}
 
-      {notice && <p className="footnote training-start-notice">{notice}</p>}
-
-      <div>
-        <button
-          type="button"
-          className="btn btn-primary btn-lg"
-          disabled={busy || preview === null || batchIds.length === 0}
-          onClick={start}
-        >
-          Start
-        </button>
-      </div>
     </section>
   )
 }

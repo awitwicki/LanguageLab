@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type BulkWordEntry, type BulkWordOutcome, type PersonalDictionary, type PersonalWord, type TrainingStarted } from '../api/client'
-import { LeitnerScale } from '../components/LeitnerScale'
+import { ScopeProgress } from '../components/ScopeProgress'
 import { formatInt, wordsLabel } from '../lib/format'
 import './PersonalDictionaryScreen.css'
 
@@ -12,7 +12,7 @@ interface Props {
 }
 
 /// The user's own word list: type a word, take or fix the suggested translation, add it. The
-/// server shelves it "don't know" at once, so "Start exercise" picks it up without sorting.
+/// server shelves it "don't know" at once, so "Learn new words" picks it up without sorting.
 export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props) {
   const [detail, setDetail] = useState<PersonalDictionary | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -207,8 +207,7 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
         <p className="personal-meta num">{wordsLabel(detail.wordsCount)}</p>
         {detail.learning.total > 0 && (
           <div className="personal-learning">
-            <span className="footnote">Learned</span>
-            <LeitnerScale progress={detail.learning} caption />
+            <ScopeProgress learning={detail.learning} />
           </div>
         )}
       </header>
@@ -299,24 +298,26 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
         )}
       </div>
 
-      <div className="personal-actions">
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={detail.learnableCount === 0}
-          onClick={() => onTrain(detail.id)}
-        >
-          Start exercise
-        </button>
-        {detail.dueCount > 0 && (
-          <button type="button" className="btn btn-secondary" disabled={reviewBusy} onClick={() => void startReview()}>
-            Review ({formatInt(detail.dueCount)})
+      <div className="personal-start">
+        <div className="personal-actions">
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={detail.learnableCount === 0}
+            onClick={() => onTrain(detail.id)}
+          >
+            Learn new words
           </button>
-        )}
-      </div>
+          {detail.dueCount > 0 && (
+            <button type="button" className="btn btn-secondary" disabled={reviewBusy} onClick={() => void startReview()}>
+              Review ({formatInt(detail.dueCount)})
+            </button>
+          )}
+        </div>
 
-      {detail.learnableCount === 0 && <p className="footnote">Add a word to start an exercise.</p>}
-      {reviewNotice && <p className="footnote">{reviewNotice}</p>}
+        {detail.learnableCount === 0 && <p className="footnote">Add a word to start learning.</p>}
+        {reviewNotice && <p className="footnote">{reviewNotice}</p>}
+      </div>
 
       <section className="section">
         <h2 className="title">Words</h2>

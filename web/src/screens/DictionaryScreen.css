@@ -10,10 +10,15 @@
 
 .dict-visibility {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   font-size: var(--fs-footnote);
   color: var(--text-2);
+}
+
+.dict-visibility .caption {
+  margin-left: 4px;
 }
 
 .dict-danger-zone {
@@ -30,11 +35,11 @@
   color: var(--text-2);
 }
 
-.dict-learning {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
+/* The admin section closes the page under a hairline, apart from the learner's content. */
+.dict-admin {
+  gap: 10px;
+  padding-top: 24px;
+  border-top: 1px solid var(--hairline);
 }
 
 /* Chapters on the left, top words on the right; on a narrow screen one column, chapters first (DOM order). */

@@ -44,6 +44,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  margin-bottom: 10px;
+}
+
+/* What the two cross-group sessions do, for anyone meeting the buttons for the first time. */
+.session-hint {
+  max-width: 60ch;
   margin-bottom: 32px;
 }
 

@@ -76,7 +76,7 @@ describe('TrainingStartScreen — preview', () => {
     expect(apiMock.previewBatch).toHaveBeenCalledWith(7, [11], 20)
     expect(container.querySelector('.leitner-large')).not.toBeNull()
     expect(container.textContent).toContain('42 words to learn')
-    expect(container.textContent).toContain('frequency in the chapter')
+    expect(container.textContent).toContain('occurs in the chapter')
 
     expect(rows(container)).toHaveLength(10)
     expect(rows(container)[0].textContent).toContain('word0')
@@ -103,7 +103,7 @@ describe('TrainingStartScreen — preview', () => {
     expect(onStarted).toHaveBeenCalledWith(started, 10)
   })
 
-  it('× → mark known, the row is crossed out in place, a replacement appended; "Bring back" → mark unknown', async () => {
+  it('"Know" → mark known, the row is crossed out in place, a replacement appended; "Bring back" → mark unknown', async () => {
     const { container } = await render(screen())
     await flush()
 
@@ -169,7 +169,7 @@ describe('TrainingStartScreen — preview', () => {
     await flush()
 
     expect(apiMock.previewBatch).toHaveBeenCalledWith(7, null, 20)
-    expect(container.textContent).toContain('frequency in the book')
+    expect(container.textContent).toContain('occurs in the book')
   })
 })
 

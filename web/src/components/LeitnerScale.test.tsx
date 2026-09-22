@@ -48,12 +48,12 @@ describe('LeitnerScale', () => {
     expect(items.map((li) => li.classList.contains('is-empty'))).toEqual([false, false, true, false, false, false])
   })
 
-  it('large: a caption under the legend says what the percent measures', async () => {
+  it('large: a caption under the legend says what the percent measures, without jargon', async () => {
     const { container } = await render(<LeitnerScale progress={progress} size="large" />)
 
     const caption = container.querySelector('.leitner-caption')
-    expect(caption?.textContent).toContain('don’t know')
-    expect(caption?.textContent).toContain('Leitner')
+    expect(caption?.textContent).toContain('box 1 counts one fifth')
+    expect(caption?.textContent).not.toContain('Leitner')
   })
 
   it('compact: the caption only when asked for', async () => {
@@ -61,7 +61,13 @@ describe('LeitnerScale', () => {
     expect(bare.container.querySelector('.leitner-caption')).toBeNull()
 
     const captioned = await render(<LeitnerScale progress={progress} caption />)
-    expect(captioned.container.querySelector('.leitner-caption')?.textContent).toContain('Leitner')
+    expect(captioned.container.querySelector('.leitner-caption')?.textContent).toContain('box 1')
+  })
+
+  it('compact, labelled: the percent says what it is', async () => {
+    const { container } = await render(<LeitnerScale progress={progress} labelled />)
+
+    expect(container.querySelector('.leitner-percent')?.textContent).toBe('23% learned')
   })
 
   it('total 0 → renders nothing', async () => {

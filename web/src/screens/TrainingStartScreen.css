@@ -13,6 +13,14 @@
   color: var(--text-2);
 }
 
+/* The batch-size picker and the Start button share a row. */
+.training-start-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
 /* Segmented control: one track with three radio buttons, the active one "floats" up as a surface. */
 .segment {
   display: inline-flex;
@@ -102,10 +110,7 @@
 }
 
 .batch-know {
-  min-width: 36px;
-  padding: 0;
-  font-size: 18px;
-  line-height: 1;
+  padding: 0 10px;
 }
 
 /* The container clips everything outside (overflow: hidden) — the focus ring is drawn inward. */

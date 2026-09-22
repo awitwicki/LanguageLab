@@ -3,19 +3,24 @@ import { formatInt } from '../lib/format'
 import { learningPercent, learningSegments } from '../lib/learning'
 import './LeitnerScale.css'
 
-/** The percent is a weighted score, not a share of words — this line says so wherever the scale stands alone. */
-const CAPTION =
-  'How far the words marked “don’t know” have climbed the Leitner boxes: box 1 counts one fifth, learned counts in full.'
+/**
+ * The percent is a weighted score, not a share of words — this line says so wherever the scale
+ * stands alone. Plain words on purpose: a learner meets it before ever hearing of Leitner boxes.
+ */
+export const LEARNED_CAPTION =
+  'Each correct answer moves a word up a box; a word in box 1 counts one fifth, a learned word counts in full.'
 
 interface Props {
   progress: LearningProgress
   /** compact — bar + percentage on one line (chapter row, header); large — percentage on top, legend below (start screen). */
   size?: 'compact' | 'large'
-  /** A footnote under the scale explaining the percent. Always on for large; the book header turns it on, chapter rows under it don't repeat it. */
+  /** A footnote under the scale explaining the percent. Always on for large; compact callers that need it (ScopeProgress) render it themselves. */
   caption?: boolean
+  /** compact only: "23% learned" instead of a bare "23%" — for a row with no label column of its own (the chapter list). */
+  labelled?: boolean
 }
 
-export function LeitnerScale({ progress, size = 'compact', caption = size === 'large' }: Props) {
+export function LeitnerScale({ progress, size = 'compact', caption = size === 'large', labelled = false }: Props) {
   // No "don't know" words — nothing to show; the caller reserves no space.
   if (progress.total <= 0) {
     return null
@@ -37,7 +42,9 @@ export function LeitnerScale({ progress, size = 'compact', caption = size === 'l
           ))}
       </div>
 
-      {size === 'compact' && <span className="leitner-percent footnote num">{percent}%</span>}
+      {size === 'compact' && (
+        <span className="leitner-percent footnote num">{labelled ? `${percent}% learned` : `${percent}%`}</span>
+      )}
 
       {size === 'large' && (
         <ul className="leitner-legend footnote num">
@@ -50,7 +57,7 @@ export function LeitnerScale({ progress, size = 'compact', caption = size === 'l
         </ul>
       )}
 
-      {caption && <p className="leitner-caption footnote">{CAPTION}</p>}
+      {caption && <p className="leitner-caption footnote">{LEARNED_CAPTION}</p>}
     </div>
   )
 }

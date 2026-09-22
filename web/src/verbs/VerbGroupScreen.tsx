@@ -100,7 +100,7 @@ export function VerbGroupScreen({ group, onBack, onStartSession }: Props) {
                     onClick={() => toggle(family.key)}
                     aria-expanded={expanded.has(family.key)}
                   >
-                    Verbs
+                    {expanded.has(family.key) ? 'Hide verbs' : 'Show verbs'}
                   </button>
                 </div>
               </div>

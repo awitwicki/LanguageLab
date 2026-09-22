@@ -49,17 +49,16 @@ function row(overrides: Partial<Parameters<typeof ChapterRow>[0]> = {}) {
 const star = (container: HTMLElement) => container.querySelector<HTMLButtonElement>('.chapter-star')!
 
 describe('ChapterRow', () => {
-  it('renders the label, the sub-line, the percent and the Leitner scale', async () => {
+  it('renders the label, the sub-line with the sorted share, and a labelled Leitner scale', async () => {
     const { container } = await render(row())
 
     expect(container.querySelector('.chapter-title')?.textContent).toBe('Holston')
-    expect(container.querySelector('.chapter-sub')?.textContent).toBe('300 words · 42 to learn')
-    expect(container.querySelector('.chapter-pct')?.textContent).toBe('50%')
-    expect(container.querySelector('.chapter-learning .leitner')).not.toBeNull()
+    expect(container.querySelector('.chapter-sub')?.textContent).toBe('300 words · 50% sorted · 42 to learn')
+    expect(container.querySelector('.chapter-learning .leitner-percent')?.textContent).toBe('26% learned')
     expect(container.querySelector('.chapter-row')?.classList.contains('done')).toBe(false)
   })
 
-  it('the main area sorts, "Exercise" trains', async () => {
+  it('the main area and "Sort" both sort; "Learn" trains', async () => {
     const onSort = vi.fn()
     const onTrain = vi.fn()
     const { container } = await render(row({ onSort, onTrain }))
@@ -67,20 +66,28 @@ describe('ChapterRow', () => {
     await click(container.querySelector('.chapter-main')!)
     expect(onSort).toHaveBeenCalledTimes(1)
 
+    const sort = container.querySelector<HTMLButtonElement>('.chapter-sort')!
+    expect(sort.textContent).toBe('Sort')
+    expect(sort.getAttribute('aria-label')).toBe('Sort: Holston')
+    await click(sort)
+    expect(onSort).toHaveBeenCalledTimes(2)
+
     const train = container.querySelector<HTMLButtonElement>('.chapter-train')!
-    expect(train.textContent).toBe('Exercise')
+    expect(train.textContent).toBe('Learn')
+    expect(train.getAttribute('aria-label')).toBe('Learn: Holston')
     await click(train)
     expect(onTrain).toHaveBeenCalledTimes(1)
   })
 
-  it('a chapter with due words and nothing new offers "Review" instead, and is marked done', async () => {
+  it('a chapter with due words and nothing new offers "Review" instead, reads "all sorted" and drops "Sort"', async () => {
     const onReview = vi.fn()
     const { container } = await render(row({ chapter: juliette, onReview }))
 
     const train = container.querySelector<HTMLButtonElement>('.chapter-train')!
     expect(train.textContent).toBe('Review')
-    expect(container.querySelector('.chapter-sub')?.textContent).toBe('80 words · 5 to review')
+    expect(container.querySelector('.chapter-sub')?.textContent).toBe('80 words · all sorted · 5 to review')
     expect(container.querySelector('.chapter-row')?.classList.contains('done')).toBe(true)
+    expect(container.querySelector('.chapter-sort')).toBeNull()
 
     await click(train)
     expect(onReview).toHaveBeenCalledTimes(1)

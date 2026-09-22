@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type ChapterView, type DictionaryDetail, type TopWord, type TrainingStarted, type UserRole } from '../api/client'
 import { ChapterRow } from '../components/ChapterRow'
-import { LeitnerScale } from '../components/LeitnerScale'
-import { ProgressBar } from '../components/ProgressBar'
+import { ScopeProgress } from '../components/ScopeProgress'
 import { chaptersLabel, formatInt, wordsLabel } from '../lib/format'
 import { WHOLE_BOOK, chapterLabel } from '../lib/labels'
 import './DictionaryScreen.css'
@@ -181,6 +180,7 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
   const maxFrequency = detail.topWords[0]?.frequency ?? 1
   // The mini-list at the top: the same rows, only the starred ones, still in book order.
   const starred = detail.chapters.filter((c) => c.isStarred)
+  const unsortedLeft = detail.sortedCount < detail.wordsCount
 
   return (
     <>
@@ -190,56 +190,23 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
           {wordsLabel(detail.wordsCount)}
           {detail.chapters.length > 0 && `, ${chaptersLabel(detail.chapters.length)}`}
         </p>
-        {role === 'admin' && (
-          <label className="dict-visibility">
-            <input
-              type="checkbox"
-              checked={detail.isPublic}
-              disabled={visibilityBusy}
-              onChange={(e) => void toggleVisibility(e.target.checked)}
-            />
-            Public
-          </label>
-        )}
-        {visibilityError && <p className="footnote error">{visibilityError}</p>}
-        {role === 'admin' && (
-          <div className="dict-danger-zone">
-            <button
-              type="button"
-              className="btn btn-quiet delete-dictionary"
-              disabled={deleteBusy}
-              onClick={() => void removeDictionary()}
-            >
-              {deleteConfirming ? 'Confirm deletion' : 'Delete dictionary'}
-            </button>
-            {deleteConfirming && (
-              <p className="footnote delete-warning">
-                This deletes the dictionary and its chapters for everyone. Cannot be undone.
-              </p>
-            )}
-            {deleteError && <p className="footnote error">{deleteError}</p>}
-          </div>
-        )}
-        <ProgressBar sorted={detail.sortedCount} total={detail.wordsCount} />
-        {detail.learning.total > 0 && (
-          <div className="dict-learning">
-            <span className="footnote">Learned</span>
-            <LeitnerScale progress={detail.learning} caption />
-          </div>
-        )}
+        <ScopeProgress sorting={{ sorted: detail.sortedCount, total: detail.wordsCount }} learning={detail.learning} />
       </header>
 
+      {/* Sorting leads while there is anything left to sort; once the book is through, learning takes the lead. */}
       <div className="dict-actions">
-        <button type="button" className="btn btn-primary" onClick={() => onSort(null, WHOLE_BOOK)}>
-          Sort the whole book
-        </button>
+        {unsortedLeft && (
+          <button type="button" className="btn btn-primary" onClick={() => onSort(null, WHOLE_BOOK)}>
+            Sort the whole book
+          </button>
+        )}
         <button
           type="button"
-          className="btn btn-secondary"
+          className={`btn ${unsortedLeft ? 'btn-secondary' : 'btn-primary'}`}
           disabled={detail.learnableCount === 0}
           onClick={() => onTrain(null, WHOLE_BOOK)}
         >
-          Start exercise
+          Learn new words
         </button>
         {detail.dueCount > 0 && (
           <button type="button" className="btn btn-secondary" disabled={reviewBusy} onClick={() => void startReview()}>
@@ -283,7 +250,7 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
 
             <section className="section">
               <h2 className="title">Chapters</h2>
-              <p className="footnote">Choose a chapter to sort only it; “Exercise” trains only it.</p>
+              <p className="footnote">A row’s Sort and Learn act on that chapter alone; the buttons above take the whole book.</p>
               {starError && <p className="footnote error">{starError}</p>}
               <ul className="chapter-list">
                 {detail.chapters.map((chapter) => (
@@ -345,6 +312,40 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
           </section>
         )}
       </div>
+
+      {/* Admin-only housekeeping lives after the content: it is rare, and one of its buttons is irreversible. */}
+      {role === 'admin' && (
+        <section className="section dict-admin">
+          <h2 className="title">Manage</h2>
+          <label className="dict-visibility">
+            <input
+              type="checkbox"
+              checked={detail.isPublic}
+              disabled={visibilityBusy}
+              onChange={(e) => void toggleVisibility(e.target.checked)}
+            />
+            Public
+            <span className="caption">everyone who signs in can see and sort it</span>
+          </label>
+          {visibilityError && <p className="footnote error">{visibilityError}</p>}
+          <div className="dict-danger-zone">
+            <button
+              type="button"
+              className="btn btn-quiet delete-dictionary"
+              disabled={deleteBusy}
+              onClick={() => void removeDictionary()}
+            >
+              {deleteConfirming ? 'Confirm deletion' : 'Delete dictionary'}
+            </button>
+            {deleteConfirming && (
+              <p className="footnote delete-warning">
+                This deletes the dictionary and its chapters for everyone. Cannot be undone.
+              </p>
+            )}
+            {deleteError && <p className="footnote error">{deleteError}</p>}
+          </div>
+        </section>
+      )}
     </>
   )
 }

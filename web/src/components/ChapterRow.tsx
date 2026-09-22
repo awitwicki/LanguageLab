@@ -11,7 +11,7 @@ interface Props {
   compact?: boolean
   reviewBusy: boolean
   starBusy: boolean
-  /** The main click. */
+  /** The main click and the "Sort" button. */
   onSort: () => void
   /** The side button when the chapter still has new words. */
   onTrain: () => void
@@ -21,77 +21,85 @@ interface Props {
 }
 
 /**
- * One chapter, as three separate buttons rather than nested ones: the main area (sort), the
- * side action (exercise or review) and the star. Rendered as an <li>: put it in a `.chapter-list`.
- * Shared by the book page's full list, its starred mini-list and the home screen.
+ * One chapter, as separate buttons rather than nested ones: the main area (sort), the
+ * explicit "Sort" and "Learn"/"Review" actions and the star. The main area sorts too — a big
+ * target for the common move — but the labelled button is what tells a newcomer that is
+ * what a click does. Rendered as an <li>: put it in a `.chapter-list`. Shared by the book
+ * page's full list, its starred mini-list and the home screen.
  */
 export function ChapterRow({ chapter, compact = false, reviewBusy, starBusy, onSort, onTrain, onReview, onToggleStar }: Props) {
   const label = chapterLabel(chapter)
   const percent = percentOf(chapter.sortedCount, chapter.wordsCount)
+  const done = percent === 100
   const action = chapterAction(chapter)
 
   return (
-    <li className={`chapter-row${percent === 100 ? ' done' : ''}${compact ? ' compact' : ''}`}>
-      <button type="button" className="chapter-main" onClick={onSort}>
+    <li className={`chapter-row${done ? ' done' : ''}${compact ? ' compact' : ''}`}>
+      <button type="button" className="chapter-main" title="Sort this chapter" onClick={onSort}>
         <span className="chapter-text">
           <span className="chapter-title">{label}</span>
           <span className="chapter-sub num">
-            {wordsLabel(chapter.wordsCount)} · {chapterSubLine(action)}
+            {wordsLabel(chapter.wordsCount)} · <span className="chapter-sorted">{done ? 'all sorted' : `${percent}% sorted`}</span>{' '}
+            · {chapterSubLine(action)}
           </span>
         </span>
-        <span className="chapter-pct num">{percent}%</span>
-        <span className="chevron" aria-hidden="true">
-          ›
-        </span>
       </button>
-      {action.kind === 'review' ? (
+      <span className="chapter-actions">
+        {/* Nothing left to sort — the button would only open an empty sorter. */}
+        {!done && (
+          <button type="button" className="btn btn-quiet chapter-sort" aria-label={`Sort: ${label}`} onClick={onSort}>
+            Sort
+          </button>
+        )}
+        {action.kind === 'review' ? (
+          <button
+            type="button"
+            className="btn btn-quiet chapter-train"
+            disabled={reviewBusy}
+            aria-label={`Review: ${label}`}
+            onClick={onReview}
+          >
+            Review
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-quiet chapter-train"
+            disabled={action.kind !== 'exercise'}
+            title={
+              action.kind === 'wait' ? 'Nothing due yet in this chapter'
+              : action.kind === 'none' ? 'No words to learn in this chapter'
+              : undefined
+            }
+            aria-label={`Learn: ${label}`}
+            onClick={onTrain}
+          >
+            Learn
+          </button>
+        )}
         <button
           type="button"
-          className="btn btn-quiet chapter-train"
-          disabled={reviewBusy}
-          aria-label={`Review: ${label}`}
-          onClick={onReview}
+          className="btn btn-quiet chapter-star"
+          aria-pressed={chapter.isStarred}
+          aria-label={`${chapter.isStarred ? 'Unstar' : 'Star'}: ${label}`}
+          title={chapter.isStarred ? 'Remove from the home screen' : 'Keep this chapter on the home screen'}
+          disabled={starBusy}
+          onClick={onToggleStar}
         >
-          Review
+          {chapter.isStarred ? '★' : '☆'}
         </button>
-      ) : (
-        <button
-          type="button"
-          className="btn btn-quiet chapter-train"
-          disabled={action.kind !== 'exercise'}
-          title={
-            action.kind === 'wait' ? 'Nothing due yet in this chapter'
-            : action.kind === 'none' ? 'No words to learn in this chapter'
-            : undefined
-          }
-          aria-label={`Exercise: ${label}`}
-          onClick={onTrain}
-        >
-          Exercise
-        </button>
-      )}
-      <button
-        type="button"
-        className="btn btn-quiet chapter-star"
-        aria-pressed={chapter.isStarred}
-        aria-label={`${chapter.isStarred ? 'Unstar' : 'Star'}: ${label}`}
-        title={chapter.isStarred ? 'Remove from the home screen' : 'Keep this chapter on the home screen'}
-        disabled={starBusy}
-        onClick={onToggleStar}
-      >
-        {chapter.isStarred ? '★' : '☆'}
-      </button>
+      </span>
       {/* The third line sits outside the sort button so the scale does not pollute its accessible name. */}
       {!compact && chapter.learning.total > 0 && (
         <div className="chapter-learning">
-          <LeitnerScale progress={chapter.learning} />
+          <LeitnerScale progress={chapter.learning} labelled />
         </div>
       )}
     </li>
   )
 }
 
-/** The second half of a chapter's sub-line: what the row's button is about to offer, or why it can't. */
+/** The last part of a chapter's sub-line: what the row's button is about to offer, or why it can't. */
 function chapterSubLine(action: ChapterAction): string {
   switch (action.kind) {
     case 'exercise':

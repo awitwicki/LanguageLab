@@ -9,10 +9,7 @@
 }
 
 .personal-learning {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
+  min-width: 0;
 }
 
 /* Word · Translate · Translation · Add on one row; the hint and notes span underneath. */
@@ -61,11 +58,18 @@
   gap: 2px;
 }
 
+/* The go buttons and their notes, set apart from the word list under them. */
+.personal-start {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  margin: 16px 0 32px;
+}
+
 .personal-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 16px 0 8px;
 }
 
 .personal-words {
