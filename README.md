@@ -11,7 +11,6 @@ Web app for learning new words from books
 Backlog of short topics. When something gets deferred (a stub, an inactive button, "we'll do it later") —
 add one line here **in the same set of changes**. Done items are marked `[x]`.
 
-- [x] Possibility to star chapters for fast access on dashboard, and minitable with starred chapteers in dict page
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService.LookupAsync` (`LanguageLab.Application/Translation`) now caches a provider's answer into the shared vocabulary on every lookup, but nothing calls it from `BookImportService` or `WordSortingService.MarkAsync` yet (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation still don't enter exercises)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
 - [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
@@ -32,10 +31,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Pronunciation trainer: spaced-repetition scheduling for resurfacing mastered words (same idea as the irregular-verbs trainer's own deferred SM-2 item)
 - [ ] Pronunciation trainer: record-and-replay the learner's own attempt for self-comparison
 - [ ] Top-100/200/500/1000 English word dictionaries, public
-- [x] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
-- [x] Comment sweep: code comments are still Ukrainian in ~190 lines across `web/src` (plus `useBatchPreview.test.ts` test names), 36 backend `.cs` files (`Domain` mostly), `Program.cs` and the `Dockerfile` — comments only, no UI copy
 - [ ] Edit a personal word's translation after it was added (`web/src/screens/PersonalDictionaryScreen.tsx`, `PersonalDictionaryService`)
-- [x] Cache provider translations into shared `WordPair` rows so the same word is not looked up twice (`TranslationService.LookupAsync`)
 - [ ] Book import inside the Telegram Mini App: the lemmatizing worker never starts there (the screen sat at "Starting the word extractor…" with no progress and no error event), while the same build works in a browser. `ImportScreen` now shows a "use a browser" notice instead of the file picker when `telegramInitData()` is set; find out why the module worker does not run in Telegram's webview and bring the import back there (`web/src/screens/ImportScreen.tsx`, `web/src/worker/parseBook.worker.ts`)
 - [ ] Reader: open `.fb2.zip` directly (now refused with "Unzip the book first." — `web/src/reader/readerBook.ts`, `readBookFile`)
 - [ ] Admin review of machine translations — `WordPair.TranslationOrigin = Machine` rows written by `TranslationService`
