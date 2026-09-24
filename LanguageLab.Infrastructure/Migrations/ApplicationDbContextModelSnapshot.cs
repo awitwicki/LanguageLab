@@ -78,6 +78,10 @@ namespace LanguageLab.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("FileHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("IsPersonal")
                         .HasColumnType("boolean");
 
@@ -95,6 +99,8 @@ namespace LanguageLab.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FileHash");
 
                     b.HasIndex("OwnerId")
                         .IsUnique()
@@ -252,6 +258,59 @@ namespace LanguageLab.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("PronunciationProgresses");
+                });
+
+            modelBuilder.Entity("LanguageLab.Domain.Entities.ReaderBook", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Author")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("ChapterIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ChaptersCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("ParagraphIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("Progress")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("SentenceIndex")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "FileHash")
+                        .IsUnique();
+
+                    b.ToTable("ReaderBooks");
                 });
 
             modelBuilder.Entity("LanguageLab.Domain.Entities.StarredChapter", b =>
@@ -652,6 +711,9 @@ namespace LanguageLab.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int>("TranslationOrigin")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Word")
                         .IsRequired()
                         .HasColumnType("text");
@@ -821,6 +883,17 @@ namespace LanguageLab.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("LanguageLab.Domain.Entities.PronunciationProgress", b =>
+                {
+                    b.HasOne("LanguageLab.Domain.Entities.TelegramUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("LanguageLab.Domain.Entities.ReaderBook", b =>
                 {
                     b.HasOne("LanguageLab.Domain.Entities.TelegramUser", "User")
                         .WithMany()

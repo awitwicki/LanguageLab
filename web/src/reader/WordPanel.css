@@ -1,0 +1,106 @@
+.word-panel {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+  background: var(--reader-surface);
+  color: var(--reader-text);
+  border: 1px solid var(--reader-hairline);
+  border-bottom: 0;
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  font-family: var(--font);
+}
+
+.word-panel-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.word-panel-lemma {
+  flex: 1;
+  margin: 0;
+  font: 600 var(--fs-title) / var(--lh-title) var(--reader-font);
+}
+
+.word-panel-form {
+  color: var(--reader-muted);
+  font-size: var(--fs-footnote);
+}
+
+.word-panel-close {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--reader-icon);
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.word-panel-meta {
+  display: flex;
+  gap: 12px;
+  margin: 6px 0 10px;
+  color: var(--reader-muted);
+  font-size: var(--fs-footnote);
+}
+
+.word-panel-status-new {
+  color: var(--reader-new);
+}
+
+.word-panel-status-learning {
+  color: var(--reader-learning);
+}
+
+.word-panel-translation {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--reader-hairline);
+  border-radius: var(--r-md);
+  color: var(--reader-muted);
+  font: var(--fs-headline) / var(--lh-headline) var(--reader-font);
+}
+
+.word-panel-typed {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 12px;
+  color: var(--reader-muted);
+  font-size: var(--fs-footnote);
+}
+
+.word-panel-input {
+  padding: 10px 12px;
+  border: 1px solid var(--reader-hairline);
+  border-radius: var(--r-md);
+  background: var(--reader-bg);
+  color: var(--reader-text);
+  font: var(--fs-headline) / var(--lh-headline) var(--reader-font);
+}
+
+.word-panel-loading {
+  margin: 0 0 12px;
+  color: var(--reader-muted);
+}
+
+.word-panel-error {
+  margin: 0 0 12px;
+  color: var(--danger);
+  font-size: var(--fs-footnote);
+}
+
+.word-panel-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.word-panel-actions .btn {
+  flex: 1;
+}

@@ -177,6 +177,8 @@ describe('ImportScreen', () => {
     await worker.reply(aggregated)
 
     expect(apiMock.importDictionary).toHaveBeenCalledTimes(1)
+    // The reader recognises the same file by this hash, see ReaderBook.FileHash.
+    expect(apiMock.importDictionary.mock.calls[0][0].fileHash).toMatch(/^[0-9a-f]{64}$/)
     expect(status(container)).toContain('Uploading')
 
     await act(async () => report?.(600, 1200))

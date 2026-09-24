@@ -139,3 +139,39 @@ describe('importDictionary', () => {
     expect(unauthorized).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('translateSentence', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  const answer = (status: number, body: unknown = {}) =>
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(body), { status })))
+
+  it('returns the translation', async () => {
+    answer(200, { translation: 'Привіт.' })
+
+    expect(await api.translateSentence('Hello.')).toEqual({ status: 'ok', translation: 'Привіт.' })
+  })
+
+  it('names the two limits apart from other failures', async () => {
+    answer(429)
+    expect(await api.translateSentence('Hello.')).toEqual({ status: 'limit' })
+
+    answer(503, { reason: 'quota' })
+    expect(await api.translateSentence('Hello.')).toEqual({ status: 'quota' })
+
+    answer(502)
+    expect(await api.translateSentence('Hello.')).toEqual({ status: 'failed' })
+  })
+
+  it('turns a network error into a failure', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('offline'))))
+
+    expect(await api.translateSentence('Hello.')).toEqual({ status: 'failed' })
+  })
+
+  it('turns a malformed 200 body into a failure instead of throwing', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('not json', { status: 200 })))
+
+    expect(await api.translateSentence('Hello.')).toEqual({ status: 'failed' })
+  })
+})

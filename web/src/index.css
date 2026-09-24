@@ -264,3 +264,37 @@ select {
     animation: none !important;
   }
 }
+
+/*
+ * Reader — its own light/dark pair, picked in the reader (Light / Dark / System) rather than by
+ * the system alone. --reader-dim (0..0.7) and --reader-size are set inline by the reader: the
+ * browser cannot change the screen's brightness, so dimming darkens the page itself.
+ */
+[data-reader-theme='light'] {
+  --reader-bg-base: #fbfaf7;
+  --reader-surface-base: #f1efea;
+  --reader-text-base: #1f1f1f;
+  --reader-muted: #66704a;
+  --reader-new: #c27c0e;
+  --reader-learning: #0a66c2;
+  --reader-hairline: rgba(0, 0, 0, 0.1);
+  --reader-icon: #8a8a8e;
+}
+
+[data-reader-theme='dark'] {
+  --reader-bg-base: #000000;
+  --reader-surface-base: #141416;
+  --reader-text-base: #d9dee7;
+  --reader-muted: #8f9a6e;
+  --reader-new: #d9a441;
+  --reader-learning: #5ab0ff;
+  --reader-hairline: rgba(255, 255, 255, 0.12);
+  --reader-icon: #6e6e73;
+}
+
+[data-reader-theme] {
+  --reader-font: 'Iowan Old Style', Charter, Georgia, 'Noto Serif', serif;
+  --reader-bg: color-mix(in srgb, var(--reader-bg-base), #000000 calc(var(--reader-dim, 0) * 100%));
+  --reader-surface: color-mix(in srgb, var(--reader-surface-base), #000000 calc(var(--reader-dim, 0) * 100%));
+  --reader-text: color-mix(in srgb, var(--reader-text-base), #000000 calc(var(--reader-dim, 0) * 60%));
+}

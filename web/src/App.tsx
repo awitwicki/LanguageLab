@@ -20,6 +20,9 @@ import { VerbSessionScreen } from './verbs/VerbSessionScreen'
 import { VerbsScreen } from './verbs/VerbsScreen'
 import { PronunciationFamiliesScreen } from './pronunciation/PronunciationFamiliesScreen'
 import { PronunciationFamilyScreen } from './pronunciation/PronunciationFamilyScreen'
+import { ReaderLibraryScreen } from './reader/ReaderLibraryScreen'
+import { ReaderScreen } from './reader/ReaderScreen'
+import { useBookStore } from './reader/useBookStore'
 
 type Route =
   | { name: 'home' }
@@ -42,6 +45,9 @@ type Route =
   | { name: 'verbs-session'; sessionId: number }
   | { name: 'pronunciation' }
   | { name: 'pronunciation-family'; key: string }
+  | { name: 'reader' }
+  /** Full screen, outside the app shell — the reader has its own header. */
+  | { name: 'reader-book'; hash: string }
   | { name: 'admin' }
 
 const REVIEW_TITLE = 'Review'
@@ -50,6 +56,7 @@ const ALL_DICTIONARIES = 'All dictionaries'
 
 const MODE_LANDING: Record<AppMode, Route> = {
   words: { name: 'home' },
+  reading: { name: 'reader' },
   pronunciation: { name: 'pronunciation' },
   verbs: { name: 'verbs' },
 }
@@ -60,6 +67,9 @@ export default function App() {
   const [route, setRoute] = useState<Route>({ name: 'home' })
   const [dictionaries, setDictionaries] = useState<DictionaryListItem[] | null>(null)
   const [listError, setListError] = useState<string | null>(null)
+
+  // Opened once here so the library and the reader share one store (and one memory fallback).
+  const books = useBookStore()
 
   const reload = useCallback(
     () =>
@@ -132,6 +142,20 @@ export default function App() {
         loginFailed={loginFailed}
         onTelegramSignIn={insideTelegram ? () => void signInWithTelegram() : null}
       />
+    )
+  }
+
+  if (route.name === 'reader-book') {
+    return books ? (
+      <ReaderScreen
+        key={route.hash}
+        hash={route.hash}
+        store={books.store}
+        onBack={() => setRoute({ name: 'reader' })}
+        onOpenDictionary={(id) => setRoute({ name: 'dictionary', id })}
+      />
+    ) : (
+      <main className="boot" aria-busy="true" />
     )
   }
 
@@ -297,6 +321,14 @@ export default function App() {
           key={route.key}
           familyKey={route.key}
           onBack={() => setRoute({ name: 'pronunciation' })}
+        />
+      )}
+
+      {route.name === 'reader' && books && (
+        <ReaderLibraryScreen
+          store={books.store}
+          persistent={books.persistent}
+          onOpen={(hash) => setRoute({ name: 'reader-book', hash })}
         />
       )}
     </AppShell>

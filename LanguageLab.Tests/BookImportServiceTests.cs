@@ -168,4 +168,26 @@ public class BookImportServiceTests
         Assert.Equal("", silos[1].Translation);
         Assert.Equal(3, result.NewWords);
     }
+
+    [Fact]
+    public async Task The_file_hash_is_kept_lowercase()
+    {
+        await using var db = NewContext();
+
+        var result = await new BookImportService(db).ImportAsync(
+            TwoChapterBook() with { FileHash = new string('A', 64) }, ownerId: 1, isPublic: true);
+
+        Assert.Equal(new string('a', 64), (await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId)).FileHash);
+    }
+
+    [Fact]
+    public async Task A_malformed_file_hash_is_dropped()
+    {
+        await using var db = NewContext();
+
+        var result = await new BookImportService(db).ImportAsync(
+            TwoChapterBook() with { FileHash = "nope" }, ownerId: 1, isPublic: true);
+
+        Assert.Null((await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId)).FileHash);
+    }
 }

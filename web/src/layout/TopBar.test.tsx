@@ -37,24 +37,29 @@ describe('TopBar — brand', () => {
 })
 
 describe('TopBar — mode tabs', () => {
-  it('offers the three modes in order and marks the current one', async () => {
+  it('offers the four modes in order and marks the current one', async () => {
     const { container } = await render(topBar('pronunciation'))
 
-    expect(tabs(container).map((t) => t.textContent)).toEqual(['Words', 'Pronunciation', 'Irregular verbs'])
-    expect(tabs(container).map((t) => t.getAttribute('aria-current'))).toEqual([null, 'page', null])
+    expect(tabs(container).map((t) => t.textContent)).toEqual([
+      'Words',
+      'Reading',
+      'Pronunciation',
+      'Irregular verbs',
+    ])
+    expect(tabs(container).map((t) => t.getAttribute('aria-current'))).toEqual([null, null, 'page', null])
   })
 
   it('marks no tab when the screen belongs to no mode', async () => {
     const { container } = await render(topBar(null))
 
-    expect(tabs(container).map((t) => t.getAttribute('aria-current'))).toEqual([null, null, null])
+    expect(tabs(container).map((t) => t.getAttribute('aria-current'))).toEqual([null, null, null, null])
   })
 
   it('reports the chosen mode', async () => {
     const onSelectMode = vi.fn()
     const { container } = await render(topBar('words', onSelectMode))
 
-    await click(tabs(container)[2])
+    await click(tabs(container)[3])
 
     expect(onSelectMode).toHaveBeenCalledWith('verbs')
   })

@@ -94,6 +94,49 @@ export interface TranslationLookup {
   source: TranslationSource
 }
 
+export type ReaderWordStatus = 'new' | 'learning' | 'known'
+
+/** The server's record of a book read in the reader — the file itself stays on the device. */
+export interface ReaderBookDto {
+  fileHash: string
+  title: string
+  author: string
+  chaptersCount: number
+  chapterIndex: number
+  paragraphIndex: number
+  sentenceIndex: number
+  /** 0..1 over the whole book. */
+  progress: number
+  /** ISO 8601. */
+  updatedAt: string
+  /** A visible dictionary imported from the same file. */
+  dictionaryId: number | null
+}
+
+export interface ReaderCapabilities {
+  sentenceTranslation: boolean
+}
+
+export interface WordStatusesDto {
+  learning: string[]
+  known: string[]
+}
+
+export interface ReaderWord {
+  lemma: string
+  translation: string | null
+  source: TranslationSource
+  status: ReaderWordStatus
+  /** false: "I know it" has no shared row to shelve. */
+  inSharedVocabulary: boolean
+}
+
+export type SentenceTranslationResult =
+  | { status: 'ok'; translation: string }
+  | { status: 'limit' }
+  | { status: 'quota' }
+  | { status: 'failed' }
+
 /** box is null until the word's first exercise; 1..5 while learning; isLearned once graduated. */
 export interface PersonalWord {
   wordPairId: number
@@ -613,6 +656,78 @@ export const api = {
   translate: (word: string) =>
     request<TranslationLookup>(`/api/translate?${new URLSearchParams({ word })}`) as Promise<TranslationLookup>,
 
+  readerCapabilities: () => request<ReaderCapabilities>('/api/reader/capabilities') as Promise<ReaderCapabilities>,
+
+  listReaderBooks: () => request<ReaderBookDto[]>('/api/reader/books') as Promise<ReaderBookDto[]>,
+
+  registerReaderBook: (hash: string, book: { title: string; author: string; chaptersCount: number }) =>
+    request<ReaderBookDto>(`/api/reader/books/${hash}`, {
+      method: 'PUT',
+      body: JSON.stringify(book),
+    }) as Promise<ReaderBookDto>,
+
+  saveReaderPosition: (
+    hash: string,
+    position: {
+      chapterIndex: number
+      paragraphIndex: number
+      sentenceIndex: number
+      progress: number
+      clientUpdatedAt: string
+    },
+  ) => request<null>(`/api/reader/books/${hash}/position`, { method: 'PUT', body: JSON.stringify(position) }),
+
+  removeReaderBook: (hash: string) => request<null>(`/api/reader/books/${hash}`, { method: 'DELETE' }),
+
+  getWordStatuses: () => request<WordStatusesDto>('/api/reader/word-statuses') as Promise<WordStatusesDto>,
+
+  getReaderWord: (lemma: string) =>
+    request<ReaderWord>(`/api/reader/words/${encodeURIComponent(lemma)}`) as Promise<ReaderWord>,
+
+  // 400 carries { message } ("Type a translation first.").
+  learnWord: (lemma: string, translation?: string) =>
+    request<null>(`/api/reader/words/${encodeURIComponent(lemma)}/learn`, {
+      method: 'POST',
+      body: JSON.stringify({ translation: translation ?? null }),
+    }),
+
+  knowWord: (lemma: string) =>
+    request<null>(`/api/reader/words/${encodeURIComponent(lemma)}/known`, { method: 'POST' }),
+
+  /** Never throws: the reader shows each outcome under the sentence. */
+  translateSentence: async (text: string): Promise<SentenceTranslationResult> => {
+    let response: Response
+
+    try {
+      response = await fetch('/api/translate/sentence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+    } catch {
+      return { status: 'failed' }
+    }
+
+    if (response.ok) {
+      try {
+        const body = (await response.json()) as { translation: string }
+        return { status: 'ok', translation: body.translation }
+      } catch {
+        return { status: 'failed' }
+      }
+    }
+
+    if (response.status === 401) {
+      unauthorizedHandler()
+    }
+
+    if (response.status === 429) {
+      return { status: 'limit' }
+    }
+
+    return response.status === 503 ? { status: 'quota' } : { status: 'failed' }
+  },
+
   getPersonalDictionary: () =>
     request<PersonalDictionary>('/api/dictionaries/personal') as Promise<PersonalDictionary>,
 
@@ -639,6 +754,7 @@ export const api = {
       chapters?: ImportChapter[]
       words?: ImportWord[]
       isPublic?: boolean
+      fileHash?: string
     },
     onUploadProgress?: UploadProgress,
   ) => uploadJson<ImportResult>('/api/dictionaries/import', payload, onUploadProgress),

@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LanguageLab.Domain.Entities;
@@ -25,6 +26,14 @@ public class Dictionary : BaseEntity
     /// in by hand rather than imported. Visible to its owner only — admins included.
     /// </summary>
     public bool IsPersonal { get; set; }
+
+    /// <summary>
+    /// Lowercase hex SHA-256 of the imported fb2 file (ReaderHash), so the reader can link a book
+    /// it opens to this dictionary. Null for dictionaries imported before the reader existed and
+    /// for flat imports.
+    /// </summary>
+    [MaxLength(ReaderHash.Length)]
+    public string? FileHash { get; set; }
 
     public IList<WordPair> Words { get; set; } = new List<WordPair>();
 

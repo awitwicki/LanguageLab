@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modeOf } from './mode'
+import { MODES, modeOf } from './mode'
 
 describe('modeOf', () => {
   it('puts every book and personal-dictionary screen under Words', () => {
@@ -21,5 +21,14 @@ describe('modeOf', () => {
 
   it('leaves admin outside any mode', () => {
     expect(modeOf('admin')).toBeNull()
+  })
+
+  it('puts the library and the reader under Reading', () => {
+    expect(modeOf('reader')).toBe('reading')
+    expect(modeOf('reader-book')).toBe('reading')
+  })
+
+  it('offers Reading right after Words', () => {
+    expect(MODES.map((m) => m.mode)).toEqual(['words', 'reading', 'pronunciation', 'verbs'])
   })
 })

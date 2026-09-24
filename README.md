@@ -12,7 +12,7 @@ Backlog of short topics. When something gets deferred (a stub, an inactive butto
 add one line here **in the same set of changes**. Done items are marked `[x]`.
 
 - [x] Possibility to star chapters for fast access on dashboard, and minitable with starred chapteers in dict page
-- [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService` (`LanguageLab.Application/Translation`) now exists for single words; wire it into `BookImportService` / `WordSortingService.MarkAsync` (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation don't enter exercises)
+- [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService.LookupAsync` (`LanguageLab.Application/Translation`) now caches a provider's answer into the shared vocabulary on every lookup, but nothing calls it from `BookImportService` or `WordSortingService.MarkAsync` yet (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation still don't enter exercises)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
 - [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
 - [ ] Spacing tokens in the design system: `web/src/index.css` tokenizes color/typography/radii, but not spacing
@@ -35,8 +35,13 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [x] Remove the diagnostic Telegram claims dump from `TelegramAuth.OnTokenValidatedAsync` (`LanguageLab.Api/Auth/TelegramAuth.cs`) once a real sign-in confirms whether the numeric Telegram id arrives as the `id` or the `sub` claim — it logs every profile claim verbatim, and `ReadIdentity` may need the name corrected
 - [x] Comment sweep: code comments are still Ukrainian in ~190 lines across `web/src` (plus `useBatchPreview.test.ts` test names), 36 backend `.cs` files (`Domain` mostly), `Program.cs` and the `Dockerfile` — comments only, no UI copy
 - [ ] Edit a personal word's translation after it was added (`web/src/screens/PersonalDictionaryScreen.tsx`, `PersonalDictionaryService`)
-- [ ] Cache provider translations into shared `WordPair` rows so the same word is not looked up twice (`TranslationService.LookupAsync`)
+- [x] Cache provider translations into shared `WordPair` rows so the same word is not looked up twice (`TranslationService.LookupAsync`)
 - [ ] Book import inside the Telegram Mini App: the lemmatizing worker never starts there (the screen sat at "Starting the word extractor…" with no progress and no error event), while the same build works in a browser. `ImportScreen` now shows a "use a browser" notice instead of the file picker when `telegramInitData()` is set; find out why the module worker does not run in Telegram's webview and bring the import back there (`web/src/screens/ImportScreen.tsx`, `web/src/worker/parseBook.worker.ts`)
+- [ ] Reader: open `.fb2.zip` directly (now refused with "Unzip the book first." — `web/src/reader/readerBook.ts`, `readBookFile`)
+- [ ] Admin review of machine translations — `WordPair.TranslationOrigin = Machine` rows written by `TranslationService`
+- [ ] Reader: sentence positions and cached translation keys depend on `Intl.Segmenter`'s exact output, which can differ across browser engines/ICU versions — resume is best-effort at the sentence level; chapter/paragraph indices are stable and `clampPosition` (`web/src/reader/readerBook.ts`) prevents a crash either way
+- [ ] Reader: a fb2 with no `<section>` structure renders as a single chapter with the whole book's sentences in the DOM at once (no virtualization by design) — likely slow on a phone for a very long, sectionless book; see `collectChapters` in `web/src/reader/readerBook.ts`
+- [ ] Reader: `ReaderMenu` (`web/src/reader/ReaderMenu.tsx`) and the library's row action menu (`web/src/reader/ReaderLibraryScreen.tsx`, `RowMenu`) have no Escape-key or outside-click handler to close them
 
 ## Development
 
@@ -91,6 +96,8 @@ spelling:
 * `WebApp__Url` - the public `https://` address of the app, which the bot's button opens
 * `Translation__MyMemoryEmail` - optional; any contact email raises MyMemory's free
   translation quota from 5 000 to 50 000 characters a day per server IP (see Translation, below)
+* `Translation__DeepLApiKey` - optional; a DeepL API Free key for sentence translation in the
+  reader. Without it the reader has no sentence translation.
 
 **Docker compose:** create `.env` file and fill it with those variables.
 
@@ -111,6 +118,9 @@ spelling:
 * `Translation:MyMemoryEmail` - optional. Auto-translation for the personal dictionary uses
   MyMemory (api.mymemory.translated.net), which needs no key; the email only raises the daily
   quota. Leave it empty to run anonymously.
+* `Translation:DeepLApiKey` - optional. A DeepL API Free key (ends in `:fx`), for the reader's
+  sentence translation — 500 000 characters a month for the whole app, 20 000 characters a day
+  per user. Without it the reader hides the sentence-translation button.
 
 For a local run, fill in `LanguageLab.Api/appsettings.Development.json` (see the example
 below). In Docker the same values are passed via env vars using the standard

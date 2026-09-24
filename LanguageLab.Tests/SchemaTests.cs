@@ -358,4 +358,27 @@ public class SchemaTests
         Assert.Empty(await db.PronunciationProgresses.ToListAsync());
         Assert.Empty(await db.PronunciationAttempts.ToListAsync());
     }
+
+    /// <summary>One library row per user and file: registering the same file twice must not duplicate it.</summary>
+    [Fact]
+    public void Reader_books_are_unique_per_user_and_file()
+    {
+        using var db = NewContext();
+
+        var index = db.Model.FindEntityType(typeof(ReaderBook))!.GetIndexes().Single(i => i.IsUnique);
+
+        Assert.Equal(["UserId", "FileHash"], index.Properties.Select(p => p.Name));
+    }
+
+    /// <summary>Every row that exists today was translated by hand or imported: Manual is the default.</summary>
+    [Fact]
+    public async Task New_words_default_to_a_manual_translation()
+    {
+        await using var db = NewContext();
+
+        db.Words.Add(new WordPair { Id = 1, Word = "abide", Translation = "дотримуватися" });
+        await db.SaveChangesAsync();
+
+        Assert.Equal(TranslationOrigin.Manual, (await db.Words.SingleAsync()).TranslationOrigin);
+    }
 }

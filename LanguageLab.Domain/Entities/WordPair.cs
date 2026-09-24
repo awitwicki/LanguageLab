@@ -15,6 +15,9 @@ public class WordPair : BaseEntity
     public required string Word { get; set; }
     public required string Translation { get; set; }
 
+    /// <summary>Manual unless the translation provider filled it in, see TranslationService.</summary>
+    public TranslationOrigin TranslationOrigin { get; set; }
+
     /// <summary>Null = shared vocabulary. Set only on words a user typed into their personal dictionary.</summary>
     public TelegramUser? Owner { get; set; }
     [ForeignKey(nameof(Owner))]

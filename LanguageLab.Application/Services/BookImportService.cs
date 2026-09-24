@@ -1,3 +1,4 @@
+using LanguageLab.Domain;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
@@ -10,13 +11,14 @@ public sealed record ImportChapter(int Order, string Title, IReadOnlyList<Import
 
 /// <summary>
 /// A book arrives with chapters; a flat list (like a "top 500") comes through Words.
-/// Exactly one of the two must be set.
+/// Exactly one of the two must be set. FileHash: SHA-256 of the fb2 file, for the reader.
 /// </summary>
 public sealed record ImportRequest(
     string Name,
     IReadOnlyList<ImportChapter>? Chapters,
     IReadOnlyList<ImportWord>? Words,
-    bool? IsPublic = null);
+    bool? IsPublic = null,
+    string? FileHash = null);
 
 public sealed record ImportResult(long DictionaryId, int TotalWords, int NewWords, int ReusedWords);
 
@@ -92,6 +94,8 @@ public class BookImportService
             WordsCount = totals.Count,
             OwnerId = ownerId,
             IsPublic = isPublic,
+            // A malformed hash is dropped rather than refused: the import itself is still good.
+            FileHash = ReaderHash.Normalize(request.FileHash),
         };
 
         _dbContext.Dictionaries.Add(dictionary);

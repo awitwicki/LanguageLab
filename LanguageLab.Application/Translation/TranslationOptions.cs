@@ -10,4 +10,10 @@ public sealed class TranslationOptions
     /// contact email rides along in the request. Never shown to users.
     /// </summary>
     public string? MyMemoryEmail { get; set; }
+
+    /// <summary>
+    /// Optional. DeepL API Free key (it ends in ":fx"), for sentence translation in the reader:
+    /// 500 000 characters a month for the whole app. Without it the reader hides the button.
+    /// </summary>
+    public string? DeepLApiKey { get; set; }
 }

@@ -25,6 +25,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<DictionaryWord> DictionaryWords { get; set; }
     public DbSet<ExcludedWord> ExcludedWords { get; set; }
     public DbSet<StarredChapter> StarredChapters { get; set; }
+    public DbSet<ReaderBook> ReaderBooks { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -195,5 +196,20 @@ public class ApplicationDbContext : DbContext
         builder.Entity<StarredChapter>()
             .HasIndex(s => new { s.UserId, s.ChapterId })
             .IsUnique();
+
+        // The reader's library: one row per user per file, gone with the user.
+        builder.Entity<ReaderBook>()
+            .HasIndex(b => new { b.UserId, b.FileHash })
+            .IsUnique();
+
+        builder.Entity<ReaderBook>()
+            .HasOne(b => b.User)
+            .WithMany()
+            .HasForeignKey(b => b.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // The library links a book to the dictionary imported from the same file.
+        builder.Entity<Dictionary>()
+            .HasIndex(d => d.FileHash);
     }
 }

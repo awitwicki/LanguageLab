@@ -1,0 +1,90 @@
+.reader-sentence {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 36px;
+  column-gap: 4px;
+  /* Room for the sticky header when a sentence is scrolled to — the header's real measured
+     height (ReaderScreen.tsx), so this can never disagree with the reading band's rootMargin. */
+  scroll-margin-top: var(--reader-header-height, 72px);
+}
+
+.reader-paragraph-start {
+  margin-top: 0.6em;
+}
+
+.reader-gutter {
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  display: flex;
+  justify-content: center;
+  padding-top: 0.4em;
+}
+
+.reader-bookmark {
+  width: 10px;
+  height: 14px;
+  background: var(--reader-icon);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 72%, 0 100%);
+}
+
+.reader-text {
+  grid-column: 2;
+  grid-row: 1;
+  margin: 0;
+  text-indent: 1.2em;
+}
+
+.reader-strip {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0.35em 0 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--reader-icon);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.reader-strip:hover,
+.reader-strip:focus-visible {
+  background: var(--reader-surface);
+}
+
+.reader-translation {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0.15em 0 0.35em;
+  text-indent: 1.2em;
+  color: var(--reader-muted);
+}
+
+.reader-translation-error {
+  text-indent: 0;
+  font: var(--fs-footnote) / var(--lh-footnote) var(--font);
+}
+
+.reader-word {
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.reader-word-new {
+  text-decoration: underline;
+  text-decoration-color: var(--reader-new);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.reader-word-learning {
+  color: var(--reader-learning);
+}
+
+.reader-word-selected {
+  text-decoration: underline solid currentColor;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
+}

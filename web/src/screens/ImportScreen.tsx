@@ -3,6 +3,7 @@ import { decodeFb2 } from '../fb2/decode'
 import { flattenChapters, parseBook, type ChapterMode, type SectionNode } from '../fb2/chapters'
 import type { WorkerRequest, WorkerResponse } from '../worker/parseBook.worker'
 import { api } from '../api/client'
+import { sha256Hex } from '../reader/hash'
 import { openOutsideTelegram, telegramInitData } from '../auth/telegram'
 import { ProgressBar } from '../components/ProgressBar'
 import { formatBytes, formatInt, percentOf } from '../lib/format'
@@ -36,6 +37,7 @@ export function ImportScreen({ onImported }: Props) {
   const [isPublic, setIsPublic] = useState(true)
   const [extraction, setExtraction] = useState<Extraction>(null)
   const [upload, setUpload] = useState<Upload>(null)
+  const [fileHash, setFileHash] = useState<string | null>(null)
 
   const worker = useRef<Worker | null>(null)
   const pending = useRef<Pending | null>(null)
@@ -111,13 +113,14 @@ export function ImportScreen({ onImported }: Props) {
 
     file
       .arrayBuffer()
-      .then((buffer) => {
+      .then(async (buffer) => {
         const xml = decodeFb2(buffer)
         const { bookTitle, sections, maxDepth } = parseBook(xml)
 
         setSections(sections)
         setMaxDepth(maxDepth)
         setName(bookTitle || file.name.replace(/\.fb2$/i, ''))
+        setFileHash(await sha256Hex(buffer))
         setStage('preview')
       })
       .catch((e) => {
@@ -158,6 +161,7 @@ export function ImportScreen({ onImported }: Props) {
         {
           name,
           isPublic,
+          fileHash: fileHash ?? undefined,
           chapters: response.chapters.map((c) => ({
             order: c.order,
             title: c.title,
@@ -172,7 +176,7 @@ export function ImportScreen({ onImported }: Props) {
       setError(e instanceof Error ? e.message : String(e))
       setStage('preview')
     }
-  }, [ask, sections, mode, name, isPublic, onImported])
+  }, [ask, sections, mode, name, isPublic, fileHash, onImported])
 
   const working = stage === 'aggregating' || stage === 'uploading'
 

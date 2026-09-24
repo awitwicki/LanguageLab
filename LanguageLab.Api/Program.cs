@@ -191,8 +191,19 @@ builder.Services.AddHttpClient<ITranslator, MyMemoryTranslator>(client =>
     client.BaseAddress = new Uri(MyMemoryTranslator.BaseUrl);
     client.Timeout = MyMemoryTranslator.Timeout;
 });
+
+// DeepL is optional: without Translation:DeepLApiKey the reader hides sentence translation.
+builder.Services.AddHttpClient<ISentenceTranslator, DeepLTranslator>(client =>
+{
+    client.BaseAddress = new Uri(DeepLTranslator.BaseUrl);
+    client.Timeout = DeepLTranslator.Timeout;
+});
+builder.Services.AddSingleton(new SentenceQuota());
 builder.Services.AddScoped<TranslationService>();
 builder.Services.AddScoped<PersonalDictionaryService>();
+builder.Services.AddScoped<ReaderBookService>();
+builder.Services.AddScoped<ReaderWordStatusService>();
+builder.Services.AddScoped<ReaderWordService>();
 
 builder.Services.AddRequestDecompression();
 
@@ -252,6 +263,7 @@ app.MapAdminEndpoints();
 app.MapIrregularVerbEndpoints();
 app.MapPronunciationEndpoints();
 app.MapTranslationEndpoints();
+app.MapReaderEndpoints();
 
 // The SPA has its own routing: anything that is not /api and not a file gets index.html.
 app.MapFallbackToFile("index.html");
