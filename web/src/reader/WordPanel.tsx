@@ -28,12 +28,33 @@ const TARGET_HINT: Record<LearnTarget, string> = {
 /** A swipe down this far closes the panel. */
 const SWIPE_CLOSE_PX = 60
 
+/** Matches --dur-sheet in index.css. */
+export const SHEET_OUT_MS = 220
+
+const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+
 export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusChange }: Props) {
   const [word, setWord] = useState<ReaderWord | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [typed, setTyped] = useState('')
   const [busy, setBusy] = useState(false)
+  const [closing, setClosing] = useState(false)
   const touchStart = useRef<number | null>(null)
+  // The parent passes a fresh arrow each render; a ref keeps the close timer from restarting.
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  useEffect(() => {
+    if (!closing) return
+
+    const timer = window.setTimeout(() => onCloseRef.current(), prefersReducedMotion() ? 0 : SHEET_OUT_MS)
+    return () => window.clearTimeout(timer)
+  }, [closing])
+
+  const dismiss = () => setClosing(true)
 
   useEffect(() => {
     let cancelled = false
@@ -54,12 +75,12 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') setClosing(true)
     }
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [])
 
   const act = async (action: Action) => {
     if (!word) return
@@ -79,8 +100,7 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
       const status = action === 'learn' ? 'learning' : 'known'
       setWord({ ...word, status })
       onStatusChange(lemma, status)
-
-      if (action === 'ignore') onClose()
+      dismiss()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -93,7 +113,7 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
 
   return (
     <section
-      className="word-panel"
+      className={closing ? 'word-panel word-panel-closing' : 'word-panel'}
       role="dialog"
       aria-label={`Word: ${lemma}`}
       onTouchStart={(event) => {
@@ -103,7 +123,7 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
         const start = touchStart.current
         const end = event.changedTouches[0]?.clientY
 
-        if (start !== null && end !== undefined && end - start > SWIPE_CLOSE_PX) onClose()
+        if (start !== null && end !== undefined && end - start > SWIPE_CLOSE_PX) dismiss()
         touchStart.current = null
       }}
     >
@@ -114,7 +134,7 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
             {form} → {lemma}
           </span>
         )}
-        <button type="button" className="word-panel-close" aria-label="Close" onClick={onClose}>
+        <button type="button" className="word-panel-close" aria-label="Close" onClick={dismiss}>
           ×
         </button>
       </div>

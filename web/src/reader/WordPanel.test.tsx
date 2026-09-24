@@ -2,7 +2,7 @@ import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReaderWord } from '../api/client'
 import { click, flush, render } from '../test/render'
-import { WordPanel } from './WordPanel'
+import { SHEET_OUT_MS, WordPanel } from './WordPanel'
 
 const apiMock = vi.hoisted(() => ({
   getReaderWord: vi.fn(),
@@ -45,6 +45,12 @@ async function open(word: ReaderWord, dictionaryId: number | null = 10) {
   return { ...view, onClose, onStatusChange }
 }
 
+const closesAfterSlide = async (container: HTMLElement, onClose: () => void) => {
+  expect(container.querySelector('.word-panel')!.classList).toContain('word-panel-closing')
+  expect(onClose).not.toHaveBeenCalled()
+  await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce(), { timeout: SHEET_OUT_MS * 5 })
+}
+
 const button = (container: HTMLElement, text: string) =>
   [...container.querySelectorAll('button')].find((b) => b.textContent === text)!
 
@@ -73,8 +79,8 @@ describe('WordPanel', () => {
     )
   })
 
-  it('sends the word to training with the book it was read in', async () => {
-    const { container, onStatusChange } = await open(adjust)
+  it('sends the word to training with the book it was read in, then slides away', async () => {
+    const { container, onStatusChange, onClose } = await open(adjust)
 
     await click(button(container, 'Add to training'))
     await flush()
@@ -82,6 +88,7 @@ describe('WordPanel', () => {
     expect(apiMock.learnWord).toHaveBeenCalledWith('adjust', undefined, 10)
     expect(onStatusChange).toHaveBeenCalledWith('adjust', 'learning')
     expect(container.querySelector('.word-panel-meta')!.textContent).toContain('Learning')
+    await closesAfterSlide(container, onClose)
   })
 
   it('asks for a translation when none was found, and sends the typed one', async () => {
@@ -98,14 +105,15 @@ describe('WordPanel', () => {
     expect(apiMock.learnWord).toHaveBeenCalledWith('adjust', 'налаштувати', null)
   })
 
-  it('marks the word known', async () => {
-    const { container, onStatusChange } = await open(adjust)
+  it('marks the word known, then slides away', async () => {
+    const { container, onStatusChange, onClose } = await open(adjust)
 
     await click(button(container, 'I know it'))
     await flush()
 
     expect(apiMock.knowWord).toHaveBeenCalledWith('adjust')
     expect(onStatusChange).toHaveBeenCalledWith('adjust', 'known')
+    await closesAfterSlide(container, onClose)
   })
 
   it('ignores a name, stops highlighting it and closes', async () => {
@@ -116,7 +124,7 @@ describe('WordPanel', () => {
 
     expect(apiMock.ignoreWord).toHaveBeenCalledWith('frank')
     expect(onStatusChange).toHaveBeenCalledWith('frank', 'known')
-    expect(onClose).toHaveBeenCalled()
+    await closesAfterSlide(container, onClose)
   })
 
   it('says so when the lookup fails', async () => {
@@ -130,12 +138,24 @@ describe('WordPanel', () => {
   })
 
   it('closes on Escape', async () => {
-    const { onClose } = await open(adjust)
+    const { container, onClose } = await open(adjust)
 
     await act(async () => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     })
 
-    expect(onClose).toHaveBeenCalled()
+    await closesAfterSlide(container, onClose)
+  })
+
+  it('stays open when the action fails', async () => {
+    apiMock.knowWord.mockRejectedValueOnce(new Error('POST /api/reader/words/adjust/known → 500'))
+    const { container, onClose } = await open(adjust)
+
+    await click(button(container, 'I know it'))
+    await flush()
+
+    expect(container.querySelector('.word-panel-error')).not.toBeNull()
+    expect(container.querySelector('.word-panel')!.classList).not.toContain('word-panel-closing')
+    expect(onClose).not.toHaveBeenCalled()
   })
 })

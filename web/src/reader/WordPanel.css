@@ -13,6 +13,17 @@
   font-family: var(--font);
 }
 
+.word-panel-closing {
+  pointer-events: none;
+  animation: word-panel-out var(--dur-sheet) var(--ease-in) forwards;
+}
+
+@keyframes word-panel-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+
 .word-panel-head {
   display: flex;
   align-items: baseline;

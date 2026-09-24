@@ -43,6 +43,9 @@
   --content-max: 880px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --dur: 160ms;
+  /* A bottom sheet leaving the screen; WordPanel's SHEET_OUT_MS mirrors --dur-sheet. */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --dur-sheet: 220ms;
 }
 
 @media (prefers-color-scheme: dark) {
