@@ -229,3 +229,4 @@ web/dist/
 .worktrees/
 /docs/superpowers
 result/import-sorted-words.sql
+/.superpowers/brainstorm
