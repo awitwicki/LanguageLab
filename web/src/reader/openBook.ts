@@ -1,3 +1,4 @@
+import { api } from '../api/client'
 import type { BookStore } from './bookStore'
 import { sha256Hex } from './hash'
 import { BookFormatError, readBookFile, type ReaderBook } from './readerBook'
@@ -49,4 +50,16 @@ export async function openBookFile(file: File, store: BookStore, expectedHash: s
   }
 
   return { kind: 'opened', hash }
+}
+
+/**
+ * Puts a file already known to be a book on this device and registers it with the server — for
+ * the import screen, which has just imported the same file as a dictionary. Throws on any
+ * failure; the caller decides whether that matters.
+ */
+export async function addBookToReader(store: BookStore, bytes: ArrayBuffer, fileName: string, hash: string): Promise<void> {
+  const book = readBookFile(bytes, fileName)
+
+  await store.put({ hash, title: book.title, author: book.author, fileName, addedAt: new Date().toISOString() }, bytes)
+  await api.registerReaderBook(hash, { title: book.title, author: book.author, chaptersCount: book.chapters.length })
 }

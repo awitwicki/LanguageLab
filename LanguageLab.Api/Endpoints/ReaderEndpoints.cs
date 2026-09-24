@@ -11,7 +11,8 @@ public sealed record RegisterReaderBookRequest(string? Title, string? Author, in
 public sealed record ReaderPositionRequest(
     int ChapterIndex, int ParagraphIndex, int SentenceIndex, double Progress, DateTime ClientUpdatedAt);
 
-public sealed record LearnWordRequest(string? Translation);
+/// <summary>DictionaryId: the dictionary of the book being read, if it has one.</summary>
+public sealed record LearnWordRequest(string? Translation, long? DictionaryId);
 
 /// <summary>
 /// The reader's server side. The book file never comes here: only its hash, title and the
@@ -89,17 +90,8 @@ public static class ReaderEndpoints
             Results.Ok(await statuses.GetAsync(await currentUser.GetIdAsync())));
 
         group.MapGet("/words/{lemma}", async (
-            string lemma, ReaderWordService words, ICurrentUser currentUser, CancellationToken cancellationToken) =>
-        {
-            var word = WordText.Normalize(lemma);
-
-            return WordText.IsValid(word)
-                ? Results.Ok(await words.GetAsync(await currentUser.GetIdAsync(), word, cancellationToken))
-                : Results.BadRequest();
-        });
-
-        group.MapPost("/words/{lemma}/learn", async (
-            string lemma, LearnWordRequest request, ReaderWordService words, ICurrentUser currentUser) =>
+            string lemma, long? dictionaryId, ReaderWordService words, ICurrentUserContext currentUser,
+            CancellationToken cancellationToken) =>
         {
             var word = WordText.Normalize(lemma);
 
@@ -108,9 +100,26 @@ public static class ReaderEndpoints
                 return Results.BadRequest();
             }
 
+            var (userId, role) = currentUser.Require();
+
+            return Results.Ok(await words.GetAsync(userId, role, word, dictionaryId, cancellationToken));
+        });
+
+        group.MapPost("/words/{lemma}/learn", async (
+            string lemma, LearnWordRequest request, ReaderWordService words, ICurrentUserContext currentUser) =>
+        {
+            var word = WordText.Normalize(lemma);
+
+            if (!WordText.IsValid(word))
+            {
+                return Results.BadRequest();
+            }
+
+            var (userId, role) = currentUser.Require();
+
             try
             {
-                await words.LearnAsync(await currentUser.GetIdAsync(), word, request.Translation, DateTime.UtcNow);
+                await words.LearnAsync(userId, role, word, request.DictionaryId, request.Translation, DateTime.UtcNow);
                 return Results.NoContent();
             }
             catch (ArgumentException e)
@@ -128,9 +137,21 @@ public static class ReaderEndpoints
                 return Results.BadRequest();
             }
 
-            return await words.MarkKnownAsync(await currentUser.GetIdAsync(), word, DateTime.UtcNow)
-                ? Results.NoContent()
-                : Results.NotFound();
+            await words.MarkKnownAsync(await currentUser.GetIdAsync(), word, DateTime.UtcNow);
+            return Results.NoContent();
+        });
+
+        group.MapPost("/words/{lemma}/ignore", async (string lemma, ReaderWordService words, ICurrentUser currentUser) =>
+        {
+            var word = WordText.Normalize(lemma);
+
+            if (!WordText.IsValid(word))
+            {
+                return Results.BadRequest();
+            }
+
+            await words.IgnoreAsync(await currentUser.GetIdAsync(), word, DateTime.UtcNow);
+            return Results.NoContent();
         });
     }
 }

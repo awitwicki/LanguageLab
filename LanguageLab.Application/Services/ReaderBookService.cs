@@ -44,7 +44,7 @@ public class ReaderBookService
             .ThenBy(b => b.Title)
             .ToListAsync();
 
-        var dictionaries = await LinkedDictionariesAsync(userId, role, books.Select(b => b.FileHash).ToList());
+        var dictionaries = await LinkedDictionariesAsync(userId, role, books);
 
         return books.Select(b => View(b, dictionaries)).ToList();
     }
@@ -92,7 +92,7 @@ public class ReaderBookService
             book = await Find(userId, fileHash) ?? throw new InvalidOperationException("The racing registration vanished.");
         }
 
-        var dictionaries = await LinkedDictionariesAsync(userId, role, [fileHash]);
+        var dictionaries = await LinkedDictionariesAsync(userId, role, [book]);
         return View(book, dictionaries);
     }
 
@@ -150,17 +150,48 @@ public class ReaderBookService
     private Task<ReaderBook?> Find(long userId, string fileHash) =>
         _dbContext.ReaderBooks.FirstOrDefaultAsync(b => b.UserId == userId && b.FileHash == fileHash);
 
-    /// <summary>File hash → the lowest id among the visible dictionaries imported from it.</summary>
-    private async Task<Dictionary<string, long>> LinkedDictionariesAsync(long userId, UserRole role, List<string> hashes)
+    /// <summary>
+    /// File hash → the lowest id among the visible, non-personal dictionaries linked to it: a
+    /// dictionary imported from that same file (FileHash match), or, failing that, a legacy one
+    /// (imported before Dictionary.FileHash existed, so FileHash is null) whose Name equals the
+    /// book's title — so such a dictionary is reused instead of duplicated by auto-import. A
+    /// hash match always wins over a name match.
+    /// </summary>
+    private async Task<Dictionary<string, long>> LinkedDictionariesAsync(long userId, UserRole role, IReadOnlyList<ReaderBook> books)
     {
-        var rows = await _access.Visible(userId, role)
-            .Where(d => d.FileHash != null && hashes.Contains(d.FileHash))
-            .Select(d => new { d.Id, d.FileHash })
-            .ToListAsync();
+        var hashes = books.Select(b => b.FileHash).Distinct().ToList();
+        var titles = books.Select(b => b.Title).Distinct().ToList();
+        var visible = _access.Visible(userId, role).Where(d => !d.IsPersonal);
 
-        return rows
+        var byHash = (await visible
+                .Where(d => d.FileHash != null && hashes.Contains(d.FileHash))
+                .Select(d => new { d.Id, d.FileHash })
+                .ToListAsync())
             .GroupBy(d => d.FileHash!)
             .ToDictionary(g => g.Key, g => g.Min(d => d.Id));
+
+        var byTitle = (await visible
+                .Where(d => d.FileHash == null && titles.Contains(d.Name))
+                .Select(d => new { d.Id, d.Name })
+                .ToListAsync())
+            .GroupBy(d => d.Name)
+            .ToDictionary(g => g.Key, g => g.Min(d => d.Id));
+
+        var result = new Dictionary<string, long>();
+
+        foreach (var book in books)
+        {
+            if (byHash.TryGetValue(book.FileHash, out var hashId))
+            {
+                result[book.FileHash] = hashId;
+            }
+            else if (byTitle.TryGetValue(book.Title, out var titleId))
+            {
+                result[book.FileHash] = titleId;
+            }
+        }
+
+        return result;
     }
 
     private static ReaderBookView View(ReaderBook book, Dictionary<string, long> dictionaries) =>

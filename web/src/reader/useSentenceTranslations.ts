@@ -5,7 +5,8 @@ import type { SentenceTranslation } from './Sentence'
 
 const MESSAGES = {
   limit: 'Daily sentence translation limit reached',
-  quota: 'Sentence translation is out of quota this month',
+  quota: 'Translation limit reached — try again later',
+  tooLong: 'This sentence is too long to translate',
   failed: "Couldn't translate",
 } as const
 

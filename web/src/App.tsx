@@ -151,6 +151,7 @@ export default function App() {
         key={route.hash}
         hash={route.hash}
         store={books.store}
+        canImport={canImport(state.user.role)}
         onBack={() => setRoute({ name: 'reader' })}
         onOpenDictionary={(id) => setRoute({ name: 'dictionary', id })}
       />
@@ -205,7 +206,7 @@ export default function App() {
         />
       )}
 
-      {route.name === 'import' && <ImportScreen onImported={openDictionary} />}
+      {route.name === 'import' && <ImportScreen onImported={openDictionary} bookStore={books?.store} />}
 
       {route.name === 'personal' && (
         <PersonalDictionaryScreen

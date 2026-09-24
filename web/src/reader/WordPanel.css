@@ -6,12 +6,10 @@
   z-index: 3;
   max-width: 720px;
   margin: 0 auto;
-  padding: 16px 16px max(16px, env(safe-area-inset-bottom));
+  padding: 14px 16px max(16px, env(safe-area-inset-bottom));
   background: var(--reader-surface);
   color: var(--reader-text);
-  border: 1px solid var(--reader-hairline);
-  border-bottom: 0;
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  border-top: 1px solid var(--reader-hairline);
   font-family: var(--font);
 }
 
@@ -24,7 +22,7 @@
 .word-panel-lemma {
   flex: 1;
   margin: 0;
-  font: 600 var(--fs-title) / var(--lh-title) var(--reader-font);
+  font: 500 20px / 1.3 var(--reader-font);
 }
 
 .word-panel-form {
@@ -38,14 +36,12 @@
   border: 0;
   border-radius: var(--r-md);
   background: none;
-  color: var(--reader-icon);
+  color: var(--reader-muted);
   font-size: 22px;
   cursor: pointer;
 }
 
 .word-panel-meta {
-  display: flex;
-  gap: 12px;
   margin: 6px 0 10px;
   color: var(--reader-muted);
   font-size: var(--fs-footnote);
@@ -56,16 +52,14 @@
 }
 
 .word-panel-status-learning {
-  color: var(--reader-learning);
+  color: var(--reader-accent);
 }
 
 .word-panel-translation {
   margin: 0 0 12px;
-  padding: 10px 12px;
-  border: 1px solid var(--reader-hairline);
-  border-radius: var(--r-md);
-  color: var(--reader-muted);
-  font: var(--fs-headline) / var(--lh-headline) var(--reader-font);
+  color: var(--reader-text);
+  font-size: var(--fs-headline);
+  line-height: var(--lh-headline);
 }
 
 .word-panel-typed {
@@ -97,10 +91,28 @@
 }
 
 .word-panel-actions {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: 6px;
 }
 
-.word-panel-actions .btn {
-  flex: 1;
+.word-panel-hint {
+  margin: 6px 0 0;
+  color: var(--reader-muted);
+  font-size: var(--fs-caption);
+}
+
+.word-panel-actions .btn-primary {
+  background: var(--reader-accent);
+  color: var(--reader-on-accent);
+}
+
+.word-panel-actions .btn-secondary {
+  background: var(--reader-hairline);
+  color: var(--reader-text);
+}
+
+.word-panel-ignore {
+  border: 1px solid var(--reader-bar);
+  color: var(--reader-muted);
 }

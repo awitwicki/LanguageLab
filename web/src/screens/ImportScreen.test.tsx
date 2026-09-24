@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UploadProgress } from '../api/client'
 import type { WorkerResponse } from '../worker/parseBook.worker'
 import { click, flush, render } from '../test/render'
+import { MemoryBookStore } from '../reader/bookStore'
 import { ImportScreen } from './ImportScreen'
 
 const apiMock = vi.hoisted(() => ({
   importDictionary: vi.fn(),
+  registerReaderBook: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
@@ -73,9 +75,9 @@ function progressValue(container: HTMLElement) {
 }
 
 /** Renders the screen and takes it to the preview: a book chosen, "Import" ready to press. */
-async function preview() {
+async function preview(bookStore?: MemoryBookStore) {
   const onImported = vi.fn()
-  const { container } = await render(<ImportScreen onImported={onImported} />)
+  const { container } = await render(<ImportScreen onImported={onImported} bookStore={bookStore} />)
   const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
 
   Object.defineProperty(input, 'files', { value: [new File([book], 'wool.fb2')] })
@@ -92,6 +94,7 @@ beforeEach(() => {
   FakeWorker.instances = []
   vi.stubGlobal('Worker', FakeWorker)
   apiMock.importDictionary.mockReset()
+  apiMock.registerReaderBook.mockReset().mockResolvedValue(null)
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -209,5 +212,33 @@ describe('ImportScreen', () => {
     expect(container.querySelector('.error')?.textContent).toContain('too large')
     expect(container.querySelector('.import-status')).toBeNull()
     expect(importButton(container).disabled).toBe(false)
+  })
+
+  it('puts the imported book in the reader too', async () => {
+    apiMock.importDictionary.mockResolvedValue({ dictionaryId: 42 })
+    const store = new MemoryBookStore()
+    const { container, worker, onImported } = await preview(store)
+
+    await click(importButton(container))
+    await worker.reply(aggregated)
+    await flush()
+
+    const [stored] = await store.list()
+    expect(stored).toMatchObject({ title: 'Wool', fileName: 'wool.fb2' })
+    expect(stored.hash).toMatch(/^[0-9a-f]{64}$/)
+    expect(apiMock.registerReaderBook).toHaveBeenCalledWith(stored.hash, { title: 'Wool', author: '', chaptersCount: 2 })
+    expect(onImported).toHaveBeenCalledWith(42)
+  })
+
+  it('still finishes the import when the reader could not take the book', async () => {
+    apiMock.importDictionary.mockResolvedValue({ dictionaryId: 42 })
+    apiMock.registerReaderBook.mockRejectedValue(new Error('offline'))
+    const { container, worker, onImported } = await preview(new MemoryBookStore())
+
+    await click(importButton(container))
+    await worker.reply(aggregated)
+    await flush()
+
+    expect(onImported).toHaveBeenCalledWith(42)
   })
 })

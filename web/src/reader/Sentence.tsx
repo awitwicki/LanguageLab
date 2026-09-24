@@ -17,28 +17,11 @@ interface Props {
   statuses: KnownStatuses
   /** The tapped token's index in this sentence, or null. */
   selectedToken: number | null
-  /** The saved reading position is here. */
-  isBookmark: boolean
   canTranslate: boolean
   translation: SentenceTranslation | undefined
   onWordTap: (positionKey: string, tokenIndex: number, resolved: ResolvedWord, form: string, element: HTMLElement) => void
   /** Opens, closes or retries — the caller decides from the current state. */
   onToggleTranslation: (positionKey: string, text: string) => void
-}
-
-function TranslateIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M2 3h6M5 2v1m1.5 0C6 6 4.5 8 2.5 9M4 5.5c.8 1.5 2 2.7 3.5 3.3M9 14l2.5-6 2.5 6m-4.2-1.8h3.4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
 }
 
 export const Sentence = memo(function Sentence({
@@ -47,7 +30,6 @@ export const Sentence = memo(function Sentence({
   paragraphStart,
   statuses,
   selectedToken,
-  isBookmark,
   canTranslate,
   translation,
   onWordTap,
@@ -57,10 +39,6 @@ export const Sentence = memo(function Sentence({
 
   return (
     <div className={paragraphStart ? 'reader-sentence reader-paragraph-start' : 'reader-sentence'} data-pos={positionKey}>
-      <div className="reader-gutter" aria-hidden="true">
-        {isBookmark && <span className="reader-bookmark" />}
-      </div>
-
       <p className="reader-text">
         {sentence.tokens.map((token, index) => {
           const resolved = token.isWord ? resolveWord(token.text, statuses) : null
@@ -94,14 +72,12 @@ export const Sentence = memo(function Sentence({
       {canTranslate && (
         <button
           type="button"
-          className="reader-strip"
+          className={translation ? 'reader-strip reader-strip-open' : 'reader-strip'}
           aria-label={translation ? 'Hide translation' : 'Translate sentence'}
           aria-expanded={translation !== undefined}
           onClick={toggle}
         >
-          <span className="reader-strip-icon" aria-hidden="true">
-            {translation?.state === 'loading' ? '…' : translation ? '⌃' : <TranslateIcon />}
-          </span>
+          <span className="reader-strip-line" aria-hidden="true" />
         </button>
       )}
 

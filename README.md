@@ -95,9 +95,11 @@ spelling:
   the API validates Mini App sign-ins with it (see Accounts → Inside Telegram)
 * `WebApp__Url` - the public `https://` address of the app, which the bot's button opens
 * `Translation__MyMemoryEmail` - optional; any contact email raises MyMemory's free
-  translation quota from 5 000 to 50 000 characters a day per server IP (see Translation, below)
+  translation quota from 5 000 to 50 000 characters a day per server IP (see Translation, below).
+  Recommended in production: without a DeepL key, sentences get 40 % of that quota for
+  themselves (2 000 characters a day without this email, 20 000 with it)
 * `Translation__DeepLApiKey` - optional; a DeepL API Free key for sentence translation in the
-  reader. Without it the reader has no sentence translation.
+  reader. Without it MyMemory translates sentences as well.
 
 **Docker compose:** create `.env` file and fill it with those variables.
 
@@ -117,10 +119,13 @@ spelling:
   it signing in from inside Telegram answers 503.
 * `Translation:MyMemoryEmail` - optional. Auto-translation for the personal dictionary uses
   MyMemory (api.mymemory.translated.net), which needs no key; the email only raises the daily
-  quota. Leave it empty to run anonymously.
+  quota. Leave it empty to run anonymously. When MyMemory also translates sentences (no DeepL
+  key), sentences get 40 % of that daily quota for themselves: 2 000 characters without this
+  email, 20 000 with it — recommended in production so the reader does not exhaust the day's
+  quota for everyone's word lookups.
 * `Translation:DeepLApiKey` - optional. A DeepL API Free key (ends in `:fx`), for the reader's
   sentence translation — 500 000 characters a month for the whole app, 20 000 characters a day
-  per user. Without it the reader hides the sentence-translation button.
+  per user. Without it MyMemory translates sentences as well.
 
 For a local run, fill in `LanguageLab.Api/appsettings.Development.json` (see the example
 below). In Docker the same values are passed via env vars using the standard

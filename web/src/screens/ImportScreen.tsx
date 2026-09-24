@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { decodeFb2 } from '../fb2/decode'
 import { flattenChapters, parseBook, type ChapterMode, type SectionNode } from '../fb2/chapters'
-import type { WorkerRequest, WorkerResponse } from '../worker/parseBook.worker'
+import { createWordExtractor, type WordExtractor } from '../fb2/wordExtractor'
+import type { AggregatedChapter } from '../fb2/aggregate'
 import { api } from '../api/client'
+import type { BookStore } from '../reader/bookStore'
 import { sha256Hex } from '../reader/hash'
+import { addBookToReader } from '../reader/openBook'
 import { openOutsideTelegram, telegramInitData } from '../auth/telegram'
 import { ProgressBar } from '../components/ProgressBar'
 import { formatBytes, formatInt, percentOf } from '../lib/format'
@@ -11,15 +14,11 @@ import './ImportScreen.css'
 
 interface Props {
   onImported: (dictionaryId: number) => void
+  /** The reader's store: an imported book is also put in the reader. Absent in tests of the import alone. */
+  bookStore?: BookStore
 }
 
 type Stage = 'idle' | 'parsing' | 'preview' | 'aggregating' | 'uploading'
-
-/** The request the worker is answering: settled by its final message, or by its failure. */
-interface Pending {
-  resolve: (response: WorkerResponse) => void
-  reject: (error: Error) => void
-}
 
 /** Chapters lemmatized so far; null until the worker has picked the request up. */
 type Extraction = { done: number; total: number } | null
@@ -27,7 +26,7 @@ type Extraction = { done: number; total: number } | null
 /** Bytes of the JSON body the browser has pushed out; null until it reports the first chunk. */
 type Upload = { sent: number; total: number } | null
 
-export function ImportScreen({ onImported }: Props) {
+export function ImportScreen({ onImported, bookStore }: Props) {
   const [stage, setStage] = useState<Stage>('idle')
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -39,87 +38,41 @@ export function ImportScreen({ onImported }: Props) {
   const [upload, setUpload] = useState<Upload>(null)
   const [fileHash, setFileHash] = useState<string | null>(null)
 
-  const worker = useRef<Worker | null>(null)
-  const pending = useRef<Pending | null>(null)
+  const extractor = useRef<WordExtractor | null>(null)
+  // The chosen file, kept for the reader once the import succeeds.
+  const file = useRef<{ bytes: ArrayBuffer; name: string } | null>(null)
 
   // The chapter preview is computed from the already parsed tree, so switching
   // the nesting level is instant — the file is not parsed a second time.
   const chapters = useMemo(() => flattenChapters(sections, mode), [sections, mode])
 
-  // One worker for the screen's whole lifetime: otherwise every level switch
-  // would ship the section tree to a fresh instance.
+  // One worker for the screen's whole lifetime: otherwise every level switch would ship the
+  // section tree to a fresh instance.
   useEffect(() => {
-    const instance = new Worker(new URL('../worker/parseBook.worker.ts', import.meta.url), {
-      type: 'module',
-    })
+    const instance = createWordExtractor()
+    extractor.current = instance
 
-    const settle = (outcome: (request: Pending) => void) => {
-      const request = pending.current
-      pending.current = null
-
-      if (request) {
-        outcome(request)
-      }
-    }
-
-    instance.onmessage = (event: MessageEvent<WorkerResponse>) => {
-      if (event.data.kind === 'progress') {
-        setExtraction({ done: event.data.done, total: event.data.total })
-        return
-      }
-
-      settle((request) => request.resolve(event.data))
-    }
-
-    // A worker that never loads (a stale bundle after a deploy, a download that broke off on
-    // mobile data) or dies mid-book (memory, on phones) never answers. Without these two
-    // handlers the screen would say "Extracting words…" forever, with nothing to act on.
-    instance.onerror = (event) => {
-      const detail = event.message ? ` (${event.message})` : ''
-
-      settle((request) =>
-        request.reject(new Error(`The word extractor failed${detail}. Reload the app and try again.`)),
-      )
-    }
-
-    instance.onmessageerror = () =>
-      settle((request) =>
-        request.reject(new Error('The word extractor sent an unreadable reply. Reload the app and try again.')),
-      )
-
-    worker.current = instance
-
-    return () => instance.terminate()
+    return () => instance.dispose()
   }, [])
-
-  // A single slot, because the UI does not allow two operations at once:
-  // the buttons are disabled until the stage returns to 'preview'.
-  const ask = useCallback(
-    (request: WorkerRequest) =>
-      new Promise<WorkerResponse>((resolve, reject) => {
-        pending.current = { resolve, reject }
-        worker.current!.postMessage(request)
-      }),
-    [],
-  )
 
   // Decoding and XML parsing happen here, on the main thread, not in the worker:
   // they need DOMParser, which the Worker scope lacks in this browser.
   // They are fast — native XML parsing of a multi-megabyte file takes far
   // less than a second, so the tab does not freeze.
-  const onFile = useCallback((file: File) => {
+  const onFile = useCallback((chosen: File) => {
     setStage('parsing')
     setError(null)
 
-    file
+    chosen
       .arrayBuffer()
       .then(async (buffer) => {
+        file.current = { bytes: buffer, name: chosen.name }
         const xml = decodeFb2(buffer)
         const { bookTitle, sections, maxDepth } = parseBook(xml)
 
         setSections(sections)
         setMaxDepth(maxDepth)
-        setName(bookTitle || file.name.replace(/\.fb2$/i, ''))
+        setName(bookTitle || chosen.name.replace(/\.fb2$/i, ''))
         setFileHash(await sha256Hex(buffer))
         setStage('preview')
       })
@@ -137,18 +90,12 @@ export function ImportScreen({ onImported }: Props) {
     setStage('aggregating')
     setExtraction(null)
 
-    let response: WorkerResponse
+    let extracted: AggregatedChapter[]
 
     try {
-      response = await ask({ kind: 'aggregate', sections, mode })
+      extracted = await extractor.current!.extract(sections, mode, (done, total) => setExtraction({ done, total }))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
-      setStage('preview')
-      return
-    }
-
-    if (response.kind !== 'aggregated') {
-      setError(response.kind === 'error' ? response.message : 'Unexpected response from the worker.')
       setStage('preview')
       return
     }
@@ -162,7 +109,7 @@ export function ImportScreen({ onImported }: Props) {
           name,
           isPublic,
           fileHash: fileHash ?? undefined,
-          chapters: response.chapters.map((c) => ({
+          chapters: extracted.map((c) => ({
             order: c.order,
             title: c.title,
             words: c.words,
@@ -171,12 +118,19 @@ export function ImportScreen({ onImported }: Props) {
         (sent, total) => setUpload({ sent, total }),
       )
 
+      // The same file, straight into the reader. Best effort and fire-and-forget: the import
+      // itself already succeeded, and waiting here would re-parse the book and write
+      // IndexedDB, stalling the screen at "uploading 100%".
+      if (bookStore && file.current && fileHash) {
+        void addBookToReader(bookStore, file.current.bytes, file.current.name, fileHash).catch(() => undefined)
+      }
+
       onImported(result.dictionaryId)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setStage('preview')
     }
-  }, [ask, sections, mode, name, isPublic, fileHash, onImported])
+  }, [sections, mode, name, isPublic, fileHash, onImported, bookStore])
 
   const working = stage === 'aggregating' || stage === 'uploading'
 

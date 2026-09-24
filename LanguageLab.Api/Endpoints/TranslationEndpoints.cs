@@ -36,10 +36,11 @@ public static class TranslationEndpoints
     }
 
     /// <summary>
-    /// The reader's sentence translation. 404 without a DeepL key (the SPA hides the button then,
-    /// see /api/reader/capabilities), 400 for empty or over-long text, 429 past the user's daily
-    /// characters, 503 { reason: "quota" } when DeepL's monthly quota is gone, 502 for any other
-    /// provider failure. Nothing is stored.
+    /// The reader's sentence translation. 404 when no translator is configured (never, with
+    /// FallbackSentenceTranslator), 400 for empty or over-long text, 429 past the user's daily
+    /// characters, 503 { reason: "quota" } when DeepL's monthly quota is gone, 413 when the
+    /// provider cannot take a sentence this long, 502 for any other provider failure. Nothing is
+    /// stored.
     /// </summary>
     public static async Task<IResult> TranslateSentenceAsync(
         SentenceRequest request,
@@ -72,6 +73,7 @@ public static class TranslationEndpoints
             SentenceTranslationStatus.Ok => Results.Ok(new SentenceTranslationResponse(result.Text!)),
             SentenceTranslationStatus.QuotaExceeded => Results.Json(
                 new SentenceTranslationError("quota"), statusCode: StatusCodes.Status503ServiceUnavailable),
+            SentenceTranslationStatus.TooLong => Results.StatusCode(StatusCodes.Status413PayloadTooLarge),
             _ => Results.StatusCode(StatusCodes.Status502BadGateway),
         };
     }

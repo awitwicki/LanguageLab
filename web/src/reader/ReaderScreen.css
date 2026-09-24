@@ -26,8 +26,8 @@
   border: 0;
   border-radius: var(--r-md);
   background: none;
-  color: var(--reader-text);
-  font-size: 22px;
+  color: var(--reader-muted);
+  font-size: 20px;
   cursor: pointer;
 }
 
@@ -44,12 +44,15 @@
 }
 
 .reader-chapter-title {
-  font-size: var(--fs-body);
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .reader-book-title {
   color: var(--reader-muted);
-  font-size: var(--fs-footnote);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .reader-progress {
@@ -58,7 +61,7 @@
   bottom: -1px;
   height: 2px;
   width: calc(var(--reader-chapter-progress, 0) * 100%);
-  background: var(--reader-muted);
+  background: var(--reader-accent);
   transition: width var(--dur) var(--ease);
 }
 
@@ -75,7 +78,7 @@
   /* Room below the last sentence so it can scroll up past the word panel. */
   padding: 12px 0 45vh;
   font-size: var(--reader-size, 20px);
-  line-height: 1.5;
+  line-height: 1.65;
 }
 
 .reader-chapter-nav {

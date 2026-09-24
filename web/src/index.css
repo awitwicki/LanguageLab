@@ -271,25 +271,33 @@ select {
  * browser cannot change the screen's brightness, so dimming darkens the page itself.
  */
 [data-reader-theme='light'] {
-  --reader-bg-base: #fbfaf7;
-  --reader-surface-base: #f1efea;
-  --reader-text-base: #1f1f1f;
-  --reader-muted: #66704a;
-  --reader-new: #c27c0e;
-  --reader-learning: #0a66c2;
-  --reader-hairline: rgba(0, 0, 0, 0.1);
-  --reader-icon: #8a8a8e;
+  --reader-bg-base: #f7f8fb;
+  --reader-surface-base: #ffffff;
+  --reader-text-base: #1a1d24;
+  --reader-muted: #5b6475;
+  --reader-accent: #4f5bd5;
+  --reader-on-accent: #ffffff;
+  --reader-new: #c98a12;
+  --reader-learning-wash: rgba(79, 91, 213, 0.14);
+  --reader-hairline: #e3e7ef;
+  --reader-bar: #d5dbe6;
+  --reader-translation-bg: #eceff5;
+  --reader-translation-text: #3d4556;
 }
 
 [data-reader-theme='dark'] {
-  --reader-bg-base: #000000;
-  --reader-surface-base: #141416;
-  --reader-text-base: #d9dee7;
-  --reader-muted: #8f9a6e;
-  --reader-new: #d9a441;
-  --reader-learning: #5ab0ff;
-  --reader-hairline: rgba(255, 255, 255, 0.12);
-  --reader-icon: #6e6e73;
+  --reader-bg-base: #121418;
+  --reader-surface-base: #1a1e26;
+  --reader-text-base: #eef1f5;
+  --reader-muted: #9aa4b5;
+  --reader-accent: #7c8cff;
+  --reader-on-accent: #0d0f14;
+  --reader-new: #f0b429;
+  --reader-learning-wash: rgba(124, 140, 255, 0.24);
+  --reader-hairline: #232833;
+  --reader-bar: #2a3040;
+  --reader-translation-bg: #1a1e26;
+  --reader-translation-text: #b8c0cf;
 }
 
 [data-reader-theme] {

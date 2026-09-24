@@ -18,7 +18,6 @@ function renderSentence(overrides: { canTranslate?: boolean; translation?: Sente
       paragraphStart={false}
       statuses={statuses}
       selectedToken={null}
-      isBookmark={false}
       canTranslate={overrides.canTranslate ?? true}
       translation={overrides.translation}
       onWordTap={onWordTap}
@@ -81,5 +80,17 @@ describe('Sentence', () => {
     const { container } = await renderSentence({ canTranslate: false })
 
     expect(container.querySelector('.reader-strip')).toBeNull()
+  })
+
+  it('draws the bar as a plain line, coloured while the translation is open', async () => {
+    const closed = await renderSentence()
+    const strip = closed.container.querySelector('.reader-strip')!
+
+    expect(strip.querySelector('svg')).toBeNull()
+    expect(strip.querySelector('.reader-strip-line')).not.toBeNull()
+    expect(strip.className).toBe('reader-strip')
+
+    const open = await renderSentence({ translation: { state: 'loading' } })
+    expect(open.container.querySelector('.reader-strip')!.className).toBe('reader-strip reader-strip-open')
   })
 })

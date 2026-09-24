@@ -192,12 +192,21 @@ builder.Services.AddHttpClient<ITranslator, MyMemoryTranslator>(client =>
     client.Timeout = MyMemoryTranslator.Timeout;
 });
 
-// DeepL is optional: without Translation:DeepLApiKey the reader hides sentence translation.
-builder.Services.AddHttpClient<ISentenceTranslator, DeepLTranslator>(client =>
+// Sentence translation: DeepL when Translation:DeepLApiKey is set, MyMemory otherwise.
+builder.Services.AddHttpClient<DeepLTranslator>(client =>
 {
     client.BaseAddress = new Uri(DeepLTranslator.BaseUrl);
     client.Timeout = DeepLTranslator.Timeout;
 });
+builder.Services.AddHttpClient<MyMemorySentenceTranslator>(client =>
+{
+    client.BaseAddress = new Uri(MyMemoryTranslator.BaseUrl);
+    client.Timeout = MyMemoryTranslator.Timeout;
+});
+// Sentences translated through MyMemory get 40% of its daily quota, server-wide — see
+// MyMemorySentenceBudget — so one reader cannot exhaust the day's quota for everyone's word lookups.
+builder.Services.AddSingleton<MyMemorySentenceBudget>();
+builder.Services.AddScoped<ISentenceTranslator, FallbackSentenceTranslator>();
 builder.Services.AddSingleton(new SentenceQuota());
 builder.Services.AddScoped<TranslationService>();
 builder.Services.AddScoped<PersonalDictionaryService>();

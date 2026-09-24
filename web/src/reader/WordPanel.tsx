@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { api, type ReaderWord, type ReaderWordStatus } from '../api/client'
+import { api, type LearnTarget, type ReaderWord, type ReaderWordStatus } from '../api/client'
 import { formatInt } from '../lib/format'
 import './WordPanel.css'
 
@@ -9,16 +9,26 @@ interface Props {
   form: string
   /** Occurrences of the lemma in the whole book. */
   count: number
+  /** The dictionary of the book being read, if it has one: it decides where Add to training goes. */
+  dictionaryId: number | null
   onClose: () => void
+  /** Ignore reports 'known': an ignored word is not highlighted, the same as a known one. */
   onStatusChange: (lemma: string, status: 'learning' | 'known') => void
 }
 
+type Action = 'learn' | 'know' | 'ignore'
+
 const STATUS_LABEL: Record<ReaderWordStatus, string> = { new: 'New', learning: 'Learning', known: 'Known' }
+
+const TARGET_HINT: Record<LearnTarget, string> = {
+  book: "Goes to this book's words",
+  personal: 'Goes to My words',
+}
 
 /** A swipe down this far closes the panel. */
 const SWIPE_CLOSE_PX = 60
 
-export function WordPanel({ lemma, form, count, onClose, onStatusChange }: Props) {
+export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusChange }: Props) {
   const [word, setWord] = useState<ReaderWord | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [typed, setTyped] = useState('')
@@ -29,7 +39,7 @@ export function WordPanel({ lemma, form, count, onClose, onStatusChange }: Props
     let cancelled = false
 
     api
-      .getReaderWord(lemma)
+      .getReaderWord(lemma, dictionaryId)
       .then((found) => {
         if (!cancelled) setWord(found)
       })
@@ -40,7 +50,7 @@ export function WordPanel({ lemma, form, count, onClose, onStatusChange }: Props
     return () => {
       cancelled = true
     }
-  }, [lemma])
+  }, [lemma, dictionaryId])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -51,21 +61,26 @@ export function WordPanel({ lemma, form, count, onClose, onStatusChange }: Props
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const act = async (status: 'learning' | 'known') => {
+  const act = async (action: Action) => {
     if (!word) return
 
     setBusy(true)
     setError(null)
 
     try {
-      if (status === 'learning') {
-        await api.learnWord(lemma, word.translation ? undefined : typed.trim())
-      } else {
+      if (action === 'learn') {
+        await api.learnWord(lemma, word.translation ? undefined : typed.trim(), dictionaryId)
+      } else if (action === 'know') {
         await api.knowWord(lemma)
+      } else {
+        await api.ignoreWord(lemma)
       }
 
+      const status = action === 'learn' ? 'learning' : 'known'
       setWord({ ...word, status })
       onStatusChange(lemma, status)
+
+      if (action === 'ignore') onClose()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -104,10 +119,11 @@ export function WordPanel({ lemma, form, count, onClose, onStatusChange }: Props
         </button>
       </div>
 
-      <div className="word-panel-meta">
+      <p className="word-panel-meta">
         <span className={`word-panel-status word-panel-status-${status}`}>{STATUS_LABEL[status]}</span>
-        <span className="num">Count: {formatInt(count)}</span>
-      </div>
+        {' · '}
+        <span className="num">seen {formatInt(count)}× in this book</span>
+      </p>
 
       {word === null && error === null && <p className="word-panel-loading">Looking up…</p>}
 
@@ -137,19 +153,24 @@ export function WordPanel({ lemma, form, count, onClose, onStatusChange }: Props
           type="button"
           className="btn btn-primary"
           disabled={!word || busy || (needsTranslation && typed.trim() === '')}
-          onClick={() => void act('learning')}
+          onClick={() => void act('learn')}
         >
-          Learn
+          Add to training
+        </button>
+        <button type="button" className="btn btn-secondary" disabled={!word || busy} onClick={() => void act('know')}>
+          I know it
         </button>
         <button
           type="button"
-          className="btn btn-secondary"
-          disabled={!word || busy || !word.inSharedVocabulary}
-          onClick={() => void act('known')}
+          className="btn btn-quiet word-panel-ignore"
+          disabled={!word || busy}
+          onClick={() => void act('ignore')}
         >
-          I know it
+          Ignore
         </button>
       </div>
+
+      {word && <p className="word-panel-hint">{TARGET_HINT[word.learnTarget]}</p>}
     </section>
   )
 }

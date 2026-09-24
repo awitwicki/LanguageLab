@@ -9,6 +9,8 @@ import {
   type MouseEvent,
 } from 'react'
 import { api, type ReaderBookDto } from '../api/client'
+import { telegramInitData } from '../auth/telegram'
+import { formatInt } from '../lib/format'
 import type { BookStore } from './bookStore'
 import {
   chapterProgress,
@@ -23,6 +25,7 @@ import {
 import { ReaderMenu } from './ReaderMenu'
 import { loadSettings, resolveTheme, saveSettings, TEXT_SIZES, type ReaderSettings } from './readerSettings'
 import { Sentence } from './Sentence'
+import { useAutoImport } from './useAutoImport'
 import { loadLocalPosition, pickPosition, useReaderPosition } from './useReaderPosition'
 import { useSentenceTranslations } from './useSentenceTranslations'
 import { WordPanel } from './WordPanel'
@@ -32,6 +35,8 @@ import './ReaderScreen.css'
 interface Props {
   hash: string
   store: BookStore
+  /** An uploader or admin: opening a book with no dictionary builds one. */
+  canImport: boolean
   onBack: () => void
   onOpenDictionary: (dictionaryId: number) => void
 }
@@ -40,7 +45,7 @@ type Load =
   | { status: 'loading' }
   | { status: 'missing' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; book: ReaderBook }
+  | { status: 'ready'; book: ReaderBook; bytes: ArrayBuffer }
 
 interface Selection {
   key: string
@@ -70,7 +75,7 @@ function usePrefersDark(): boolean {
   return dark
 }
 
-export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
+export function ReaderScreen({ hash, store, canImport, onBack, onOpenDictionary }: Props) {
   const [load, setLoad] = useState<Load>({ status: 'loading' })
   /** undefined until the server answered; null when it does not know the book (or failed). */
   const [server, setServer] = useState<ReaderBookDto | null | undefined>(undefined)
@@ -92,6 +97,29 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   const { translations, toggle } = useSentenceTranslations(hash, store)
   const counts = useMemo(() => (book ? bookLemmaCounts(book) : new Map<string, number>()), [book])
 
+  const bytes = load.status === 'ready' ? load.bytes : null
+
+  // After the dictionary is built: link it (dictionaryId) and pick up its words' statuses.
+  const refreshAfterImport = useCallback(() => {
+    api
+      .listReaderBooks()
+      .then((books) => setServer(books.find((b) => b.fileHash === hash) ?? null))
+      .catch(() => undefined)
+    api
+      .getWordStatuses()
+      .then((found) => setStatuses(toStatusMap(found)))
+      .catch(() => undefined)
+  }, [hash])
+
+  const autoImport = useAutoImport({
+    // Only a registered book whose dictionaryId is known to be null — not a server that timed out.
+    enabled: canImport && telegramInitData() === null && server != null && server.dictionaryId === null,
+    hash,
+    title: book?.title ?? '',
+    bytes,
+    onImported: refreshAfterImport,
+  })
+
   // The file, from this device.
   useEffect(() => {
     let cancelled = false
@@ -107,7 +135,7 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
         const fileName = metas.find((meta) => meta.hash === hash)?.fileName ?? 'book.fb2'
 
         try {
-          setLoad({ status: 'ready', book: readBookFile(bytes, fileName) })
+          setLoad({ status: 'ready', book: readBookFile(bytes, fileName), bytes })
         } catch (e) {
           setLoad({ status: 'error', message: e instanceof Error ? e.message : String(e) })
         }
@@ -303,7 +331,6 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   }
 
   const chapter = book.chapters[position.chapterIndex]
-  const current = positionKey(position)
   const progressStyle = { '--reader-chapter-progress': chapterProgress(book, position) } as CSSProperties
 
   return (
@@ -323,6 +350,14 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
       </header>
 
       {statusesFailed && <p className="reader-notice">Word highlights unavailable</p>}
+
+      {autoImport.status === 'running' && (
+        <p className="reader-notice" role="status">
+          Building this book's word list…
+          {autoImport.total > 0 && ` ${formatInt(Math.round((autoImport.done / autoImport.total) * 100))} %`}
+        </p>
+      )}
+      {autoImport.status === 'failed' && <p className="reader-notice">Couldn't build this book's word list</p>}
 
       <main className="reader-body" ref={bodyRef} onClick={onBodyClick}>
         {position.chapterIndex > 0 && (
@@ -345,7 +380,6 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
                 paragraphStart={sentenceIndex === 0 && paragraphIndex > 0}
                 statuses={statuses}
                 selectedToken={selection?.key === key ? selection.tokenIndex : null}
-                isBookmark={key === current}
                 canTranslate={canTranslate}
                 translation={translations[key]}
                 onWordTap={onWordTap}
@@ -370,6 +404,7 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
           lemma={selection.lemma}
           form={selection.form}
           count={selection.count}
+          dictionaryId={server?.dictionaryId ?? null}
           onClose={() => setSelection(null)}
           onStatusChange={onStatusChange}
         />

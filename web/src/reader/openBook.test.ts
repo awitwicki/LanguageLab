@@ -1,8 +1,12 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { READER_BOOK_XML } from '../test/readerFixtures'
 import { MemoryBookStore } from './bookStore'
 import { sha256Hex } from './hash'
-import { openBookFile } from './openBook'
+import { addBookToReader, openBookFile } from './openBook'
+
+const apiMock = vi.hoisted(() => ({ registerReaderBook: vi.fn() }))
+
+vi.mock('../api/client', () => ({ api: apiMock }))
 
 const file = (content: BlobPart, name = 'deaths-end.fb2') => new File([content], name)
 
@@ -37,6 +41,24 @@ describe('openBookFile', () => {
     expect(await openBookFile(file('<not fb2'), store, null)).toEqual({
       kind: 'error',
       message: "This file isn't a readable fb2 book.",
+    })
+  })
+})
+
+describe('addBookToReader', () => {
+  it('keeps the book on the device and registers it with the server', async () => {
+    apiMock.registerReaderBook.mockReset().mockResolvedValue(null)
+    const store = new MemoryBookStore()
+    const bytes = await file(READER_BOOK_XML).arrayBuffer()
+    const hash = await sha256Hex(bytes)
+
+    await addBookToReader(store, bytes, 'deaths-end.fb2', hash)
+
+    expect((await store.list())[0]).toMatchObject({ hash, title: "Death's End", fileName: 'deaths-end.fb2' })
+    expect(apiMock.registerReaderBook).toHaveBeenCalledWith(hash, {
+      title: "Death's End",
+      author: 'Cixin Liu',
+      chaptersCount: 2,
     })
   })
 })

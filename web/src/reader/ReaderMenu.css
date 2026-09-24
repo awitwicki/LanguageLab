@@ -71,7 +71,7 @@
 }
 
 .reader-contents button[aria-current='true'] {
-  color: var(--reader-learning);
+  color: var(--reader-accent);
   font-weight: 600;
 }
 

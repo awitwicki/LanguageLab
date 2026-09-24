@@ -122,19 +122,22 @@ export interface WordStatusesDto {
   known: string[]
 }
 
+/** Where "Add to training" sends a word: this book's dictionary, or "My words". */
+export type LearnTarget = 'book' | 'personal'
+
 export interface ReaderWord {
   lemma: string
   translation: string | null
   source: TranslationSource
   status: ReaderWordStatus
-  /** false: "I know it" has no shared row to shelve. */
-  inSharedVocabulary: boolean
+  learnTarget: LearnTarget
 }
 
 export type SentenceTranslationResult =
   | { status: 'ok'; translation: string }
   | { status: 'limit' }
   | { status: 'quota' }
+  | { status: 'tooLong' }
   | { status: 'failed' }
 
 /** box is null until the word's first exercise; 1..5 while learning; isLearned once graduated. */
@@ -681,18 +684,27 @@ export const api = {
 
   getWordStatuses: () => request<WordStatusesDto>('/api/reader/word-statuses') as Promise<WordStatusesDto>,
 
-  getReaderWord: (lemma: string) =>
-    request<ReaderWord>(`/api/reader/words/${encodeURIComponent(lemma)}`) as Promise<ReaderWord>,
+  /** dictionaryId: the dictionary of the book being read — it decides where Add to training goes. */
+  getReaderWord: (lemma: string, dictionaryId: number | null = null) =>
+    request<ReaderWord>(
+      `/api/reader/words/${encodeURIComponent(lemma)}${
+        dictionaryId === null ? '' : `?${new URLSearchParams({ dictionaryId: String(dictionaryId) })}`
+      }`,
+    ) as Promise<ReaderWord>,
 
   // 400 carries { message } ("Type a translation first.").
-  learnWord: (lemma: string, translation?: string) =>
+  learnWord: (lemma: string, translation?: string, dictionaryId: number | null = null) =>
     request<null>(`/api/reader/words/${encodeURIComponent(lemma)}/learn`, {
       method: 'POST',
-      body: JSON.stringify({ translation: translation ?? null }),
+      body: JSON.stringify({ translation: translation ?? null, dictionaryId }),
     }),
 
   knowWord: (lemma: string) =>
     request<null>(`/api/reader/words/${encodeURIComponent(lemma)}/known`, { method: 'POST' }),
+
+  /** The "exclude" shelf: a name or another non-word the reader should stop highlighting. */
+  ignoreWord: (lemma: string) =>
+    request<null>(`/api/reader/words/${encodeURIComponent(lemma)}/ignore`, { method: 'POST' }),
 
   /** Never throws: the reader shows each outcome under the sentence. */
   translateSentence: async (text: string): Promise<SentenceTranslationResult> => {
@@ -723,6 +735,10 @@ export const api = {
 
     if (response.status === 429) {
       return { status: 'limit' }
+    }
+
+    if (response.status === 413) {
+      return { status: 'tooLong' }
     }
 
     return response.status === 503 ? { status: 'quota' } : { status: 'failed' }

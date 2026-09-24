@@ -174,4 +174,10 @@ describe('translateSentence', () => {
 
     expect(await api.translateSentence('Hello.')).toEqual({ status: 'failed' })
   })
+
+  it('names a sentence too long for the provider', async () => {
+    answer(413)
+
+    expect(await api.translateSentence('Hello.')).toEqual({ status: 'tooLong' })
+  })
 })

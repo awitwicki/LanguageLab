@@ -88,4 +88,12 @@ public class TranslateSentenceEndpointTests
 
         Assert.Equal(502, Assert.IsType<StatusCodeHttpResult>(result).StatusCode);
     }
+
+    [Fact]
+    public async Task A_sentence_too_long_for_the_provider_is_413()
+    {
+        var result = await Call(new FakeSentences(true, SentenceTranslation.TooLong), "Hello.");
+
+        Assert.Equal(413, Assert.IsType<StatusCodeHttpResult>(result).StatusCode);
+    }
 }

@@ -102,6 +102,76 @@ public class ReaderBookServiceTests
         Assert.Null(view.DictionaryId);
     }
 
+    /// <summary>Imported before Dictionary.FileHash existed, so reopening the book must not duplicate it.</summary>
+    [Fact]
+    public async Task A_legacy_dictionary_with_no_file_hash_is_linked_by_the_books_title()
+    {
+        await using var db = await ArrangeAsync();
+        db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 30, Name = "Legacy Book", IsPublic = true, FileHash = null });
+        await db.SaveChangesAsync();
+
+        var view = await Service(db).RegisterAsync(Reader, UserRole.User, new('d', 64), "Legacy Book", "", 3, Now);
+
+        Assert.Equal(30, view.DictionaryId);
+    }
+
+    [Fact]
+    public async Task A_same_titled_dictionary_with_a_different_file_hash_is_not_linked_by_name()
+    {
+        await using var db = await ArrangeAsync();
+        db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 31, Name = "Legacy Book", IsPublic = true, FileHash = new('e', 64) });
+        await db.SaveChangesAsync();
+
+        var view = await Service(db).RegisterAsync(Reader, UserRole.User, new('d', 64), "Legacy Book", "", 3, Now);
+
+        Assert.Null(view.DictionaryId);
+    }
+
+    [Fact]
+    public async Task A_file_hash_match_wins_over_a_name_match()
+    {
+        await using var db = await ArrangeAsync();
+        var hash = new string('d', 64);
+        db.Dictionaries.AddRange(
+            new Domain.Entities.Dictionary { Id = 32, Name = "Something else", IsPublic = true, FileHash = hash },
+            new Domain.Entities.Dictionary { Id = 33, Name = "Legacy Book", IsPublic = true, FileHash = null });
+        await db.SaveChangesAsync();
+
+        var view = await Service(db).RegisterAsync(Reader, UserRole.User, hash, "Legacy Book", "", 3, Now);
+
+        Assert.Equal(32, view.DictionaryId);
+    }
+
+    [Fact]
+    public async Task An_invisible_legacy_dictionary_is_not_linked_by_name()
+    {
+        await using var db = await ArrangeAsync();
+        db.Dictionaries.Add(new Domain.Entities.Dictionary
+        {
+            Id = 34, Name = "Their Legacy Book", OwnerId = Other, IsPublic = false, FileHash = null,
+        });
+        await db.SaveChangesAsync();
+
+        var view = await Service(db).RegisterAsync(Reader, UserRole.User, new('d', 64), "Their Legacy Book", "", 3, Now);
+
+        Assert.Null(view.DictionaryId);
+    }
+
+    [Fact]
+    public async Task A_personal_dictionary_is_never_linked_by_name()
+    {
+        await using var db = await ArrangeAsync();
+        db.Dictionaries.Add(new Domain.Entities.Dictionary
+        {
+            Id = 35, Name = "My words", OwnerId = Reader, IsPersonal = true, IsPublic = false, FileHash = null,
+        });
+        await db.SaveChangesAsync();
+
+        var view = await Service(db).RegisterAsync(Reader, UserRole.User, new('d', 64), "My words", "", 3, Now);
+
+        Assert.Null(view.DictionaryId);
+    }
+
     [Fact]
     public async Task Saving_moves_the_position_and_clamps_it()
     {
