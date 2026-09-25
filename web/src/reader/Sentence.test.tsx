@@ -1,19 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
 import { click, render } from '../test/render'
-import { splitSentences } from './readerBook'
+import { splitSentences, type ReaderSentence } from './readerBook'
 import { Sentence, type SentenceTranslation } from './Sentence'
 import { toStatusMap } from './wordStatus'
 
 const [sentence] = splitSentences('Most men tried to adjust quickly.')
 const statuses = toStatusMap({ learning: ['adjust'], known: ['man'] })
 
-function renderSentence(overrides: { canTranslate?: boolean; translation?: SentenceTranslation } = {}) {
+function renderSentence(
+  overrides: { canTranslate?: boolean; translation?: SentenceTranslation; sentence?: ReaderSentence } = {},
+) {
   const onWordTap = vi.fn()
   const onToggleTranslation = vi.fn()
 
   return render(
     <Sentence
-      sentence={sentence}
+      sentence={overrides.sentence ?? sentence}
       positionKey="0.0.0"
       paragraphStart={false}
       statuses={statuses}
@@ -25,6 +27,13 @@ function renderSentence(overrides: { canTranslate?: boolean; translation?: Sente
     />,
   ).then((view) => ({ ...view, onWordTap, onToggleTranslation }))
 }
+
+/** The placeholder's total length in characters — what it claims the translation will take. */
+const barChars = (container: HTMLElement) =>
+  [...container.querySelectorAll<HTMLElement>('.reader-translation-loading .skeleton')].reduce(
+    (total, bar) => total + Number.parseInt(bar.style.width, 10) + 1,
+    0,
+  )
 
 const word = (container: HTMLElement, text: string) =>
   [...container.querySelectorAll('.reader-word')].find((el) => el.textContent === text)!
@@ -91,6 +100,34 @@ describe('Sentence', () => {
     expect(strip.className).toBe('reader-strip')
 
     const open = await renderSentence({ translation: { state: 'loading' } })
-    expect(open.container.querySelector('.reader-strip')!.className).toBe('reader-strip reader-strip-open')
+    expect(open.container.querySelector('.reader-strip')!.className).toBe(
+      'reader-strip reader-strip-open reader-strip-loading',
+    )
+  })
+
+  it('holds the translation place with shimmering bars while it loads', async () => {
+    const { container } = await renderSentence({ translation: { state: 'loading' } })
+    const placeholder = container.querySelector('.reader-translation-loading')!
+
+    expect(placeholder.getAttribute('role')).toBe('status')
+    expect(placeholder.getAttribute('aria-busy')).toBe('true')
+    expect(placeholder.querySelectorAll('.skeleton').length).toBeGreaterThan(1)
+  })
+
+  it('stands in words as long as the sentence, so the bars wrap where the text will', async () => {
+    const [long] = splitSentences(
+      'Donald jerked so hard that his mouse went skidding off the pad and across the desk while Mick' +
+        ' stood grinning at him from the doorway with his jacket tucked under one arm',
+    )
+    const short = await renderSentence({ translation: { state: 'loading' } })
+    const { container } = await renderSentence({ sentence: long, translation: { state: 'loading' } })
+
+    for (const [view, text] of [
+      [short.container, sentence.text],
+      [container, long.text],
+    ] as const) {
+      expect(barChars(view)).toBeGreaterThan(text.length * 0.8)
+      expect(barChars(view)).toBeLessThan(text.length * 1.2 + 10)
+    }
   })
 })

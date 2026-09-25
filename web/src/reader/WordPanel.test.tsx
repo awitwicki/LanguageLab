@@ -127,6 +127,55 @@ describe('WordPanel', () => {
     await closesAfterSlide(container, onClose)
   })
 
+  it('holds the translation place with a shimmering bar while the word is looked up', async () => {
+    apiMock.getReaderWord.mockReturnValue(new Promise(() => {}))
+    const { container } = await render(
+      <WordPanel lemma="adjust" form="adjusted" count={18} dictionaryId={10} onClose={vi.fn()} onStatusChange={vi.fn()} />,
+    )
+
+    const placeholder = container.querySelector('.word-panel-skeleton')!
+
+    expect(placeholder.getAttribute('aria-busy')).toBe('true')
+    expect(placeholder.querySelectorAll('.skeleton').length).toBe(1)
+    expect(container.querySelector('.word-panel-skeleton')).not.toBeNull()
+  })
+
+  it('keeps the hint row while looking up, so the buttons stay put when the word lands', async () => {
+    apiMock.getReaderWord.mockReturnValue(new Promise(() => {}))
+    const { container } = await render(
+      <WordPanel lemma="adjust" form="adjusted" count={18} dictionaryId={10} onClose={vi.fn()} onStatusChange={vi.fn()} />,
+    )
+
+    expect(container.querySelector('.word-panel-hint .skeleton')).not.toBeNull()
+  })
+
+  it('drops the bar once the word is there', async () => {
+    const { container } = await open(adjust)
+
+    expect(container.querySelector('.word-panel-skeleton')).toBeNull()
+  })
+
+  it('spins on the pressed button alone while its request is in flight', async () => {
+    let finish: () => void = () => {}
+    apiMock.knowWord.mockReturnValue(
+      new Promise<null>((resolve) => {
+        finish = () => resolve(null)
+      }),
+    )
+    const { container } = await open(adjust)
+
+    await click(button(container, 'I know it'))
+
+    expect(button(container, 'I know it').getAttribute('aria-busy')).toBe('true')
+    expect(button(container, 'I know it').querySelector('.btn-spinner')).not.toBeNull()
+    expect(button(container, 'Add to training').getAttribute('aria-busy')).toBe('false')
+    expect(button(container, 'Add to training').querySelector('.btn-spinner')).toBeNull()
+    expect(button(container, 'Add to training').disabled).toBe(true)
+
+    await act(async () => finish())
+    await flush()
+  })
+
   it('says so when the lookup fails', async () => {
     apiMock.getReaderWord.mockRejectedValue(new Error('GET /api/reader/words/adjust → 500'))
     const { container } = await render(
