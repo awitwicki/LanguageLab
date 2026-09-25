@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type DictionaryListItem, type SessionStarted, type TrainingStarted } from './api/client'
-import { canPublishDirectly } from './auth/roles'
 import { useAuth } from './auth/useAuth'
 import { AppShell } from './layout/AppShell'
 import { modeOf, type AppMode } from './layout/mode'
@@ -151,7 +150,6 @@ export default function App() {
         key={route.hash}
         hash={route.hash}
         store={books.store}
-        canImport={canPublishDirectly(state.user.role)}
         onBack={() => setRoute({ name: 'reader' })}
         onOpenDictionary={(id) => setRoute({ name: 'dictionary', id })}
       />

@@ -136,8 +136,8 @@ describe('ImportScreen', () => {
     expect(container.textContent).toContain('An administrator checks the dictionary before other users see it.')
   })
 
-  it('offers an uploader a plain visibility switch', async () => {
-    const { container } = await preview(undefined, 'uploader')
+  it('offers an admin a plain visibility switch', async () => {
+    const { container } = await preview(undefined, 'admin')
 
     expect(container.querySelector('.field.checkbox')?.textContent).toContain('Visible to all users')
     expect(container.textContent).not.toContain('An administrator checks the dictionary')

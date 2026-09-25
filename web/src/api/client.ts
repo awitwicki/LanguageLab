@@ -1,4 +1,4 @@
-export type UserRole = 'user' | 'uploader' | 'admin'
+export type UserRole = 'user' | 'admin'
 
 export interface CurrentUser {
   id: number

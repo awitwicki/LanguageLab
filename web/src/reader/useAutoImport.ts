@@ -11,7 +11,7 @@ export type AutoImport =
   | { status: 'done'; dictionaryId: number }
 
 interface Options {
-  /** An uploader or admin, outside Telegram, reading a registered book that has no dictionary yet. */
+  /** Outside Telegram, reading a registered book that has no dictionary yet. */
   enabled: boolean
   hash: string
   title: string
@@ -24,9 +24,9 @@ interface Options {
 const started = new Set<string>()
 
 /**
- * Builds the dictionary of a book an uploader or admin opens in the reader: the import screen's
- * pipeline (leaf chapters, the word-extraction worker, importDictionary) in the background, as a
- * private dictionary named after the book. Reading goes on meanwhile.
+ * Builds the dictionary of a book opened in the reader: the import screen's pipeline (leaf
+ * chapters, the word-extraction worker, importDictionary) in the background, as a private
+ * dictionary named after the book. Reading goes on meanwhile.
  */
 export function useAutoImport({ enabled, hash, title, bytes, onImported }: Options): AutoImport {
   const [state, setState] = useState<AutoImport>({ status: 'idle' })

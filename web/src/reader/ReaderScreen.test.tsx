@@ -87,14 +87,14 @@ const serverBook: ReaderBookDto = {
   dictionaryId: null,
 }
 
-async function openReader(store = new MemoryBookStore(), { canImport = false }: { canImport?: boolean } = {}) {
+async function openReader(store = new MemoryBookStore()) {
   await store.put(
     { hash: HASH, title: "Death's End", author: 'Cixin Liu', fileName: 'deaths-end.fb2', addedAt: '2026-09-24T09:00:00.000Z' },
     bytesOf(READER_BOOK_XML),
   )
   const onBack = vi.fn()
   const view = await render(
-    <ReaderScreen hash={HASH} store={store} canImport={canImport} onBack={onBack} onOpenDictionary={vi.fn()} />,
+    <ReaderScreen hash={HASH} store={store} onBack={onBack} onOpenDictionary={vi.fn()} />,
   )
   await flush()
   await flush()
@@ -150,7 +150,7 @@ describe('ReaderScreen', () => {
 
   it('says the book is missing when its file is not on this device', async () => {
     const view = await render(
-      <ReaderScreen hash={HASH} store={new MemoryBookStore()} canImport={false} onBack={vi.fn()} onOpenDictionary={vi.fn()} />,
+      <ReaderScreen hash={HASH} store={new MemoryBookStore()} onBack={vi.fn()} onOpenDictionary={vi.fn()} />,
     )
     await flush()
 
@@ -277,7 +277,7 @@ describe('ReaderScreen', () => {
       )
 
       const { container } = await render(
-        <ReaderScreen hash={HASH} store={store} canImport={false} onBack={vi.fn()} onOpenDictionary={vi.fn()} />,
+        <ReaderScreen hash={HASH} store={store} onBack={vi.fn()} onOpenDictionary={vi.fn()} />,
       )
 
       // The device-side effects (reading the file from IndexedDB, word statuses) run on real
@@ -309,8 +309,8 @@ describe('ReaderScreen', () => {
     expect(sentenceTexts(container)).toContain('Most men tried to adjust.')
   })
 
-  it("builds the book's dictionary in the background for an uploader, then links it", async () => {
-    const { container } = await openReader(new MemoryBookStore(), { canImport: true })
+  it("builds the book's dictionary in the background, then links it", async () => {
+    const { container } = await openReader()
     const worker = FakeWorker.instances[0]
 
     expect(worker.requests[0]).toMatchObject({ kind: 'aggregate', mode: 'leaf' })
@@ -335,7 +335,7 @@ describe('ReaderScreen', () => {
 
   it('reads on and says so when building the word list fails', async () => {
     apiMock.importDictionary.mockRejectedValue(new Error('500'))
-    const { container } = await openReader(new MemoryBookStore(), { canImport: true })
+    const { container } = await openReader()
 
     await FakeWorker.instances[0].reply({ kind: 'aggregated', chapters: [] })
     await flush()
@@ -344,34 +344,27 @@ describe('ReaderScreen', () => {
     expect(sentenceTexts(container)).toContain('Most men tried to adjust.')
   })
 
-  it('imports nothing for an ordinary user', async () => {
-    await openReader()
-
-    expect(FakeWorker.instances).toHaveLength(0)
-    expect(apiMock.importDictionary).not.toHaveBeenCalled()
-  })
-
   it('imports nothing when the book already has a dictionary', async () => {
     apiMock.listReaderBooks.mockResolvedValue([{ ...serverBook, dictionaryId: 5 }])
-    await openReader(new MemoryBookStore(), { canImport: true })
+    await openReader()
 
     expect(FakeWorker.instances).toHaveLength(0)
   })
 
   it('imports nothing inside Telegram, where the worker does not start', async () => {
     vi.stubGlobal('Telegram', { WebApp: { initData: 'auth_date=1&hash=abc', ready: vi.fn(), expand: vi.fn(), openLink: vi.fn() } })
-    await openReader(new MemoryBookStore(), { canImport: true })
+    await openReader()
 
     expect(FakeWorker.instances).toHaveLength(0)
   })
 
   it('tries again next time when the reader was left mid-import', async () => {
     const store = new MemoryBookStore()
-    const first = await openReader(store, { canImport: true })
+    const first = await openReader(store)
     expect(FakeWorker.instances).toHaveLength(1)
 
     await first.unmount()
-    await openReader(store, { canImport: true })
+    await openReader(store)
 
     expect(FakeWorker.instances).toHaveLength(2)
   })

@@ -35,8 +35,6 @@ import './ReaderScreen.css'
 interface Props {
   hash: string
   store: BookStore
-  /** An uploader or admin: opening a book with no dictionary builds one. */
-  canImport: boolean
   onBack: () => void
   onOpenDictionary: (dictionaryId: number) => void
 }
@@ -75,7 +73,7 @@ function usePrefersDark(): boolean {
   return dark
 }
 
-export function ReaderScreen({ hash, store, canImport, onBack, onOpenDictionary }: Props) {
+export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   const [load, setLoad] = useState<Load>({ status: 'loading' })
   /** undefined until the server answered; null when it does not know the book (or failed). */
   const [server, setServer] = useState<ReaderBookDto | null | undefined>(undefined)
@@ -113,7 +111,7 @@ export function ReaderScreen({ hash, store, canImport, onBack, onOpenDictionary 
 
   const autoImport = useAutoImport({
     // Only a registered book whose dictionaryId is known to be null — not a server that timed out.
-    enabled: canImport && telegramInitData() === null && server != null && server.dictionaryId === null,
+    enabled: telegramInitData() === null && server != null && server.dictionaryId === null,
     hash,
     title: book?.title ?? '',
     bytes,

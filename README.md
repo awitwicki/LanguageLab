@@ -157,15 +157,20 @@ the code, validates the `id_token` and issues its own `ll_session` cookie. The c
 internal user id and a role, never Telegram's claims.
 
 The first person to sign in successfully becomes the administrator; everyone after them is a
-regular user. Regular users can use the dictionaries an admin made public but cannot import,
-delete or re-publish one. An **uploader** is a regular user who may also import books — an
-admin grants the role from **Users** in the account menu, where admins pick each account's
-role (user, uploader, admin) and ban or delete accounts. Uploaders choose whether an import is
-public, but re-publishing or deleting it afterwards stays with admins. A ban takes effect on
+regular user. Importing a book takes no role at all — every signed-in user may, and what they
+import stays private until an admin approves it from the moderation queue. Only an admin's own
+import is published without review, and deleting or re-publishing a dictionary stays with
+admins. There are just the two roles: an admin picks each account's (user, admin) from
+**Users** in the account menu, and bans or deletes accounts there. A ban takes effect on
 the banned user's next request, not at their next login. Anyone can delete their own account from the account menu
 (`DELETE /api/auth/me`) — a hard delete that takes their shelves and progress with it, while
 dictionaries they imported stay behind without an owner. The one exception is the last
 administrator, who is refused until someone else has been promoted.
+
+**Dropping the uploader role.** The `DropUploaderRole` migration moves any account still on the
+old uploader role back to the regular one. Their session cookie still spells the removed role,
+which no longer parses, so those accounts are signed out on their next request and simply sign
+in again — nothing they own is touched.
 
 **First deploy.** The migration leaves every existing account at the regular role, so right
 after a fresh deploy the instance has zero admins — the first person to sign in becomes one.

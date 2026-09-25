@@ -86,8 +86,8 @@ describe('AdminScreen', () => {
 
     const options = [...container.querySelectorAll('tbody tr')[1].querySelectorAll('.role-select option')]
 
-    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual(['user', 'uploader', 'admin'])
-    expect(options.map((o) => o.textContent)).toEqual(['User', 'Uploader', 'Admin'])
+    expect(options.map((o) => (o as HTMLOptionElement).value)).toEqual(['user', 'admin'])
+    expect(options.map((o) => o.textContent)).toEqual(['User', 'Admin'])
   })
 
   it('changes a role through the picker and reloads the list', async () => {
@@ -95,7 +95,7 @@ describe('AdminScreen', () => {
 
     respond((path, method) => {
       if (path === '/api/admin/users/2/role' && method === 'POST') {
-        role = 'uploader'
+        role = 'admin'
         return { status: 204 }
       }
 
@@ -108,13 +108,13 @@ describe('AdminScreen', () => {
     const { container } = await render(<AdminScreen meId={1} />)
     await flush()
 
-    await choose(container.querySelectorAll('tbody tr')[1].querySelector<HTMLSelectElement>('.role-select')!, 'uploader')
+    await choose(container.querySelectorAll('tbody tr')[1].querySelector<HTMLSelectElement>('.role-select')!, 'admin')
     await flush()
 
     const sent = vi.mocked(fetch).mock.calls.find(([path]) => path === '/api/admin/users/2/role')
 
-    expect(sent?.[1]?.body).toBe(JSON.stringify({ role: 'uploader' }))
-    expect(container.querySelectorAll('tbody tr')[1].querySelector<HTMLSelectElement>('.role-select')?.value).toBe('uploader')
+    expect(sent?.[1]?.body).toBe(JSON.stringify({ role: 'admin' }))
+    expect(container.querySelectorAll('tbody tr')[1].querySelector<HTMLSelectElement>('.role-select')?.value).toBe('admin')
   })
 
   // The server refuses these anyway; disabling them keeps the user from discovering that

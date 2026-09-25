@@ -394,8 +394,7 @@ public class BookImportServiceTests
     [Theory]
     [InlineData(UserRole.User, false, PublicationStatus.Private)]
     [InlineData(UserRole.User, true, PublicationStatus.Pending)]
-    [InlineData(UserRole.Uploader, false, PublicationStatus.Private)]
-    [InlineData(UserRole.Uploader, true, PublicationStatus.Published)]
+    [InlineData(UserRole.Admin, false, PublicationStatus.Private)]
     [InlineData(UserRole.Admin, true, PublicationStatus.Published)]
     public void An_import_never_publishes_on_a_plain_users_say_so(
         UserRole role, bool requested, PublicationStatus expected) =>

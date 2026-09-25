@@ -27,7 +27,6 @@ public class AuthPoliciesTests
 
     [Theory]
     [InlineData(UserRole.User, false)]
-    [InlineData(UserRole.Uploader, false)]
     [InlineData(UserRole.Admin, true)]
     public async Task Admin_policy_admits_admins_only(UserRole role, bool expected)
     {
