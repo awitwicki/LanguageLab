@@ -12,6 +12,7 @@ import { api, type ReaderBookDto } from '../api/client'
 import { telegramInitData } from '../auth/telegram'
 import { formatInt } from '../lib/format'
 import type { BookStore } from './bookStore'
+import { allChunks, chunkChapter, chunkOfPosition, chunksAround } from './chapterWindow'
 import {
   chapterProgress,
   clampPosition,
@@ -58,6 +59,14 @@ const START: ReaderPosition = { chapterIndex: 0, paragraphIndex: 0, sentenceInde
 /** Fallback before the header's real height is measured — matches Sentence.css's old default. */
 const DEFAULT_HEADER_HEIGHT = 72
 
+/**
+ * How far off the screen a gap mounts the chunk it stands for — about a screen ahead of the
+ * reading direction, so the sentences are there before they are scrolled to, and a little behind.
+ */
+const GAP_MARGIN = '800px 0px 1200px 0px'
+
+const NO_CHUNKS: ReadonlySet<number> = new Set()
+
 function usePrefersDark(): boolean {
   const [dark, setDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false)
 
@@ -87,8 +96,14 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   const prefersDark = usePrefersDark()
   const bodyRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLElement>(null)
-  const scrollTarget = useRef<string | null>(null)
   const [headerHeight, setHeaderHeight] = useState(DEFAULT_HEADER_HEIGHT)
+  /** Where the reader jumps to and opens around: the book's opening place, then every jump. */
+  const [target, setTarget] = useState<{ id: number; position: ReaderPosition } | null>(null)
+  /** The chunks of the chapter that are in the DOM, and the target they were opened around. */
+  const [chunkWindow, setChunkWindow] = useState<{ id: number; mounted: ReadonlySet<number> } | null>(null)
+  const scrolledTo = useRef(-1)
+  const anchorShift = useRef<{ key: string; top: number } | null>(null)
+  const positionRef = useRef<ReaderPosition | null>(null)
 
   const book = load.status === 'ready' ? load.book : null
   const report = useReaderPosition(hash, book)
@@ -209,19 +224,107 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
     if (!book || server === undefined || position !== null) return
 
     const start = clampPosition(book, pickPosition(loadLocalPosition(hash), server) ?? START)
-    scrollTarget.current = positionKey(start)
+    setTarget({ id: 0, position: start })
     setPosition(start)
   }, [book, server, position, hash])
 
   const chapterIndex = position?.chapterIndex ?? null
+  const chapter = book && chapterIndex !== null ? book.chapters[chapterIndex] : null
+  const chunks = useMemo(
+    () => (chapter && chapterIndex !== null ? chunkChapter(chapter, chapterIndex) : []),
+    [chapter, chapterIndex],
+  )
 
+  // A chapter is not put in the DOM whole: the chunks around the place being read are, and the
+  // rest stand as gaps until one comes near the screen (the observer below). A long chapter — a
+  // book with no structure of its own is one — would otherwise cost a phone every sentence of it
+  // at once. Without IntersectionObserver there is nothing to grow the window, so it is the
+  // whole chapter, as it was before.
+  const startChunks = useMemo<ReadonlySet<number>>(
+    () =>
+      chapter && target
+        ? new Set(
+            typeof IntersectionObserver === 'undefined'
+              ? allChunks(chunks.length)
+              : chunksAround(chunkOfPosition(chapter, target.position), chunks.length),
+          )
+        : NO_CHUNKS,
+    [chapter, chunks.length, target],
+  )
+
+  const mountedChunks = chunkWindow && target && chunkWindow.id === target.id ? chunkWindow.mounted : startChunks
+
+  // A jump has to be mounted around in the same commit that shows it, so the window follows the
+  // target here in the render rather than in an effect.
+  if (chapter && target && chunkWindow?.id !== target.id) {
+    setChunkWindow({ id: target.id, mounted: startChunks })
+  }
+
+  useEffect(() => {
+    positionRef.current = position
+  }, [position])
+
+  // The jump itself: as soon as the target's own chunk is in the DOM, scroll to it — once.
   useLayoutEffect(() => {
-    const key = scrollTarget.current
-    if (!key || !bodyRef.current) return
+    if (!target || scrolledTo.current === target.id) return
 
-    scrollTarget.current = null
-    bodyRef.current.querySelector(`[data-pos="${key}"]`)?.scrollIntoView({ block: 'start' })
-  }, [chapterIndex, book])
+    const element = bodyRef.current?.querySelector(`[data-pos="${positionKey(target.position)}"]`)
+    if (!element) return
+
+    scrolledTo.current = target.id
+    element.scrollIntoView({ block: 'start' })
+  }, [target, mountedChunks])
+
+  // Mounting a chunk above the reader pushes the text down by however far the gap it stood in for
+  // was off. The sentence being read was measured before the mount: put it back where it was.
+  useLayoutEffect(() => {
+    const shift = anchorShift.current
+    if (!shift) return
+
+    anchorShift.current = null
+    const element = bodyRef.current?.querySelector(`[data-pos="${shift.key}"]`)
+    if (!element) return
+
+    const moved = element.getBoundingClientRect().top - shift.top
+    if (moved !== 0) window.scrollBy(0, moved)
+  }, [mountedChunks])
+
+  // Every gap watches for its own chunk's turn. New gaps replace old ones as the window grows, so
+  // this is rebuilt with it.
+  useEffect(() => {
+    const body = bodyRef.current
+    if (!chapter || !body || typeof IntersectionObserver === 'undefined') return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const opened = entries
+          .filter((entry) => entry.isIntersecting)
+          .map((entry) => Number((entry.target as HTMLElement).dataset.chunk))
+
+        if (opened.length === 0) return
+
+        const reading = positionRef.current
+        const element = reading ? body.querySelector(`[data-pos="${positionKey(reading)}"]`) : null
+
+        if (reading && element && Math.min(...opened) < chunkOfPosition(chapter, reading)) {
+          anchorShift.current = { key: positionKey(reading), top: element.getBoundingClientRect().top }
+        }
+
+        setChunkWindow((current) => {
+          if (!current) return current
+
+          const mounted = new Set(current.mounted)
+          opened.forEach((chunk) => mounted.add(chunk))
+
+          return mounted.size === current.mounted.size ? current : { ...current, mounted }
+        })
+      },
+      { rootMargin: GAP_MARGIN },
+    )
+
+    body.querySelectorAll('[data-chunk]').forEach((element) => observer.observe(element))
+    return () => observer.disconnect()
+  }, [chapter, mountedChunks])
 
   // The top sentence in the reading band is the position. The band's top edge must land exactly
   // one pixel below where scrollIntoView (via Sentence.css's scroll-margin-top) places a target
@@ -256,22 +359,16 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
 
     body.querySelectorAll('[data-pos]').forEach((element) => observer.observe(element))
     return () => observer.disconnect()
-  }, [book, chapterIndex, report, headerHeight])
+  }, [book, chapterIndex, report, headerHeight, mountedChunks])
 
   const goToChapter = (index: number) => {
-    const target = { chapterIndex: index, paragraphIndex: 0, sentenceIndex: 0 }
+    const next = { chapterIndex: index, paragraphIndex: 0, sentenceIndex: 0 }
 
     setSelection(null)
     setMenuOpen(false)
-
-    if (chapterIndex === index) {
-      bodyRef.current?.querySelector('[data-pos]')?.scrollIntoView({ block: 'start' })
-      return
-    }
-
-    scrollTarget.current = positionKey(target)
-    setPosition(target)
-    report(target)
+    setTarget((current) => ({ id: (current?.id ?? 0) + 1, position: next }))
+    setPosition(next)
+    report(next)
   }
 
   const onWordTap = useCallback(
@@ -308,7 +405,7 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
     '--reader-header-height': `${headerHeight}px`,
   } as CSSProperties
 
-  if (!book || !position) {
+  if (!book || !position || !chapter) {
     const message =
       load.status === 'missing'
         ? "This book isn't on this device. Open its file from the library."
@@ -328,7 +425,6 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
     )
   }
 
-  const chapter = book.chapters[position.chapterIndex]
   const progressStyle = { '--reader-chapter-progress': chapterProgress(book, position) } as CSSProperties
 
   return (
@@ -366,25 +462,31 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
           </div>
         )}
 
-        {chapter.paragraphs.map((paragraph, paragraphIndex) =>
-          paragraph.sentences.map((sentence, sentenceIndex) => {
-            const key = positionKey({ chapterIndex: position.chapterIndex, paragraphIndex, sentenceIndex })
-
-            return (
+        {chunks.map((chunk, index) =>
+          mountedChunks.has(index) ? (
+            chunk.map((entry) => (
               <Sentence
-                key={key}
-                sentence={sentence}
-                positionKey={key}
-                paragraphStart={sentenceIndex === 0 && paragraphIndex > 0}
+                key={entry.key}
+                sentence={entry.sentence}
+                positionKey={entry.key}
+                paragraphStart={entry.paragraphStart}
                 statuses={statuses}
-                selectedToken={selection?.key === key ? selection.tokenIndex : null}
+                selectedToken={selection?.key === entry.key ? selection.tokenIndex : null}
                 canTranslate={canTranslate}
-                translation={translations[key]}
+                translation={translations[entry.key]}
                 onWordTap={onWordTap}
                 onToggleTranslation={toggle}
               />
-            )
-          }),
+            ))
+          ) : (
+            <div
+              key={`gap-${index}`}
+              className="reader-gap"
+              data-chunk={index}
+              style={{ '--reader-gap-sentences': chunk.length } as CSSProperties}
+              aria-hidden="true"
+            />
+          ),
         )}
 
         {position.chapterIndex < book.chapters.length - 1 && (

@@ -5,6 +5,7 @@ import { click, flush, render } from '../test/render'
 import { bytesOf, READER_BOOK_XML } from '../test/readerFixtures'
 import type { WorkerResponse } from '../worker/parseBook.worker'
 import { MemoryBookStore } from './bookStore'
+import { CHUNK_SENTENCES } from './chapterWindow'
 import { ReaderScreen } from './ReaderScreen'
 import { resetAutoImportsForTests } from './useAutoImport'
 
@@ -24,26 +25,50 @@ const apiMock = vi.hoisted(() => ({
 
 vi.mock('../api/client', () => ({ api: apiMock }))
 
-/** jsdom has no IntersectionObserver: this one lets a test say which sentences are on screen. */
+/**
+ * jsdom has no IntersectionObserver: this one lets a test say what is on screen. The reader runs
+ * two — one on the sentences, one on the gaps the unmounted chunks leave — so a test names an
+ * element and this finds whichever observer is watching it.
+ */
 class FakeObserver {
-  static last: FakeObserver | null = null
+  static instances: FakeObserver[] = []
   readonly callback: IntersectionObserverCallback
-  readonly targets: Element[] = []
+  targets: Element[] = []
 
   constructor(callback: IntersectionObserverCallback) {
     this.callback = callback
-    FakeObserver.last = this
+    FakeObserver.instances.push(this)
   }
 
   observe(target: Element) {
     this.targets.push(target)
   }
 
-  disconnect() {}
+  disconnect() {
+    this.targets = []
+  }
 
-  show(key: string) {
-    const target = this.targets.find((t) => (t as HTMLElement).dataset.pos === key)!
-    this.callback([{ target, isIntersecting: true } as unknown as IntersectionObserverEntry], this as never)
+  /** The sentence at that position is at the top of the screen. */
+  static show(key: string) {
+    FakeObserver.reveal(`[data-pos="${key}"]`)
+  }
+
+  /** The gap left by that chunk has come near the screen. */
+  static showGap(chunk: number) {
+    FakeObserver.reveal(`[data-chunk="${chunk}"]`)
+  }
+
+  private static reveal(selector: string) {
+    for (const instance of FakeObserver.instances) {
+      const target = instance.targets.find((element) => element.matches(selector))
+
+      if (target) {
+        instance.callback([{ target, isIntersecting: true } as unknown as IntersectionObserverEntry], instance as never)
+        return
+      }
+    }
+
+    throw new Error(`no observer is watching ${selector}`)
   }
 }
 
@@ -101,10 +126,38 @@ async function openReader(store = new MemoryBookStore()) {
   return { ...view, store, onBack }
 }
 
+/** One chapter of 120 one-sentence paragraphs: six chunks of CHUNK_SENTENCES, one chapter. */
+const LONG_PARAGRAPHS = 120
+const LONG_BOOK_XML = `<?xml version="1.0" encoding="utf-8"?>
+<FictionBook><description><title-info><book-title>Wool</book-title></title-info></description><body><section>
+  <title><p>Holston</p></title>
+  ${Array.from({ length: LONG_PARAGRAPHS }, (_, index) => `<p>Paragraph ${index} climbed the stairs.</p>`).join('\n  ')}
+</section></body></FictionBook>`
+
+const LONG_HASH = 'b'.repeat(64)
+
+/** The long book, opened where `at` says — the server's stored position. */
+async function openLongReader(at: Partial<ReaderBookDto> = {}) {
+  const store = new MemoryBookStore()
+  await store.put(
+    { hash: LONG_HASH, title: 'Wool', author: 'Hugh Howey', fileName: 'wool.fb2', addedAt: '2026-09-24T09:00:00.000Z' },
+    bytesOf(LONG_BOOK_XML),
+  )
+  apiMock.listReaderBooks.mockResolvedValue([
+    { ...serverBook, fileHash: LONG_HASH, title: 'Wool', chaptersCount: 1, chapterIndex: 0, paragraphIndex: 0, ...at },
+  ])
+
+  const view = await render(<ReaderScreen hash={LONG_HASH} store={store} onBack={vi.fn()} onOpenDictionary={vi.fn()} />)
+  await flush()
+  await flush()
+  return view
+}
+
 const sentenceTexts = (container: HTMLElement) =>
   [...container.querySelectorAll('.reader-text')].map((p) => p.textContent)
 
 beforeEach(() => {
+  FakeObserver.instances = []
   vi.stubGlobal('IntersectionObserver', FakeObserver)
   Element.prototype.scrollIntoView = vi.fn()
   localStorage.clear()
@@ -224,7 +277,7 @@ describe('ReaderScreen', () => {
   it('remembers the sentence at the top of the screen', async () => {
     await openReader()
 
-    await act(async () => FakeObserver.last!.show('1.1.0'))
+    await act(async () => FakeObserver.show('1.1.0'))
 
     expect(JSON.parse(localStorage.getItem(`reader.position.${HASH}`)!).position).toEqual({
       chapterIndex: 1,
@@ -252,7 +305,7 @@ describe('ReaderScreen', () => {
 
       expect(container.querySelector('.reader')!.getAttribute('style')).toContain('--reader-header-height: 90px')
 
-      await act(async () => FakeObserver.last!.show('1.2.0'))
+      await act(async () => FakeObserver.show('1.2.0'))
 
       expect(JSON.parse(localStorage.getItem(`reader.position.${HASH}`)!).position).toEqual({
         chapterIndex: 1,
@@ -356,6 +409,56 @@ describe('ReaderScreen', () => {
     await openReader()
 
     expect(FakeWorker.instances).toHaveLength(0)
+  })
+
+  it('puts only the chunks around the reading place in the DOM, gaps for the rest', async () => {
+    const { container } = await openLongReader()
+
+    // The chapter runs to 120 sentences; opening it mounts the chunk being read and one either
+    // side (CHUNK_SENTENCES * 2 at the start of a chapter), and leaves the other four as gaps.
+    expect(container.querySelectorAll('.reader-sentence')).toHaveLength(CHUNK_SENTENCES * 2)
+    expect(container.querySelectorAll('.reader-gap')).toHaveLength(4)
+    // Each gap says how many sentences it stands in for, which is what its height is built from.
+    expect(container.querySelector('.reader-gap')!.getAttribute('style')).toContain(
+      `--reader-gap-sentences: ${CHUNK_SENTENCES}`,
+    )
+    expect(sentenceTexts(container)).toContain('Paragraph 0 climbed the stairs.')
+    expect(sentenceTexts(container)).not.toContain(`Paragraph ${LONG_PARAGRAPHS - 1} climbed the stairs.`)
+  })
+
+  it('mounts a chunk when its gap comes near the screen', async () => {
+    const { container } = await openLongReader()
+
+    await act(async () => FakeObserver.showGap(4))
+
+    expect(sentenceTexts(container)).toContain(`Paragraph ${CHUNK_SENTENCES * 4} climbed the stairs.`)
+    expect(container.querySelectorAll('.reader-gap')).toHaveLength(3)
+    // Reading on from there: the sentences of a mounted chunk report the position like any other.
+    await act(async () => FakeObserver.show(`0.${CHUNK_SENTENCES * 4}.0`))
+    expect(JSON.parse(localStorage.getItem(`reader.position.${LONG_HASH}`)!).position).toEqual({
+      chapterIndex: 0,
+      paragraphIndex: CHUNK_SENTENCES * 4,
+      sentenceIndex: 0,
+    })
+  })
+
+  it('opens around a position deep in the chapter, not at its start', async () => {
+    const paragraphIndex = CHUNK_SENTENCES * 3
+    const { container } = await openLongReader({ paragraphIndex })
+
+    expect(sentenceTexts(container)).toContain(`Paragraph ${paragraphIndex} climbed the stairs.`)
+    // Three chunks around it; the chapter's own first sentence is a gap away.
+    expect(container.querySelectorAll('.reader-sentence')).toHaveLength(CHUNK_SENTENCES * 3)
+    expect(sentenceTexts(container)).not.toContain('Paragraph 0 climbed the stairs.')
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+  })
+
+  it('renders the whole chapter where there is no IntersectionObserver', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined)
+    const { container } = await openLongReader()
+
+    expect(container.querySelectorAll('.reader-sentence')).toHaveLength(LONG_PARAGRAPHS)
+    expect(container.querySelector('.reader-gap')).toBeNull()
   })
 
   it('tries again next time when the reader was left mid-import', async () => {
