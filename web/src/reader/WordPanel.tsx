@@ -33,11 +33,36 @@ export const SHEET_OUT_MS = 220
 
 const prefersReducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 
+interface ActionButtonProps {
+  className: string
+  /** This button's own request is out: it spins, the others merely wait. */
+  busy: boolean
+  disabled: boolean
+  onClick: () => void
+  children: string
+}
+
+function ActionButton({ className, busy, disabled, onClick, children }: ActionButtonProps) {
+  return (
+    <button
+      type="button"
+      className={busy ? `${className} btn-busy` : className}
+      disabled={disabled}
+      aria-busy={busy}
+      onClick={onClick}
+    >
+      {busy && <span className="btn-spinner" aria-hidden="true" />}
+      <span className="btn-label">{children}</span>
+    </button>
+  )
+}
+
 export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusChange }: Props) {
   const [word, setWord] = useState<ReaderWord | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [typed, setTyped] = useState('')
-  const [busy, setBusy] = useState(false)
+  /** Which of the three actions is waiting on the server, if any. */
+  const [busy, setBusy] = useState<Action | null>(null)
   const [closing, setClosing] = useState(false)
   const touchStart = useRef<number | null>(null)
   // The parent passes a fresh arrow each render; a ref keeps the close timer from restarting.
@@ -85,7 +110,7 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
   const act = async (action: Action) => {
     if (!word) return
 
-    setBusy(true)
+    setBusy(action)
     setError(null)
 
     try {
@@ -104,12 +129,15 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
 
   const status = word?.status ?? 'new'
   const needsTranslation = word !== null && !word.translation
+  // The row is there from the start: it sits under the buttons, and growing into it later
+  // would shove them upwards under the reader's finger.
+  const hint = word ? TARGET_HINT[word.learnTarget] : null
 
   return (
     <section
@@ -145,7 +173,11 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
         <span className="num">seen {formatInt(count)}× in this book</span>
       </p>
 
-      {word === null && error === null && <p className="word-panel-loading">Looking up…</p>}
+      {word === null && error === null && (
+        <p className="word-panel-skeleton" role="status" aria-busy="true" aria-label="Looking this word up…">
+          <span className="skeleton skeleton-line" style={{ width: '58%' }} />
+        </p>
+      )}
 
       {word?.translation && (
         <p className="word-panel-translation" lang="uk">
@@ -169,28 +201,35 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
       {error && <p className="word-panel-error">{error}</p>}
 
       <div className="word-panel-actions">
-        <button
-          type="button"
+        <ActionButton
           className="btn btn-primary"
-          disabled={!word || busy || (needsTranslation && typed.trim() === '')}
+          busy={busy === 'learn'}
+          disabled={!word || busy !== null || (needsTranslation && typed.trim() === '')}
           onClick={() => void act('learn')}
         >
           Add to training
-        </button>
-        <button type="button" className="btn btn-secondary" disabled={!word || busy} onClick={() => void act('know')}>
+        </ActionButton>
+        <ActionButton
+          className="btn btn-secondary"
+          busy={busy === 'know'}
+          disabled={!word || busy !== null}
+          onClick={() => void act('know')}
+        >
           I know it
-        </button>
-        <button
-          type="button"
+        </ActionButton>
+        <ActionButton
           className="btn btn-quiet word-panel-ignore"
-          disabled={!word || busy}
+          busy={busy === 'ignore'}
+          disabled={!word || busy !== null}
           onClick={() => void act('ignore')}
         >
           Ignore
-        </button>
+        </ActionButton>
       </div>
 
-      {word && <p className="word-panel-hint">{TARGET_HINT[word.learnTarget]}</p>}
+      <p className="word-panel-hint">
+        {hint ?? (error === null && <span className="skeleton skeleton-line" style={{ width: '52%' }} />)}
+      </p>
     </section>
   )
 }

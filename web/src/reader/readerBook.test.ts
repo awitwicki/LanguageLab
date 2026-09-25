@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { EPUB3_FILES, epub3Bytes, zipBytes } from '../test/epubFixtures'
 import { bytesOf, READER_BOOK_XML } from '../test/readerFixtures'
+import { BookFormatError } from '../books/formatError'
 import {
-  BookFormatError,
   bookProgress,
   chapterProgress,
   clampPosition,
@@ -52,7 +53,7 @@ describe('parseReaderBook', () => {
   it('refuses broken XML and a book without text', () => {
     expect(() => parseReaderBook('<a><b></a>', 'x')).toThrow(BookFormatError)
     expect(() => parseReaderBook('<FictionBook><body></body></FictionBook>', 'x')).toThrow(
-      "This file isn't a readable fb2 book.",
+      "This file isn't a readable fb2 or epub book.",
     )
   })
 })
@@ -71,17 +72,31 @@ describe('readBookFile', () => {
     expect(readBookFile(bytes, 'guard.fb2').chapters[0].paragraphs[0].sentences[0].text).toBe('Привіт said the guard.')
   })
 
-  it('says to unzip a zipped book', () => {
-    const zip = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]).buffer
+  it('reads an epub as a book of its own', () => {
+    const epub = readBookFile(epub3Bytes(), 'deaths-end.epub')
 
-    try {
-      readBookFile(zip, 'book.fb2.zip')
-      expect.unreachable()
-    } catch (e) {
-      expect(e).toBeInstanceOf(BookFormatError)
-      expect((e as BookFormatError).problem).toBe('zipped')
-      expect((e as Error).message).toBe('Unzip the book first.')
-    }
+    expect(epub.title).toBe("Death's End")
+    expect(epub.author).toBe('Cixin Liu')
+    expect(epub.chapters.map((c) => c.title)).toEqual(['The Swordholder', 'Year 62', 'Chapter Three'])
+    expect(epub.chapters[0].paragraphs[0].sentences.map((s) => s.text)).toEqual([
+      'Compared to the beginning, fewer individuals were emerging.',
+    ])
+    expect(epub.chapters[0].paragraphs).toHaveLength(2)
+  })
+
+  it('opens a zipped fb2 instead of asking for it to be unzipped', () => {
+    const zip = zipBytes({ 'deaths-end.fb2': READER_BOOK_XML })
+
+    expect(readBookFile(zip, 'deaths-end.fb2.zip').chapters.map((c) => c.title)).toEqual([
+      'The Swordholder',
+      'Year 62',
+    ])
+  })
+
+  it('names an epub after the file when its metadata has no title', () => {
+    const opf = (EPUB3_FILES['OEBPS/content.opf'] as string).replace("<dc:title>Death's End</dc:title>", '')
+
+    expect(readBookFile(epub3Bytes({ 'OEBPS/content.opf': opf }), 'wool.epub').title).toBe('wool')
   })
 
   it('names the book after the file when it has no title', () => {

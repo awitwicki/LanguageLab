@@ -67,4 +67,14 @@ describe('ReaderMenu', () => {
 
     expect(onOpenDictionary).toHaveBeenCalledWith(10)
   })
+
+  it('closes on Escape', async () => {
+    const { onClose } = await open()
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+
+    expect(onClose).toHaveBeenCalled()
+  })
 })

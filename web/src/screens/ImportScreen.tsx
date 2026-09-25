@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { decodeFb2 } from '../fb2/decode'
-import { flattenChapters, parseBook, type ChapterMode, type SectionNode } from '../fb2/chapters'
+import { readBookSource, stripBookExtension } from '../books/format'
+import { toParsedBook } from '../books/toParsedBook'
+import { flattenChapters, type ChapterMode, type SectionNode } from '../fb2/chapters'
 import { createWordExtractor, type WordExtractor } from '../fb2/wordExtractor'
 import type { AggregatedChapter } from '../fb2/aggregate'
 import { api, type ImportResult, type UserRole } from '../api/client'
@@ -59,10 +60,10 @@ export function ImportScreen({ onImported, role, bookStore }: Props) {
     return () => instance.dispose()
   }, [])
 
-  // Decoding and XML parsing happen here, on the main thread, not in the worker:
-  // they need DOMParser, which the Worker scope lacks in this browser.
-  // They are fast — native XML parsing of a multi-megabyte file takes far
-  // less than a second, so the tab does not freeze.
+  // Decoding, unzipping (for an epub) and XML parsing happen here, on the main thread, not in the
+  // worker: they need DOMParser, which the Worker scope lacks in this browser. They are all fast —
+  // native XML parsing and fflate's unzipSync over a multi-megabyte file take far less than a
+  // second, so the tab does not freeze.
   const onFile = useCallback((chosen: File) => {
     setStage('parsing')
     setError(null)
@@ -71,12 +72,11 @@ export function ImportScreen({ onImported, role, bookStore }: Props) {
       .arrayBuffer()
       .then(async (buffer) => {
         file.current = { bytes: buffer, name: chosen.name }
-        const xml = decodeFb2(buffer)
-        const { bookTitle, sections, maxDepth } = parseBook(xml)
+        const { bookTitle, sections, maxDepth } = toParsedBook(readBookSource(buffer, chosen.name))
 
         setSections(sections)
         setMaxDepth(maxDepth)
-        setName(bookTitle || chosen.name.replace(/\.fb2$/i, ''))
+        setName(bookTitle || stripBookExtension(chosen.name))
         setFileHash(await sha256Hex(buffer))
         setStage('preview')
       })
@@ -170,10 +170,10 @@ export function ImportScreen({ onImported, role, bookStore }: Props) {
         <label className="dropzone">
           <input
             type="file"
-            accept=".fb2"
+            accept=".fb2,.epub,.zip"
             onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])}
           />
-          <strong>Choose an .fb2 file</strong>
+          <strong>Choose an .fb2 or .epub file</strong>
           <span>or drop it here</span>
         </label>
       )}
@@ -187,21 +187,23 @@ export function ImportScreen({ onImported, role, bookStore }: Props) {
             <input value={name} onChange={(e) => setName(e.target.value)} />
           </label>
 
-          <label className="field">
-            Chapter level
-            <select
-              value={String(mode)}
-              disabled={stage !== 'preview'}
-              onChange={(e) => setMode(e.target.value === 'leaf' ? 'leaf' : Number(e.target.value))}
-            >
-              <option value="leaf">Leaf sections</option>
-              {Array.from({ length: maxDepth }, (_, i) => i + 1).map((depth) => (
-                <option key={depth} value={depth}>
-                  Level {depth}
-                </option>
-              ))}
-            </select>
-          </label>
+          {maxDepth > 1 && (
+            <label className="field">
+              Chapter level
+              <select
+                value={String(mode)}
+                disabled={stage !== 'preview'}
+                onChange={(e) => setMode(e.target.value === 'leaf' ? 'leaf' : Number(e.target.value))}
+              >
+                <option value="leaf">Leaf sections</option>
+                {Array.from({ length: maxDepth }, (_, i) => i + 1).map((depth) => (
+                  <option key={depth} value={depth}>
+                    Level {depth}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <p className="footnote">
             Chapters found: <strong className="num">{chapters.length}</strong>

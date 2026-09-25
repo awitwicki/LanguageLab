@@ -1,7 +1,8 @@
 :root {
   color-scheme: light dark;
 
-  /* Palette — light theme (Apple HIG) */
+  /* Palette — light theme (Apple HIG). Button text on a filled background has to
+     clear WCAG AA; index.contrast.test.ts scores it from these values. */
   --bg: #f5f5f7;
   --surface: #ffffff;
   --surface-2: #e8e8ed;
@@ -10,13 +11,16 @@
   --text-3: #86868b;
   --hairline: rgba(0, 0, 0, 0.08);
   --accent: #0071e3;
-  --accent-hover: #0077ed;
+  --accent-hover: #0064cc;
   --on-accent: #ffffff;
   --known: #34c759;
   --unknown: #ff9500;
   --danger: #ff3b30;
   --glass: rgba(255, 255, 255, 0.72);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
+  /* A placeholder block and the sheen that crosses it. */
+  --skeleton-base: rgba(0, 0, 0, 0.07);
+  --skeleton-sheen: rgba(0, 0, 0, 0.14);
 
   /* Typography — one family */
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Inter, 'Segoe UI', Roboto, sans-serif;
@@ -46,6 +50,8 @@
   /* A bottom sheet leaving the screen; WordPanel's SHEET_OUT_MS mirrors --dur-sheet. */
   --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --dur-sheet: 220ms;
+  /* One crossing of a placeholder's sheen — slow enough to read as waiting, not as nagging. */
+  --dur-shimmer: 1300ms;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -59,11 +65,14 @@
     --hairline: rgba(255, 255, 255, 0.12);
     --accent: #2997ff;
     --accent-hover: #4aa8ff;
+    --on-accent: #0d0f14;
     --known: #30d158;
     --unknown: #ff9f0a;
     --danger: #ff453a;
     --glass: rgba(28, 28, 30, 0.72);
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
+    --skeleton-base: rgba(255, 255, 255, 0.09);
+    --skeleton-sheen: rgba(255, 255, 255, 0.17);
   }
 }
 
@@ -231,6 +240,37 @@ select {
   border-radius: var(--r-lg);
 }
 
+/* A request in flight: the hidden label keeps the button's width, the spinner takes its place. */
+.btn-busy {
+  position: relative;
+}
+
+.btn-busy:disabled {
+  opacity: 0.75;
+}
+
+.btn-busy .btn-label {
+  visibility: hidden;
+}
+
+.btn-spinner {
+  position: absolute;
+  inset: 0;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 700ms linear infinite;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .btn kbd {
   font: inherit;
   font-size: var(--fs-caption);
@@ -259,12 +299,51 @@ select {
   border-color: var(--accent);
 }
 
+/* Skeletons — a placeholder drawn in the shape of what is still loading, so the
+   answer lands in a space already made for it instead of pushing the page around. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  background: var(--skeleton-base);
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--skeleton-sheen), transparent);
+  transform: translateX(-100%);
+  animation: skeleton-sweep var(--dur-shimmer) ease-in-out infinite;
+}
+
+@keyframes skeleton-sweep {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* One line of the text to come; its height follows the type around it. */
+.skeleton-line {
+  display: block;
+  height: 0.75em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     transition: none !important;
     animation: none !important;
+  }
+
+  /* Without the spin there is nothing to see, so the label stays instead. */
+  .btn-spinner {
+    display: none;
+  }
+
+  .btn-busy .btn-label {
+    visibility: visible;
   }
 }
 
@@ -286,6 +365,9 @@ select {
   --reader-bar: #d5dbe6;
   --reader-translation-bg: #eceff5;
   --reader-translation-text: #3d4556;
+  --reader-tap-wash: rgba(79, 91, 213, 0.24);
+  --skeleton-base: rgba(26, 29, 36, 0.1);
+  --skeleton-sheen: rgba(26, 29, 36, 0.17);
 }
 
 [data-reader-theme='dark'] {
@@ -301,6 +383,9 @@ select {
   --reader-bar: #2a3040;
   --reader-translation-bg: #1a1e26;
   --reader-translation-text: #b8c0cf;
+  --reader-tap-wash: rgba(124, 140, 255, 0.34);
+  --skeleton-base: rgba(238, 241, 245, 0.09);
+  --skeleton-sheen: rgba(238, 241, 245, 0.17);
 }
 
 [data-reader-theme] {

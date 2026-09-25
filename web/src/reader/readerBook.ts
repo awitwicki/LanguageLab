@@ -1,4 +1,6 @@
-import { decodeFb2 } from '../fb2/decode'
+import type { EpubBook } from '../books/epub'
+import { readBookSource } from '../books/format'
+import { BookFormatError } from '../books/formatError'
 
 /** One piece of a sentence: a word, or the text between words (spaces, punctuation). */
 export interface Token {
@@ -34,17 +36,6 @@ export interface ReaderPosition {
   sentenceIndex: number
 }
 
-export type BookFormatProblem = 'zipped' | 'invalid'
-
-export class BookFormatError extends Error {
-  readonly problem: BookFormatProblem
-
-  constructor(problem: BookFormatProblem) {
-    super(problem === 'zipped' ? 'Unzip the book first.' : "This file isn't a readable fb2 book.")
-    this.problem = problem
-  }
-}
-
 /** Elements whose text is one paragraph of the reader. <v> is a poem line. */
 const PARAGRAPH_TAGS = new Set(['p', 'v', 'subtitle', 'text-author'])
 
@@ -55,17 +46,41 @@ const sentenceSegmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
 const wordSegmenter = new Intl.Segmenter('en', { granularity: 'word' })
 
 /**
- * A file's bytes → the book. The same decoding as the import (windows-1251 books are common);
- * a zip is recognised by its "PK" signature and refused with its own message.
+ * A file's bytes → the book. `books/format.ts` decides what the file is (fb2, a zipped fb2, or an
+ * epub) and this only maps that onto the reader's shape. Synchronous: fflate's unzipSync and
+ * DOMParser both are, and workers do not start inside Telegram's web view.
  */
 export function readBookFile(buffer: ArrayBuffer, fileName: string): ReaderBook {
-  const head = new Uint8Array(buffer.slice(0, 2))
+  const source = readBookSource(buffer, fileName)
 
-  if (head[0] === 0x50 && head[1] === 0x4b) {
-    throw new BookFormatError('zipped')
+  return source.format === 'fb2' ? parseReaderBook(source.xml, source.fallbackTitle) : readerBookFromEpub(source.book)
+}
+
+/** An epub's documents are its chapters; sentence splitting is the same for both formats. */
+function readerBookFromEpub(epub: EpubBook): ReaderBook {
+  const chapters: ReaderChapter[] = []
+
+  for (const doc of epub.docs) {
+    const paragraphs: ReaderParagraph[] = []
+
+    for (const text of doc.paragraphs) {
+      const sentences = splitSentences(text)
+
+      if (sentences.length > 0) {
+        paragraphs.push({ sentences })
+      }
+    }
+
+    if (paragraphs.length > 0) {
+      chapters.push({ title: doc.title, paragraphs })
+    }
   }
 
-  return parseReaderBook(decodeFb2(buffer), fileName.replace(/\.fb2$/i, ''))
+  if (chapters.length === 0) {
+    throw new BookFormatError('invalid')
+  }
+
+  return { title: epub.title, author: epub.author, chapters }
 }
 
 /**

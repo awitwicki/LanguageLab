@@ -13,7 +13,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService.LookupAsync` (`LanguageLab.Application/Translation`) now caches a provider's answer into the shared vocabulary on every lookup, but nothing calls it from `BookImportService` or `WordSortingService.MarkAsync` yet (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation still don't enter exercises)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
-- [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
+- [x] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
 - [ ] Spacing tokens in the design system: `web/src/index.css` tokenizes color/typography/radii, but not spacing
 - [ ] Move a word back from "know" to "don't know" outside the exercise-start screen: the cross-out in the batch preview (`web/src/training/useBatchPreview.ts`) — "bring back" only works within the current visit; after that the word can only be reached via `POST /api/sorting/mark`
 - [ ] `ChapterStatsService.GetChapterViewsAsync`: one COUNT query per returned chapter (plus 3 whole-book queries per call) — also backs `GET /api/chapters/starred` on the home screen now, not just `GET /api/dictionaries/{id}`; merge into one GROUP BY if this ever becomes slow
@@ -25,7 +25,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Irregular-verbs "My words" screen: every verb with a state/group filter and a way to un-flag or jump straight to reviewing it
 - [ ] Irregular-verbs statistics screen: mistakes by group, family and `ErrorKind` (`VerbAttempt` already logs everything needed)
 - [ ] Irregular-verbs response-time signal: `VerbAttempt.ResponseMs` is logged but not used by the (future) review scheduling
-- [ ] Pronunciation trainer: a manual "reset progress" action for a word (`PronunciationProgressService`)
+- [x] Pronunciation trainer: a manual "reset progress" action for a word (`PronunciationProgressService`)
 - [ ] Pronunciation trainer: minimal-pair discrimination exercises (hear two words, pick which was said)
 - [ ] Pronunciation trainer: a cross-family mixed review session
 - [ ] Pronunciation trainer: spaced-repetition scheduling for resurfacing mastered words (same idea as the irregular-verbs trainer's own deferred SM-2 item)
@@ -33,11 +33,13 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Top-100/200/500/1000 English word dictionaries, public
 - [ ] Edit a personal word's translation after it was added (`web/src/screens/PersonalDictionaryScreen.tsx`, `PersonalDictionaryService`)
 - [ ] Book import inside the Telegram Mini App: the lemmatizing worker never starts there (the screen sat at "Starting the word extractor…" with no progress and no error event), while the same build works in a browser. `ImportScreen` now shows a "use a browser" notice instead of the file picker when `telegramInitData()` is set; find out why the module worker does not run in Telegram's webview and bring the import back there (`web/src/screens/ImportScreen.tsx`, `web/src/worker/parseBook.worker.ts`)
-- [ ] Reader: open `.fb2.zip` directly (now refused with "Unzip the book first." — `web/src/reader/readerBook.ts`, `readBookFile`)
+- [x] Reader: open `.fb2.zip` directly (`web/src/books/format.ts`, `readBookSource`)
 - [ ] Admin review of machine translations — `WordPair.TranslationOrigin = Machine` rows written by `TranslationService`
 - [ ] Reader: sentence positions and cached translation keys depend on `Intl.Segmenter`'s exact output, which can differ across browser engines/ICU versions — resume is best-effort at the sentence level; chapter/paragraph indices are stable and `clampPosition` (`web/src/reader/readerBook.ts`) prevents a crash either way
-- [ ] Reader: a fb2 with no `<section>` structure renders as a single chapter with the whole book's sentences in the DOM at once (no virtualization by design) — likely slow on a phone for a very long, sectionless book; see `collectChapters` in `web/src/reader/readerBook.ts`
-- [ ] Reader: `ReaderMenu` (`web/src/reader/ReaderMenu.tsx`) and the library's row action menu (`web/src/reader/ReaderLibraryScreen.tsx`, `RowMenu`) have no Escape-key or outside-click handler to close them
+- [ ] Reader: a fb2 with no `<section>` structure, or an epub whose whole text is one XHTML document, renders as a single chapter with the whole book's sentences in the DOM at once (no virtualization by design) — likely slow on a phone for a very long book; see `collectChapters` in `web/src/reader/readerBook.ts`
+- [ ] epub: split one XHTML document into chapters by the TOC's `#id` fragments — chapters now follow the spine, so a single-document epub is one chapter (`web/src/books/epub.ts`, `tocTitles` already resolves fragments away)
+- [ ] epub: images, tables and footnote panes are not shown — a footnote's text is dropped with its `epub:type` element, and `<table>` contributes only what its cells hold as paragraphs (`web/src/books/epub.ts`)
+- [x] Reader: `ReaderMenu` (`web/src/reader/ReaderMenu.tsx`) and the library's row action menu (`web/src/reader/ReaderLibraryScreen.tsx`, `RowMenu`) have no Escape-key or outside-click handler to close them
 - [ ] Automatic quality scoring of an import (share of words present in an English lexicon, language detection) so a good dictionary publishes without waiting on an admin — `BookImportService`; needs a server-side lexicon
 - [ ] User-facing reports on a published dictionary ("this is spam") feeding the same admin queue — `DictionaryPublicationService`
 - [ ] A one-off audit of shared `WordPair` rows that predate the import word rule — nothing cleans up what is already in the table
@@ -157,15 +159,20 @@ the code, validates the `id_token` and issues its own `ll_session` cookie. The c
 internal user id and a role, never Telegram's claims.
 
 The first person to sign in successfully becomes the administrator; everyone after them is a
-regular user. Regular users can use the dictionaries an admin made public but cannot import,
-delete or re-publish one. An **uploader** is a regular user who may also import books — an
-admin grants the role from **Users** in the account menu, where admins pick each account's
-role (user, uploader, admin) and ban or delete accounts. Uploaders choose whether an import is
-public, but re-publishing or deleting it afterwards stays with admins. A ban takes effect on
+regular user. Importing a book takes no role at all — every signed-in user may, and what they
+import stays private until an admin approves it from the moderation queue. Only an admin's own
+import is published without review, and deleting or re-publishing a dictionary stays with
+admins. There are just the two roles: an admin picks each account's (user, admin) from
+**Users** in the account menu, and bans or deletes accounts there. A ban takes effect on
 the banned user's next request, not at their next login. Anyone can delete their own account from the account menu
 (`DELETE /api/auth/me`) — a hard delete that takes their shelves and progress with it, while
 dictionaries they imported stay behind without an owner. The one exception is the last
 administrator, who is refused until someone else has been promoted.
+
+**Dropping the uploader role.** The `DropUploaderRole` migration moves any account still on the
+old uploader role back to the regular one. Their session cookie still spells the removed role,
+which no longer parses, so those accounts are signed out on their next request and simply sign
+in again — nothing they own is touched.
 
 **First deploy.** The migration leaves every existing account at the regular role, so right
 after a fresh deploy the instance has zero admins — the first person to sign in becomes one.

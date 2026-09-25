@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { CurrentUser } from '../api/client'
 import { roleLabel } from '../auth/roles'
+import { useDismiss } from '../lib/useDismiss'
 import './AccountMenu.css'
 
 interface Props {
@@ -17,31 +18,7 @@ export function AccountMenu({ user, onAdmin, onSignOut, onDeleteAccount }: Props
 
   // A menu that stays open after you click away or press Escape feels broken, and the
   // panel overlaps the content underneath it.
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-
-    const onPointerDown = (event: MouseEvent) => {
-      if (!root.current?.contains(event.target as Node)) {
-        setOpen(false)
-      }
-    }
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpen(false)
-      }
-    }
-
-    document.addEventListener('mousedown', onPointerDown)
-    document.addEventListener('keydown', onKeyDown)
-
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open])
+  useDismiss(open, useCallback(() => setOpen(false), []), root)
 
   const run = (action: () => void) => {
     setOpen(false)

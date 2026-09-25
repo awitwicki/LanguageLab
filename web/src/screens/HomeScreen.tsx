@@ -209,7 +209,7 @@ export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrai
       ) : (
         <>
           <p className="welcome-hint">
-            Nothing here yet. Import an .fb2 book — its words are split by chapter, ready to be
+            Nothing here yet. Import an .fb2 or .epub book — its words are split by chapter, ready to be
             sorted into “know” and “don’t know”.
           </p>
           <button type="button" className="btn btn-primary btn-lg" onClick={onImport}>

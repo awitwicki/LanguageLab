@@ -11,6 +11,14 @@
   color: var(--reader-text);
   border-top: 1px solid var(--reader-hairline);
   font-family: var(--font);
+  animation: word-panel-in var(--dur-sheet) var(--ease);
+}
+
+/* The panel slides up out of the edge it belongs to; word-panel-closing reverses it. */
+@keyframes word-panel-in {
+  from {
+    transform: translateY(100%);
+  }
 }
 
 .word-panel-closing {
@@ -90,9 +98,12 @@
   font: var(--fs-headline) / var(--lh-headline) var(--reader-font);
 }
 
-.word-panel-loading {
+/* Exactly the block the translation will occupy, so the panel keeps still when it lands. */
+.word-panel-skeleton {
+  display: flex;
+  align-items: center;
+  height: var(--lh-headline);
   margin: 0 0 12px;
-  color: var(--reader-muted);
 }
 
 .word-panel-error {
@@ -111,6 +122,12 @@
   margin: 6px 0 0;
   color: var(--reader-muted);
   font-size: var(--fs-caption);
+}
+
+/* Inline, so the empty row keeps exactly the line box the hint's text will fill. */
+.word-panel-hint .skeleton {
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .word-panel-actions .btn-primary {

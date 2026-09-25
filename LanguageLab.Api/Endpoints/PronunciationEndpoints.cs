@@ -42,6 +42,12 @@ public static class PronunciationEndpoints
             return exists ? Results.Ok(new NextWordDto(word is null ? null : ToDto(word))) : Results.NotFound();
         });
 
+        group.MapDelete("/words/{word}/progress", async (string word, PronunciationProgressService service, ICurrentUserContext currentUser) =>
+        {
+            var (userId, _) = currentUser.Require();
+            return await service.ResetWordAsync(userId, word) ? Results.NoContent() : Results.NotFound();
+        });
+
         group.MapPost("/words/{word}/attempts", async (string word, AttemptRequest request, PronunciationProgressService service, ICurrentUserContext currentUser) =>
         {
             var (userId, _) = currentUser.Require();

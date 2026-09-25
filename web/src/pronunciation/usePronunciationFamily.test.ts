@@ -8,6 +8,7 @@ const apiMock = vi.hoisted(() => ({
   getPronunciationFamily: vi.fn(),
   nextPronunciationWord: vi.fn(),
   submitPronunciationAttempt: vi.fn(),
+  resetPronunciationWord: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
@@ -55,6 +56,7 @@ beforeEach(() => {
   apiMock.getPronunciationFamily.mockReset().mockResolvedValue(family)
   apiMock.nextPronunciationWord.mockReset().mockResolvedValue({ word } satisfies PronunciationNextWord)
   apiMock.submitPronunciationAttempt.mockReset()
+  apiMock.resetPronunciationWord.mockReset().mockResolvedValue(null)
 })
 
 describe('usePronunciationFamily', () => {
@@ -240,5 +242,35 @@ describe('usePronunciationFamily', () => {
     await settle()
 
     expect(second.current.accent).toBe('uk')
+  })
+
+  it('resets the word on screen and serves the family again', async () => {
+    const hook = await renderHook(() => usePronunciationFamily('ih-vs-iy'))
+    await settle()
+
+    await act(async () => {
+      await hook.current.resetWord()
+    })
+    await settle()
+
+    expect(apiMock.resetPronunciationWord).toHaveBeenCalledWith('ship')
+    // Reloaded, so the card shows the word as New rather than its stale standing.
+    expect(apiMock.nextPronunciationWord).toHaveBeenCalledTimes(2)
+    expect(hook.current.status).toBe('ready')
+  })
+
+  it('keeps the word practisable when a reset fails', async () => {
+    apiMock.resetPronunciationWord.mockRejectedValue(new Error('500 Internal Server Error'))
+
+    const hook = await renderHook(() => usePronunciationFamily('ih-vs-iy'))
+    await settle()
+    await act(async () => {
+      await hook.current.resetWord()
+    })
+
+    expect(hook.current.attemptError).toMatch(/try again/i)
+    expect(hook.current.status).toBe('ready')
+    expect(hook.current.error).toBeNull()
+    expect(hook.current.word?.word).toBe('ship')
   })
 })

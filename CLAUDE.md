@@ -25,8 +25,9 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   `GET /api/dictionaries/personal`, `POST|DELETE /api/dictionaries/personal/words[/{id}]` — the personal dictionary; `GET /api/translate?word=` — a translation suggestion. `POST|DELETE /api/dictionaries/{id}/publication` — the owner offers a dictionary for publication or withdraws the offer; `GET /api/admin/dictionaries` — the moderation queue (`status` query param, defaults to `pending`), `POST /api/admin/dictionaries/{id}/approve|reject`, `DELETE /api/admin/users/{id}/dictionaries` — bulk-delete a user's dictionaries, for use alongside a ban.
   `/api/reader` — `GET /capabilities` (`sentenceTranslation`, always true — `FallbackSentenceTranslator` always has MyMemory to fall back on), `GET /books` (the reader's library), `PUT /books/{hash}` (register/refresh a book by its file hash, idempotent), `DELETE /books/{hash}`, `PUT /books/{hash}/position`, `GET /word-statuses`, `GET /words/{lemma}?dictionaryId=` (the word panel's lookup), `POST /words/{lemma}/learn`, `POST /words/{lemma}/known`, `POST /words/{lemma}/ignore`. `POST /api/translate/sentence` — the reader's sentence translation (DeepL when `Translation:DeepLApiKey` is set, MyMemory otherwise), 413 for a sentence MyMemory cannot take (over 500 bytes), 429 past the user's 20 000-characters-a-day quota (`SentenceQuota`), nothing stored.
 - `LanguageLab.TgBot/` — the Telegram bot: a Generic Host console app on `Telegram.Bot` (long polling), no database, no project references. `/start` (any private message) answers with the bot name, a description and an **Open LanguageLab** `web_app` button; the chat menu button is set to the same URL at startup. Config `Telegram:BotToken`, `WebApp:Url` (`BotOptions`); copy and keyboard in `StartMessage`; polling in `BotService`. Own Dockerfile and compose service.
-- `web/` — React + Vite SPA: fb2 import in the browser, dictionary stats, word sorting. `src/layout/` (shell: top bar + sidebar), `src/screens/`, `src/components/`, `src/lib/` (formatters), tests `*.test.ts(x)` next to the code (vitest + jsdom, helper `src/test/render.ts`). Details in [web/README.md](web/README.md).
-  `src/reader/` — the Reading mode: its own fb2 parser (`readerBook.ts`, sentence/word tokenizing, `.fb2.zip` refused with `BookFormatError`) and local storage (`bookStore.ts`, the book files themselves, IndexedDB — never uploaded — and `readerSettings.ts` for theme/dimming/font size), the library screen (`ReaderLibraryScreen.tsx`) and the full-screen reader (`ReaderScreen.tsx`, `Sentence.tsx`, `WordPanel.tsx`, `ReaderMenu.tsx`), word-status resolution (`wordStatus.ts`) and position sync with the server (`useReaderPosition.ts`, `useSentenceTranslations.ts`); `useAutoImport.ts` — an uploader or admin opening a book with no dictionary builds one in the background. `src/fb2/wordExtractor.ts` — the word-extraction worker behind a promise, shared by the import screen and the reader.
+- `web/` — React + Vite SPA: book import in the browser (fb2, epub, zipped fb2), dictionary stats, word sorting. `src/layout/` (shell: top bar + sidebar), `src/screens/`, `src/components/`, `src/lib/` (formatters, shared hooks such as `useDismiss` — Escape/outside-press closing for menus), tests `*.test.ts(x)` next to the code (vitest + jsdom, helper `src/test/render.ts`). Details in [web/README.md](web/README.md).
+  `src/reader/` — the Reading mode: its own reader-side parser (`readerBook.ts`, sentence/word tokenizing, fb2 and epub through `books/`) and local storage (`bookStore.ts`, the book files themselves, IndexedDB — never uploaded — and `readerSettings.ts` for theme/dimming/font size), the library screen (`ReaderLibraryScreen.tsx`) and the full-screen reader (`ReaderScreen.tsx`, `Sentence.tsx`, `WordPanel.tsx`, `ReaderMenu.tsx`), word-status resolution (`wordStatus.ts`) and position sync with the server (`useReaderPosition.ts`, `useSentenceTranslations.ts`); `useAutoImport.ts` — opening a book with no dictionary builds one in the background. `src/fb2/wordExtractor.ts` — the word-extraction worker behind a promise, shared by the import screen and the reader.
+  `src/books/` — everything format-dependent, and the only place that branches on format: `zip.ts` (fflate), `decode.ts` (`decodeXml` — the declared encoding, since fb2 books are often windows-1251), `epub.ts` (container → OPF → spine; one XHTML document per chapter, titles from the book's own TOC), `formatError.ts` (`BookFormatError`: `invalid` | `encrypted` — DRM), `format.ts` (`readBookSource`: the bytes decide the format, never the extension) and `toParsedBook.ts` (→ the import's `ParsedBook`). The reader's own shape is built in `reader/readerBook.ts`.
 - `extract.py` — Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictionaries under `dictionaries/`.
 
 ## Runtime
@@ -38,7 +39,9 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 - Auth is Telegram over OpenID Connect → an HttpOnly `ll_session` cookie holding an internal user
   id and role. `ICurrentUser` reads those claims; `ICurrentUserContext` adds the role. The first
   successful login becomes the admin. Bans take effect on the next request via the cookie's
-  `OnValidatePrincipal`. Development can use the same real flow — `http://localhost:5173/...` is
+  `OnValidatePrincipal`. The cookie is persistent (30 days, sliding — `OnSigningIn` sets
+  `IsPersistent`), and the Data Protection keys that encrypt it live in the `DataProtectionKeys`
+  table, so a redeploy does not sign everyone out. Development can use the same real flow — `http://localhost:5173/...` is
   a registered Allowed URL in @BotFather — or `GET /api/auth/dev-login`, a local sign-in as a
   dedicated account (Telegram id 1) that skips the handshake. It is fenced off from production
   three times over (`#if DEBUG` + Release publish, `IsDevelopment()`, `import.meta.env.DEV`) —
@@ -51,13 +54,15 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   `UserLoginService`. The SPA asks `/api/auth/me` first and posts only on a 401
   (`web/src/auth/useAuth.ts`; `web/src/auth/telegram.ts` is the only file touching
   `window.Telegram`). Telegram Web (browser iframe) is unsupported: `SameSite=Lax`.
-- Roles (`UserRole`: `User`, `Admin`, `Uploader` — appended, the column is an int): the `Importer`
-  policy is gone — importing a book takes no role at all, any signed-in user may. `Admin` is the
-  only named policy left (`LanguageLab.Api/Auth/AuthPolicies.cs`). `UserRoles.CanPublishDirectly(role)`
-  (`LanguageLab.Domain/Entities/UserRoles.cs`), mirrored by `web/src/auth/roles.ts`'s
-  `canPublishDirectly` (renamed from `canImport`), is true for `Uploader`/`Admin` and is the one
-  thing that still separates an uploader from a plain user: whether their import is published
-  without review. Admins set a user's role from the admin screen's picker.
+- Roles (`UserRole`: `User`, `Admin` — stored as an int). The `Importer` policy is gone, and so
+  is the `Uploader` role (dropped by the `DropUploaderRole` migration, which moves any account
+  still holding it back to `User`): importing a book takes no role at all, any signed-in user
+  may, and the publication queue — not a role — is what keeps an unreviewed import out of other
+  people's way. `Admin` is the only named policy left (`LanguageLab.Api/Auth/AuthPolicies.cs`).
+  `UserRoles.CanPublishDirectly(role)` (`LanguageLab.Domain/Entities/UserRoles.cs`), mirrored by
+  `web/src/auth/roles.ts`'s `canPublishDirectly`, is now true for `Admin` alone; it stays a named
+  predicate because the question at its call sites is whether an import skips review, not whether
+  the importer curates. Admins set a user's role from the admin screen's picker.
 - Dictionaries have an owner and a `PublicationStatus` (`Private | Pending | Published |
   Rejected`, default `Private`) in place of the old `IsPublic` flag. `POST /api/dictionaries/import`
   takes no role; its `requestPublication` flag only asks —
@@ -90,11 +95,11 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   `NULLS NOT DISTINCT`), shelved "don't know" on add. Shared vocabulary = `OwnerId IS NULL`; any
   lookup by word text must filter on it. `Translation:MyMemoryEmail` and `Translation:DeepLApiKey`
   are optional config.
-- The reader: the fb2 file stays in the browser (IndexedDB), never uploaded. The server keeps
+- The reader: the book file stays in the browser (IndexedDB), never uploaded. The server keeps
   only `ReaderBook` — the file's SHA-256 (`ReaderHash`), title, author, chapter count, and the
   reading position (chapter/paragraph/sentence index plus a 0..1 progress); on a position update
   from any device, the `clientUpdatedAt` timestamp decides and the later one wins, capped at the
-  server's own clock. `Dictionary.FileHash` is set on import (also a SHA-256 of the fb2), so the
+  server's own clock. `Dictionary.FileHash` is set on import (also a SHA-256 of the book file), so the
   reader can point a book at the dictionary it was imported as; dictionaries imported before this
   feature have none, so `ReaderBookService` falls back to a visible, non-personal dictionary whose
   `Name` equals the book's title — a hash match always wins over this name match — so opening or
@@ -116,9 +121,10 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   dictionary, so a cached word only becomes trainable once it belongs to one — the reader's Add to
   training shelves a word only in the dictionary of the book being read
   (`ReaderWordService.LearnTargetAsync`), otherwise it goes to "My words" with the cached
-  translation. Opening a book in the reader as an uploader or admin (outside Telegram) builds its
-  dictionary in the background — private, named after the book, leaf chapters — and the import
-  screen also puts an imported book in the reader.
+  translation. Opening a book in the reader (outside Telegram) builds its dictionary in the
+  background for any signed-in user — private, named after the book, leaf chapters, and bounded
+  by the same 20-imports-a-day limit as a manual import — and the import screen also puts an
+  imported book in the reader.
 - Migrations run automatically on startup (`dbContext.Database.MigrateAsync()` in [Program.cs:39](LanguageLab.Api/Program.cs#L39)).
 - The irregular-verbs trainer is a separate domain from dictionaries: the 68 verbs and their examples live in code (`LanguageLab.Domain/IrregularVerbs/IrregularVerbCatalog`), grouped into 4 pattern groups split into 15 families, every one open from the start (`LearningPath` only tells done families — 80 % learned — from available ones; nothing is locked). A user's standing on a verb (`VerbProgress`: `New → Learning1 → Learning2 → Learning3 → Learned`, or `Forgotten` via the Forgot button) drives `SessionPlanner`/`ExerciseFactory`, which build a stored queue of tasks (`VerbSession`/`VerbTask`) — seven exercise types (card, gap-fill choice, odd-one-out, match, form-pick, typed gap-fill, all-three-forms typing) with typical-mistake distractors (`DistractorGenerator`). `AnswerChecker` grades server-side and names the mistake (`ErrorKind`); every attempt is logged append-only (`VerbAttempt`). A mistake reinserts the verb 2 and 5 tasks later in the same session. `/api/irregular-verbs` (`GET /progress`, `POST /sessions`, `GET /sessions/{id}/next`, `POST /sessions/{id}/answer`, `POST /sessions/{id}/finish`, `POST /verbs/{v1}/forgot`). No `WordPair`, no dictionary, no seeding — the earlier per-form trainer's table was dropped and replaced by the `IrregularVerbTrainer` migration.
 - The pronunciation trainer is a separate domain from dictionaries and from the irregular-verbs
@@ -132,7 +138,8 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   (`PronunciationAnswerChecker` — a word-recognition proxy for pronunciation quality, not
   phoneme-level scoring), and every attempt is logged append-only (`PronunciationAttempt`).
   `/api/pronunciation` (`GET /progress`, `GET /families/{key}`, `GET /families/{key}/next`,
-  `POST /words/{word}/attempts`). Gated off entirely in browsers without `SpeechRecognition`
+  `POST /words/{word}/attempts`, `DELETE /words/{word}/progress` — the word card's Reset
+  progress, which drops the standing and keeps the attempt log). Gated off entirely in browsers without `SpeechRecognition`
   (Firefox, Safari) — no degraded fallback mode.
 - Training requires a non-empty `WordPair.Translation` (both for batch words and distractors). Translations for the "don't know" shelf were backfilled once on 2026-09-07 (`result/translations.txt`, local); auto-translation is in the README TODO.
 - Batch = the scope's most frequent learnable words (chapter or book frequency), deterministic; the web app shows a preview and passes `wordPairIds` explicitly.
@@ -159,6 +166,7 @@ dotnet ef --project LanguageLab.Infrastructure --startup-project LanguageLab.Api
 ## Frontend conventions (`web/`)
 
 - Design tokens (colors, typography, radii, motion) — only in `web/src/index.css`; component CSS uses only `var(--…)`, no hex. Light/dark theme — via `prefers-color-scheme`.
+  `web/src/index.contrast.test.ts` reads the tokens straight out of the CSS and fails if a button's label drops below WCAG AA (4.5:1) in either theme, at rest or hovered — add new filled buttons to its `BUTTONS` table.
 - CSS lives next to its component and is imported from its `.tsx`. New buttons — via `.btn` + `.btn-primary | .btn-secondary | .btn-quiet` (+ `.btn-lg`).
 - UI copy — English, sentence case, verb-first button labels. Keyboard shortcuts are shown as a separate `<kbd>`, not inline in the text.
 - Numbers — via `formatInt`/`wordsLabel` from `web/src/lib/format.ts`, class `.num` for tabular figures.

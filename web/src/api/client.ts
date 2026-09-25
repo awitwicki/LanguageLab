@@ -1,4 +1,4 @@
-export type UserRole = 'user' | 'uploader' | 'admin'
+export type UserRole = 'user' | 'admin'
 
 export interface CurrentUser {
   id: number
@@ -913,6 +913,10 @@ export const api = {
     request<PronunciationNextWord>(
       `/api/pronunciation/families/${encodeURIComponent(key)}/next?includeMastered=${includeMastered}`,
     ) as Promise<PronunciationNextWord>,
+
+  /** Back to New, as if never practised; the attempt log on the server is kept. */
+  resetPronunciationWord: (word: string) =>
+    request<null>(`/api/pronunciation/words/${encodeURIComponent(word)}/progress`, { method: 'DELETE' }),
 
   submitPronunciationAttempt: (word: string, accent: Accent, transcript: string) =>
     request<PronunciationAttemptResult>(`/api/pronunciation/words/${encodeURIComponent(word)}/attempts`, {

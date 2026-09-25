@@ -8,6 +8,7 @@ using LanguageLab.Application.Translation;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +18,14 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// The session cookie is encrypted with these keys. Left at the default they live inside the
+// container and are regenerated on every redeploy, which silently invalidates every cookie
+// issued before it — everybody is signed out. The fixed application name keeps the keys
+// readable whatever path the app is deployed to.
+builder.Services.AddDataProtection()
+    .SetApplicationName("LanguageLab")
+    .PersistKeysToDbContext<ApplicationDbContext>();
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ClaimsCurrentUser>();
@@ -92,6 +101,15 @@ var authentication = builder.Services
 
         options.ExpireTimeSpan = TimeSpan.FromDays(30);
         options.SlidingExpiration = true;
+
+        // Without IsPersistent the cookie is issued with no Expires at all — a browser-session
+        // cookie that dies with the tab or the app, so ExpireTimeSpan above never comes into
+        // play. Set here, it covers every sign-in: the OIDC callback, the Mini App and dev-login.
+        options.Events.OnSigningIn = context =>
+        {
+            context.Properties.IsPersistent = true;
+            return Task.CompletedTask;
+        };
 
         // This is an API, not a server-rendered site: answer with status codes instead of
         // redirecting to a login page that does not exist on the server.

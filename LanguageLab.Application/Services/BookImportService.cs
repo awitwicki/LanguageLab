@@ -11,7 +11,7 @@ public sealed record ImportChapter(int Order, string Title, IReadOnlyList<Import
 
 /// <summary>
 /// A book arrives with chapters; a flat list (like a "top 500") comes through Words.
-/// Exactly one of the two must be set. FileHash: SHA-256 of the fb2 file, for the reader.
+/// Exactly one of the two must be set. FileHash: SHA-256 of the book file, for the reader.
 /// </summary>
 public sealed record ImportRequest(
     string Name,
@@ -210,7 +210,7 @@ public class BookImportService
 
     /// <summary>
     /// The client already lowercases the words, but the same word can arrive twice —
-    /// deduplication is needed regardless. Words the fb2 tokenizer could never have produced
+    /// deduplication is needed regardless. Words the book tokenizer could never have produced
     /// are dropped here and counted, so the caller can refuse a file that is mostly junk.
     /// </summary>
     private static Dictionary<string, int> NormalizeWords(IReadOnlyList<ImportWord>? words, HashSet<string> dropped)

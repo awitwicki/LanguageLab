@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { api, type ReaderBookDto } from '../api/client'
 import { formatInt } from '../lib/format'
+import { useDismiss } from '../lib/useDismiss'
 import type { BookMeta, BookStore } from './bookStore'
 import { openBookFile } from './openBook'
 import './ReaderLibraryScreen.css'
@@ -16,13 +17,17 @@ function progressLabel(book: ReaderBookDto): string {
   return `Chapter ${formatInt(book.chapterIndex + 1)} of ${formatInt(book.chaptersCount)} · ${formatInt(Math.round(book.progress * 100))} %`
 }
 
-function RowMenu({ open, onToggle, actions }: {
+function RowMenu({ open, onToggle, onClose, actions }: {
   open: boolean
   onToggle: () => void
+  onClose: () => void
   actions: { label: string; run: () => void }[]
 }) {
+  const root = useRef<HTMLDivElement>(null)
+  useDismiss(open, onClose, root)
+
   return (
-    <div className="library-row-menu">
+    <div className="library-row-menu" ref={root}>
       <button type="button" className="btn btn-quiet" aria-label="More actions" aria-expanded={open} onClick={onToggle}>
         ⋯
       </button>
@@ -128,7 +133,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => pick(null)}>
           Open a book
         </button>
-        <input ref={input} type="file" accept=".fb2" hidden onChange={onFileChange} />
+        <input ref={input} type="file" accept=".fb2,.epub,.zip" hidden onChange={onFileChange} />
       </header>
 
       {!persistent && (
@@ -165,7 +170,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
         {local === null ? (
           <p className="library-empty">Loading…</p>
         ) : onDevice.length === 0 ? (
-          <p className="library-empty">No books on this device yet. Open an fb2 file to start reading.</p>
+          <p className="library-empty">No books on this device yet. Open an fb2 or epub file to start reading.</p>
         ) : (
           <ul className="library-list">
             {onDevice.map((book) => {
@@ -181,6 +186,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
                   <RowMenu
                     open={menuFor === book.hash}
                     onToggle={() => setMenuFor(menuFor === book.hash ? null : book.hash)}
+                    onClose={() => setMenuFor(null)}
                     actions={[
                       { label: 'Remove from this device', run: () => void removeFromDevice(book.hash) },
                       { label: 'Remove from library', run: () => void removeFromLibrary(book.hash) },
@@ -209,6 +215,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
                 <RowMenu
                   open={menuFor === book.fileHash}
                   onToggle={() => setMenuFor(menuFor === book.fileHash ? null : book.fileHash)}
+                  onClose={() => setMenuFor(null)}
                   actions={[{ label: 'Remove from library', run: () => void removeFromLibrary(book.fileHash) }]}
                 />
               </li>

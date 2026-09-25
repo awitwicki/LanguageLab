@@ -144,4 +144,65 @@ public class PronunciationProgressServiceTests
         Assert.Null(withoutMastered);
         Assert.NotNull(withMastered);
     }
+
+    [Fact]
+    public async Task ResetWordAsync_puts_a_practised_word_back_to_New()
+    {
+        await using var db = NewContext();
+        var service = new PronunciationProgressService(db);
+        var word = PronunciationCatalog.Words[0].Word;
+        await service.RecordAttemptAsync(1, word, Accent.Us, word, Now);
+
+        Assert.True(await service.ResetWordAsync(1, word));
+
+        var view = await service.GetFamilyAsync(1, PronunciationCatalog.Find(word)!.FamilyKey);
+        var after = view!.Words.Single(w => w.Word == word);
+        Assert.Equal(PronunciationState.New, after.State);
+        Assert.Equal(0, after.Streak);
+    }
+
+    [Fact]
+    public async Task ResetWordAsync_keeps_the_attempts_it_already_logged()
+    {
+        await using var db = NewContext();
+        var service = new PronunciationProgressService(db);
+        var word = PronunciationCatalog.Words[0].Word;
+        await service.RecordAttemptAsync(1, word, Accent.Us, word, Now);
+
+        await service.ResetWordAsync(1, word);
+
+        Assert.Single(await db.PronunciationAttempts.Where(a => a.UserId == 1 && a.Word == word).ToListAsync());
+    }
+
+    [Fact]
+    public async Task ResetWordAsync_leaves_the_same_word_alone_for_another_user()
+    {
+        await using var db = NewContext();
+        var service = new PronunciationProgressService(db);
+        var word = PronunciationCatalog.Words[0].Word;
+        await service.RecordAttemptAsync(1, word, Accent.Us, word, Now);
+        await service.RecordAttemptAsync(2, word, Accent.Us, word, Now);
+
+        await service.ResetWordAsync(1, word);
+
+        var other = await db.PronunciationProgresses.SingleAsync(p => p.UserId == 2 && p.Word == word);
+        Assert.Equal(PronunciationState.Learning, other.State);
+    }
+
+    [Fact]
+    public async Task ResetWordAsync_is_a_no_op_for_a_word_never_practised()
+    {
+        await using var db = NewContext();
+        var service = new PronunciationProgressService(db);
+
+        Assert.True(await service.ResetWordAsync(1, PronunciationCatalog.Words[0].Word));
+    }
+
+    [Fact]
+    public async Task ResetWordAsync_reports_a_word_the_catalog_does_not_have()
+    {
+        await using var db = NewContext();
+
+        Assert.False(await new PronunciationProgressService(db).ResetWordAsync(1, "notarealword"));
+    }
 }

@@ -73,6 +73,7 @@ export function PronunciationFamilyScreen({ familyKey, onBack }: Props) {
     reportAttemptError,
     next,
     practiceAgain,
+    resetWord,
   } = usePronunciationFamily(familyKey)
   const [listening, setListening] = useState(false)
   const active = useRef<SpeechRecognitionLike | null>(null)
@@ -254,6 +255,20 @@ export function PronunciationFamilyScreen({ familyKey, onBack }: Props) {
             >
               {recordLabel(status, listening, micStarting)}
             </button>
+            {/* Only worth offering once there is something to undo — a New word is already reset. */}
+            {word.state !== 'new' && (
+              <button
+                type="button"
+                className="btn btn-quiet"
+                onClick={() => {
+                  setAttempt(IDLE)
+                  void resetWord()
+                }}
+                disabled={listening || micStarting || status === 'scoring'}
+              >
+                Reset progress
+              </button>
+            )}
           </div>
 
           {attemptError && (

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { epub3Bytes } from '../test/epubFixtures'
 import { READER_BOOK_XML } from '../test/readerFixtures'
 import { MemoryBookStore } from './bookStore'
 import { sha256Hex } from './hash'
@@ -34,14 +35,18 @@ describe('openBookFile', () => {
   it('names the problem with an unreadable file', async () => {
     const store = new MemoryBookStore()
 
-    expect(await openBookFile(file(new Uint8Array([0x50, 0x4b, 3, 4]), 'book.fb2.zip'), store, null)).toEqual({
-      kind: 'error',
-      message: 'Unzip the book first.',
-    })
     expect(await openBookFile(file('<not fb2'), store, null)).toEqual({
       kind: 'error',
-      message: "This file isn't a readable fb2 book.",
+      message: "This file isn't a readable fb2 or epub book.",
     })
+  })
+
+  it('keeps an epub on the device like any other book', async () => {
+    const store = new MemoryBookStore()
+    const book = file(new Uint8Array(epub3Bytes()), 'deaths-end.epub')
+
+    expect((await openBookFile(book, store, null)).kind).toBe('opened')
+    expect((await store.list())[0]).toMatchObject({ title: "Death's End", author: 'Cixin Liu' })
   })
 })
 

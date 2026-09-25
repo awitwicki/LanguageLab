@@ -20,7 +20,7 @@ public class ReaderBook : BaseEntity
 
     public string Title { get; set; } = string.Empty;
 
-    /// <summary>Empty when the fb2 names no author.</summary>
+    /// <summary>Empty when the book names no author.</summary>
     public string Author { get; set; } = string.Empty;
 
     /// <summary>For "Chapter 7 of 30" on a device that does not have the file.</summary>
