@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import { parseBook } from '../fb2/chapters'
-import { decodeFb2 } from '../fb2/decode'
+import { readBookSource } from '../books/format'
+import { toParsedBook } from '../books/toParsedBook'
 import { createWordExtractor } from '../fb2/wordExtractor'
 
 export type AutoImport =
@@ -47,7 +47,7 @@ export function useAutoImport({ enabled, hash, title, bytes, onImported }: Optio
     setState({ status: 'running', done: 0, total: 0 })
 
     const run = async () => {
-      const { sections } = parseBook(decodeFb2(bytes))
+      const { sections } = toParsedBook(readBookSource(bytes, title))
       const chapters = await extractor.extract(sections, 'leaf', (done, total) => {
         if (!cancelled) setState({ status: 'running', done, total })
       })

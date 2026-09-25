@@ -1,7 +1,8 @@
 import { api } from '../api/client'
+import { BookFormatError } from '../books/formatError'
 import type { BookStore } from './bookStore'
 import { sha256Hex } from './hash'
-import { BookFormatError, readBookFile, type ReaderBook } from './readerBook'
+import { readBookFile, type ReaderBook } from './readerBook'
 
 export type OpenResult =
   | { kind: 'opened'; hash: string }
@@ -36,7 +37,7 @@ export async function openBookFile(file: File, store: BookStore, expectedHash: s
   } catch (e) {
     return {
       kind: 'error',
-      message: e instanceof BookFormatError ? e.message : "This file isn't a readable fb2 book.",
+      message: e instanceof BookFormatError ? e.message : "This file isn't a readable fb2 or epub book.",
     }
   }
 

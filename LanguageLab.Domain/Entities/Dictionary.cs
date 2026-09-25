@@ -31,7 +31,7 @@ public class Dictionary : BaseEntity
     public bool IsPersonal { get; set; }
 
     /// <summary>
-    /// Lowercase hex SHA-256 of the imported fb2 file (ReaderHash), so the reader can link a book
+    /// Lowercase hex SHA-256 of the imported book file (ReaderHash), so the reader can link a book
     /// it opens to this dictionary. Null for dictionaries imported before the reader existed and
     /// for flat imports.
     /// </summary>

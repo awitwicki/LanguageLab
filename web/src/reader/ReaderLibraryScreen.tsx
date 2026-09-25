@@ -133,7 +133,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
         <button type="button" className="btn btn-primary" disabled={busy} onClick={() => pick(null)}>
           Open a book
         </button>
-        <input ref={input} type="file" accept=".fb2" hidden onChange={onFileChange} />
+        <input ref={input} type="file" accept=".fb2,.epub,.zip" hidden onChange={onFileChange} />
       </header>
 
       {!persistent && (
@@ -170,7 +170,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
         {local === null ? (
           <p className="library-empty">Loading…</p>
         ) : onDevice.length === 0 ? (
-          <p className="library-empty">No books on this device yet. Open an fb2 file to start reading.</p>
+          <p className="library-empty">No books on this device yet. Open an fb2 or epub file to start reading.</p>
         ) : (
           <ul className="library-list">
             {onDevice.map((book) => {

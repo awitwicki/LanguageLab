@@ -114,7 +114,7 @@ describe('ReaderLibraryScreen', () => {
     await click(button(container, 'Open a book')!)
     await choose(container, 'PK\u0003\u0004', 'book.fb2.zip')
 
-    expect(container.querySelector('.library-error')!.textContent).toBe('Unzip the book first.')
+    expect(container.querySelector('.library-error')!.textContent).toBe("This file isn't a readable fb2 or epub book.")
   })
 
   it('removes a book from this device only, or from the library too', async () => {

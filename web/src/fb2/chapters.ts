@@ -1,3 +1,5 @@
+import { BookFormatError } from '../books/formatError'
+
 export interface SectionNode {
   title: string
   depth: number
@@ -27,6 +29,10 @@ export type ChapterMode = 'leaf' | number
  */
 export function parseBook(xml: string): ParsedBook {
   const doc = new DOMParser().parseFromString(xml, 'application/xml')
+
+  if (doc.getElementsByTagName('parsererror').length > 0) {
+    throw new BookFormatError('invalid')
+  }
 
   const bookTitle = doc.querySelector('description > title-info > book-title')?.textContent?.trim() ?? ''
 

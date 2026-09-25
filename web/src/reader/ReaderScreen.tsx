@@ -130,7 +130,7 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
           return
         }
 
-        const fileName = metas.find((meta) => meta.hash === hash)?.fileName ?? 'book.fb2'
+        const fileName = metas.find((meta) => meta.hash === hash)?.fileName ?? 'book'
 
         try {
           setLoad({ status: 'ready', book: readBookFile(bytes, fileName), bytes })

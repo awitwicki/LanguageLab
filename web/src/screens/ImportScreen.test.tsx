@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UploadProgress, UserRole } from '../api/client'
 import type { WorkerResponse } from '../worker/parseBook.worker'
 import { click, flush, render } from '../test/render'
+import { epub3Bytes } from '../test/epubFixtures'
+import { READER_BOOK_XML } from '../test/readerFixtures'
 import { MemoryBookStore } from '../reader/bookStore'
 import { ImportScreen } from './ImportScreen'
 
@@ -75,12 +77,12 @@ function progressValue(container: HTMLElement) {
 }
 
 /** Renders the screen and takes it to the preview: a book chosen, "Import" ready to press. */
-async function preview(bookStore?: MemoryBookStore, role: UserRole = 'user') {
+async function preview(bookStore?: MemoryBookStore, role: UserRole = 'user', chosen = new File([book], 'wool.fb2')) {
   const onImported = vi.fn()
   const { container } = await render(<ImportScreen onImported={onImported} role={role} bookStore={bookStore} />)
   const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
 
-  Object.defineProperty(input, 'files', { value: [new File([book], 'wool.fb2')] })
+  Object.defineProperty(input, 'files', { value: [chosen] })
 
   await act(async () => {
     input.dispatchEvent(new Event('change', { bubbles: true }))
@@ -127,6 +129,43 @@ describe('ImportScreen', () => {
     expect(container.querySelector<HTMLInputElement>('.field input')?.value).toBe('Wool')
     expect(container.querySelectorAll('.chapter-preview li')).toHaveLength(2)
     expect(importButton(container).disabled).toBe(false)
+  })
+
+  it('parses a chosen epub into a chapter preview', async () => {
+    const epub = new File([new Uint8Array(epub3Bytes())], 'deaths-end.epub')
+    const { container } = await preview(undefined, 'user', epub)
+
+    expect(container.querySelector<HTMLInputElement>('.field input')?.value).toBe("Death's End")
+    expect([...container.querySelectorAll('.chapter-preview li')].map((li) => li.textContent)).toEqual([
+      'The Swordholder',
+      'Year 62',
+      'Chapter Three',
+    ])
+    expect(importButton(container).disabled).toBe(false)
+  })
+
+  it('offers no chapter level for a book with no nesting', async () => {
+    const epub = new File([new Uint8Array(epub3Bytes())], 'deaths-end.epub')
+    const { container } = await preview(undefined, 'user', epub)
+
+    expect(container.querySelector('select')).toBeNull()
+  })
+
+  it('keeps the chapter level for a book whose sections nest', async () => {
+    const { container } = await preview(undefined, 'user', new File([READER_BOOK_XML], 'deaths-end.fb2'))
+
+    expect([...container.querySelectorAll('select option')].map((o) => o.textContent)).toEqual([
+      'Leaf sections',
+      'Level 1',
+      'Level 2',
+    ])
+  })
+
+  it('takes the file picker to both formats', async () => {
+    const { container } = await render(<ImportScreen onImported={() => {}} role="user" />)
+
+    expect(container.querySelector('input[type="file"]')?.getAttribute('accept')).toBe('.fb2,.epub,.zip')
+    expect(container.querySelector('.dropzone')?.textContent).toContain('.epub')
   })
 
   it('offers a plain user publication as a request, not a switch', async () => {
