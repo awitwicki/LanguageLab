@@ -1,0 +1,73 @@
+.drill-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.drill-head .footnote:last-child {
+  margin-left: auto;
+}
+
+.drill-card {
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+  text-align: center;
+  padding: 32px 20px;
+}
+
+.drill-prompt {
+  font-size: var(--fs-large);
+  line-height: var(--lh-large);
+  font-weight: 600;
+  margin: 0;
+}
+
+.drill-answer {
+  display: grid;
+  gap: 4px;
+  transition: filter var(--dur) var(--ease);
+}
+
+.drill-answer.is-blurred {
+  filter: blur(8px);
+  user-select: none;
+}
+
+.drill-triplet {
+  font-size: var(--fs-title);
+  line-height: var(--lh-title);
+  margin: 0;
+}
+
+.drill-translation {
+  color: var(--text-2);
+  margin: 0;
+}
+
+.drill-verdict,
+.drill-after {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  width: 100%;
+}
+
+.drill-verdict {
+  grid-auto-flow: column;
+  justify-content: center;
+}
+
+.drill-example {
+  color: var(--text-2);
+  margin: 0;
+}
+
+.drill-done {
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  text-align: center;
+  padding: 32px 20px;
+}

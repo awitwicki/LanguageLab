@@ -15,8 +15,8 @@ describe('modeOf', () => {
 
   it('puts the verb screens under Irregular verbs', () => {
     expect(modeOf('verbs')).toBe('verbs')
-    expect(modeOf('verbs-group')).toBe('verbs')
-    expect(modeOf('verbs-session')).toBe('verbs')
+    expect(modeOf('verbs-stage')).toBe('verbs')
+    expect(modeOf('verbs-drill')).toBe('verbs')
   })
 
   it('leaves admin outside any mode', () => {

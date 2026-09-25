@@ -1,62 +1,46 @@
 .verbs-intro {
-  margin: 4px 0 24px;
   color: var(--text-2);
+  margin: 0 0 24px;
 }
 
-.continue-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-  margin-bottom: 20px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--hairline));
-  border-radius: var(--r-lg);
-}
-
-.group-tiles {
+.stage-tiles {
   display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.stage-tile {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.stage-tile-title {
+  font-size: var(--fs-headline);
+  line-height: var(--lh-headline);
+  font-weight: 600;
+  margin: 0;
+}
+
+.stage-tile-caption {
+  margin: 0;
+}
+
+.verbs-free {
+  margin: 24px 0;
+}
+
+.verbs-all-title {
+  margin: 8px 0 16px;
+}
+
+.verbs-all-stage {
   margin-bottom: 24px;
 }
 
-.group-tile {
-  padding: 20px;
-  background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  display: grid;
-  gap: 10px;
-}
-
-.group-tile-title {
-  font-weight: 600;
-}
-
-.group-tile-caption {
-  color: var(--text-2);
-}
-
-.session-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-/* What the two cross-group sessions do, for anyone meeting the buttons for the first time. */
-.session-hint {
-  max-width: 60ch;
-  margin-bottom: 32px;
-}
-
-.verbs-notes {
-  padding-top: 16px;
-  border-top: 1px solid var(--hairline);
-  color: var(--text-2);
-  display: grid;
-  gap: 8px;
+.verbs-all-stage h3 {
+  margin: 0 0 8px;
 }

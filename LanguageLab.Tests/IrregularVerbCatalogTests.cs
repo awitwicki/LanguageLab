@@ -13,29 +13,41 @@ public class IrregularVerbCatalogTests
     }
 
     [Fact]
-    public void Families_follow_the_learning_path_with_the_expected_sizes()
+    public void Four_stages_hold_the_expected_counts_in_order()
     {
-        var sizes = IrregularVerbCatalog.Families.Select(f => IrregularVerbCatalog.VerbsOf(f.Key).Count);
-
-        Assert.Equal([9, 3, 5, 5, 2, 3, 2, 4, 8, 5, 6, 4, 3, 6, 3], sizes);
-        Assert.Equal([1, 2, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4], IrregularVerbCatalog.Families.Select(f => f.Group));
-        Assert.Equal(["same", "back", "ought"], IrregularVerbCatalog.Families.Take(3).Select(f => f.Key));
+        Assert.Equal(4, IrregularVerbCatalog.GroupCount);
+        Assert.Equal([9, 3, 29, 27], Enumerable.Range(1, 4).Select(g => IrregularVerbCatalog.VerbsOfGroup(g).Count));
+        Assert.Equal([1, 2, 3, 4], IrregularVerbCatalog.Verbs.Select(v => v.Group).Distinct());
+        Assert.Equal("All three forms differ", IrregularVerbCatalog.GroupTitle(4));
     }
 
     [Fact]
-    public void Every_verb_belongs_to_a_family_of_its_group_in_path_order()
+    public void Verbs_are_grouped_together_in_stage_order()
     {
-        var lastIndex = -1;
+        var groups = IrregularVerbCatalog.Verbs.Select(v => v.Group).ToList();
+        Assert.Equal(groups.OrderBy(g => g), groups);
+    }
 
-        foreach (var verb in IrregularVerbCatalog.Verbs)
-        {
-            var family = IrregularVerbCatalog.FamilyOf(verb);
-            Assert.Equal(verb.Group, family.Group);
+    [Fact]
+    public void Cumulative_scope_adds_up_the_earlier_stages()
+    {
+        Assert.Equal(9, IrregularVerbCatalog.VerbsUpToGroup(1).Count);
+        Assert.Equal(12, IrregularVerbCatalog.VerbsUpToGroup(2).Count);
+        Assert.Equal(68, IrregularVerbCatalog.VerbsUpToGroup(4).Count);
+    }
 
-            var index = IrregularVerbCatalog.FamilyIndex(family.Key);
-            Assert.True(index >= lastIndex, $"{verb.V1} is out of family order");
-            lastIndex = index;
-        }
+    /// <summary>A bare form has to identify one verb: the drill shows nothing else.</summary>
+    [Fact]
+    public void Every_form_in_the_catalog_belongs_to_exactly_one_verb()
+    {
+        var owners = IrregularVerbCatalog.Verbs
+            .SelectMany(v => new[] { v.V1 }.Concat(v.V2).Concat(v.V3).Distinct(StringComparer.Ordinal).Select(f => (Form: f, v.V1)))
+            .GroupBy(x => x.Form, StringComparer.Ordinal)
+            .Where(g => g.Select(x => x.V1).Distinct(StringComparer.Ordinal).Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+
+        Assert.Empty(owners);
     }
 
     [Fact]
@@ -63,61 +75,20 @@ public class IrregularVerbCatalogTests
     }
 
     [Fact]
-    public void Example_exposes_the_gap_and_plain_variants()
-    {
-        var example = IrregularVerbCatalog.Find("go")!.ExampleOf(Tense.Past);
-
-        Assert.Equal("went", example.Bracketed);
-        Assert.Equal("They ___ home early.", example.WithGap);
-        Assert.Equal("They went home early.", example.Plain);
-    }
-
-    [Fact]
     public void Alternative_forms_are_split_and_joined()
     {
         var be = IrregularVerbCatalog.Find("be")!;
-        var get = IrregularVerbCatalog.Find("get")!;
 
         Assert.Equal(["was", "were"], be.V2);
         Assert.Equal("be – was / were – been", be.Triplet);
-        Assert.Equal(["got", "gotten"], get.V3);
-        Assert.Equal(["get", "got", "gotten"], get.AllForms);
-        Assert.False(get.SecondAndThirdAlike);
-        Assert.True(IrregularVerbCatalog.Find("buy")!.SecondAndThirdAlike);
+        Assert.Equal(["got", "gotten"], IrregularVerbCatalog.Find("get")!.V3);
+        Assert.Equal("went", IrregularVerbCatalog.Find("go")!.ExampleOf(Tense.Past).Bracketed);
     }
 
     [Fact]
     public void Lookups()
     {
         Assert.Null(IrregularVerbCatalog.Find("walk"));
-        Assert.Null(IrregularVerbCatalog.FindFamily("nope"));
-        Assert.Equal(9, IrregularVerbCatalog.VerbsOfGroup(1).Count);
-        Assert.Equal(7, IrregularVerbCatalog.FamiliesOfGroup(3).Count);
-        Assert.Equal("All three forms differ", IrregularVerbCatalog.GroupTitle(4));
-        Assert.Contains("cat", IrregularVerbCatalog.Find("cut")!.Confusables!);
         Assert.NotNull(IrregularVerbCatalog.Find("read")!.Note);
-    }
-
-    [Fact]
-    public void Task_payload_round_trips_through_json()
-    {
-        var payload = new TaskPayload
-        {
-            Sentence = "They ___ home early.",
-            Tense = Tense.Past,
-            Options = ["went", "goed", "gone"],
-            Correct = "went",
-            Pairs = [new MatchPair("go", "went")],
-            Form = FormAsked.V2,
-        };
-
-        var back = TaskPayload.Deserialize(payload.Serialize());
-
-        Assert.Equal(payload.Sentence, back.Sentence);
-        Assert.Equal(Tense.Past, back.Tense);
-        Assert.Equal(payload.Options, back.Options);
-        Assert.Equal(payload.Pairs, back.Pairs);
-        Assert.Equal(FormAsked.V2, back.Form);
-        Assert.Null(back.Hint);
     }
 }

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LanguageLab.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260925201847_DropLegacyVerbTrainer")]
+    partial class DropLegacyVerbTrainer
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -494,84 +497,6 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.ToTable("UnknownWords");
                 });
 
-            modelBuilder.Entity("LanguageLab.Domain.Entities.VerbAnswer", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("Group")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("Known")
-                        .HasColumnType("boolean");
-
-                    b.Property<int>("Mode")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("PromptForm")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("ResponseMs")
-                        .HasColumnType("integer");
-
-                    b.Property<long>("UserId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Verb")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "CreatedAt");
-
-                    b.ToTable("VerbAnswers");
-                });
-
-            modelBuilder.Entity("LanguageLab.Domain.Entities.VerbKnowledge", b =>
-                {
-                    b.Property<long>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bigint");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
-
-                    b.Property<int>("Answers")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Knows")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("LastAnsweredAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<double>("Mastery")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("Streak")
-                        .HasColumnType("integer");
-
-                    b.Property<long>("UserId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("Verb")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "Verb")
-                        .IsUnique();
-
-                    b.ToTable("VerbKnowledges");
-                });
-
             modelBuilder.Entity("LanguageLab.Domain.Entities.WordPair", b =>
                 {
                     b.Property<long>("Id")
@@ -879,28 +804,6 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.Navigation("User");
 
                     b.Navigation("WordPair");
-                });
-
-            modelBuilder.Entity("LanguageLab.Domain.Entities.VerbAnswer", b =>
-                {
-                    b.HasOne("LanguageLab.Domain.Entities.TelegramUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("LanguageLab.Domain.Entities.VerbKnowledge", b =>
-                {
-                    b.HasOne("LanguageLab.Domain.Entities.TelegramUser", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("LanguageLab.Domain.Entities.WordPair", b =>

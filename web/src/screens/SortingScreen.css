@@ -104,25 +104,6 @@
   gap: 8px;
 }
 
-/* The one place where the semantic colors become a fill: this is the screen's primary action. */
-.btn-known {
-  background: color-mix(in srgb, var(--known) 18%, transparent);
-  color: color-mix(in srgb, var(--known) 45%, var(--text));
-}
-
-.btn-known:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--known) 26%, transparent);
-}
-
-.btn-unknown {
-  background: color-mix(in srgb, var(--unknown) 20%, transparent);
-  color: color-mix(in srgb, var(--unknown) 45%, var(--text));
-}
-
-.btn-unknown:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--unknown) 28%, transparent);
-}
-
 .card-done {
   display: grid;
   gap: 8px;

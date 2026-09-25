@@ -16,6 +16,13 @@
   --known: #34c759;
   --unknown: #ff9500;
   --danger: #ff3b30;
+  /* How well a verb is known, as a band. The bar's length carries the precision, so only
+     the zone needs a colour — three of the four are the palette's own semantic colours. */
+  --mastery-none: var(--surface-2);
+  --mastery-low: var(--danger);
+  --mastery-mid: var(--unknown);
+  --mastery-high: #ffcc00;
+  --mastery-top: var(--known);
   --glass: rgba(255, 255, 255, 0.72);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.06);
   /* A placeholder block and the sheen that crosses it. */
@@ -69,6 +76,7 @@
     --known: #30d158;
     --unknown: #ff9f0a;
     --danger: #ff453a;
+    --mastery-high: #ffd60a;
     --glass: rgba(28, 28, 30, 0.72);
     --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.5);
     --skeleton-base: rgba(255, 255, 255, 0.09);
@@ -231,6 +239,25 @@ select {
 
 .btn-quiet:hover:not(:disabled) {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/* Two screens share these: the sorting shelves and the irregular-verbs drill. */
+.btn-known {
+  background: color-mix(in srgb, var(--known) 18%, transparent);
+  color: color-mix(in srgb, var(--known) 45%, var(--text));
+}
+
+.btn-known:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--known) 26%, transparent);
+}
+
+.btn-unknown {
+  background: color-mix(in srgb, var(--unknown) 20%, transparent);
+  color: color-mix(in srgb, var(--unknown) 45%, var(--text));
+}
+
+.btn-unknown:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--unknown) 28%, transparent);
 }
 
 .btn-lg {

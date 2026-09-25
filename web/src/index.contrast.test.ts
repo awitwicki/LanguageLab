@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import theme from './index.css?raw'
-import sorting from './screens/SortingScreen.css?raw'
 import { contrastRatio, darkTokensOf, declarationOf, over, resolveColor, tokensOf, type Tokens } from './test/contrast'
 
 const THEMES: { name: string; tokens: Tokens }[] = [
@@ -13,8 +12,8 @@ const THEMES: { name: string; tokens: Tokens }[] = [
  * over, which matters only for the translucent ones: the sorting buttons live on `.card`.
  */
 const BUTTONS = [
-  { selector: '.btn-known', css: sorting, page: 'var(--surface)' },
-  { selector: '.btn-unknown', css: sorting, page: 'var(--surface)' },
+  { selector: '.btn-known', css: theme, page: 'var(--surface)' },
+  { selector: '.btn-unknown', css: theme, page: 'var(--surface)' },
   { selector: '.btn-primary', css: theme, page: 'var(--bg)' },
 ]
 

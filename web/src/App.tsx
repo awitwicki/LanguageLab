@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, type DictionaryListItem, type SessionStarted, type TrainingStarted } from './api/client'
+import { api, type DictionaryListItem, type DrillQuery, type TrainingStarted } from './api/client'
 import { useAuth } from './auth/useAuth'
 import { AppShell } from './layout/AppShell'
 import { modeOf, type AppMode } from './layout/mode'
@@ -14,9 +14,9 @@ import { LoginScreen } from './screens/LoginScreen'
 import { BannedScreen } from './screens/BannedScreen'
 import { AdminScreen } from './screens/AdminScreen'
 import { PersonalDictionaryScreen } from './screens/PersonalDictionaryScreen'
-import { VerbGroupScreen } from './verbs/VerbGroupScreen'
-import { VerbSessionScreen } from './verbs/VerbSessionScreen'
 import { VerbsScreen } from './verbs/VerbsScreen'
+import { VerbStageScreen } from './verbs/VerbStageScreen'
+import { VerbDrillScreen } from './verbs/VerbDrillScreen'
 import { PronunciationFamiliesScreen } from './pronunciation/PronunciationFamiliesScreen'
 import { PronunciationFamilyScreen } from './pronunciation/PronunciationFamilyScreen'
 import { ReaderLibraryScreen } from './reader/ReaderLibraryScreen'
@@ -40,8 +40,8 @@ type Route =
       started: TrainingStarted
     }
   | { name: 'verbs' }
-  | { name: 'verbs-group'; group: number }
-  | { name: 'verbs-session'; sessionId: number }
+  | { name: 'verbs-stage'; group: number }
+  | { name: 'verbs-drill'; query: DrillQuery; title: string }
   | { name: 'pronunciation' }
   | { name: 'pronunciation-family'; key: string }
   | { name: 'reader' }
@@ -104,8 +104,6 @@ export default function App() {
   // there, not on the book screen.
   const openDictionary = (id: number) =>
     setRoute(dictionaries?.find((d) => d.id === id)?.isPersonal ? { name: 'personal' } : { name: 'dictionary', id })
-
-  const startVerbSession = (started: SessionStarted) => setRoute({ name: 'verbs-session', sessionId: started.id })
 
   // A chapter (or the whole book) can be sorted, trained or reviewed from the book page and,
   // for starred chapters, from the home screen — the same three transitions either way.
@@ -290,25 +288,30 @@ export default function App() {
 
       {route.name === 'verbs' && (
         <VerbsScreen
-          onOpenGroup={(group) => setRoute({ name: 'verbs-group', group })}
-          onStartSession={startVerbSession}
+          onOpenStage={(group) => setRoute({ name: 'verbs-stage', group })}
+          onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
         />
       )}
 
-      {route.name === 'verbs-group' && (
-        <VerbGroupScreen
+      {route.name === 'verbs-stage' && (
+        <VerbStageScreen
           group={route.group}
+          onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
           onBack={() => setRoute({ name: 'verbs' })}
-          onStartSession={startVerbSession}
         />
       )}
 
-      {route.name === 'verbs-session' && (
-        <VerbSessionScreen
-          key={route.sessionId}
-          sessionId={route.sessionId}
-          onBack={() => setRoute({ name: 'verbs' })}
-          onRepeatErrors={startVerbSession}
+      {route.name === 'verbs-drill' && (
+        <VerbDrillScreen
+          query={route.query}
+          title={route.title}
+          onBack={() =>
+            setRoute(
+              route.query.group === undefined
+                ? { name: 'verbs' }
+                : { name: 'verbs-stage', group: route.query.group },
+            )
+          }
         />
       )}
 

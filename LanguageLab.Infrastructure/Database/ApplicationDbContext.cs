@@ -15,10 +15,8 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<KnownWord> KnownWords { get; set; }
     public DbSet<UnknownWord> UnknownWords { get; set; }
     public DbSet<WordProgress> WordProgresses { get; set; }
-    public DbSet<VerbProgress> VerbProgresses { get; set; }
-    public DbSet<VerbSession> VerbSessions { get; set; }
-    public DbSet<VerbTask> VerbTasks { get; set; }
-    public DbSet<VerbAttempt> VerbAttempts { get; set; }
+    public DbSet<VerbKnowledge> VerbKnowledges { get; set; }
+    public DbSet<VerbAnswer> VerbAnswers { get; set; }
     public DbSet<PronunciationProgress> PronunciationProgresses { get; set; }
     public DbSet<PronunciationAttempt> PronunciationAttempts { get; set; }
     public DbSet<Chapter> Chapters { get; set; }
@@ -116,38 +114,14 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
             .HasIndex(p => new { p.UserId, p.WordPairId })
             .IsUnique();
 
-        // The irregular-verbs trainer: one standing per user × verb, sessions with their
-        // task queue, and an append-only attempt log. Everything hangs off the user.
-        builder.Entity<VerbProgress>()
-            .HasIndex(p => new { p.UserId, p.Verb })
+        // The irregular-verbs trainer: one standing per user × verb, and an append-only
+        // log of every card they judged. Both hang off the user; there is no session.
+        builder.Entity<VerbKnowledge>()
+            .HasIndex(k => new { k.UserId, k.Verb })
             .IsUnique();
 
-        builder.Entity<VerbSession>()
-            .HasIndex(s => new { s.UserId, s.FinishedAt });
-
-        builder.Entity<VerbTask>()
-            .HasIndex(t => new { t.SessionId, t.Order });
-
-        builder.Entity<VerbTask>()
-            .HasOne(t => t.Session)
-            .WithMany(s => s.Tasks)
-            .HasForeignKey(t => t.SessionId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.Entity<VerbAttempt>()
+        builder.Entity<VerbAnswer>()
             .HasIndex(a => new { a.UserId, a.CreatedAt });
-
-        builder.Entity<VerbAttempt>()
-            .HasOne(a => a.Session)
-            .WithMany()
-            .HasForeignKey(a => a.SessionId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        builder.Entity<VerbAttempt>()
-            .HasOne(a => a.Task)
-            .WithMany()
-            .HasForeignKey(a => a.TaskId)
-            .OnDelete(DeleteBehavior.Cascade);
 
         // The pronunciation trainer: one standing per user × word, and an append-only attempt log.
         builder.Entity<PronunciationProgress>()

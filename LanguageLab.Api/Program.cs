@@ -200,9 +200,9 @@ builder.Services.AddScoped<ChapterStatsService>();
 builder.Services.AddScoped<StarredChapterService>();
 builder.Services.AddScoped<AdminUserService>();
 builder.Services.AddScoped<AccountService>();
-builder.Services.AddScoped<VerbProgressService>();
+builder.Services.AddScoped<VerbKnowledgeService>();
+builder.Services.AddScoped<VerbDrillService>();
 builder.Services.AddScoped<PronunciationProgressService>();
-builder.Services.AddScoped<VerbSessionService>();
 builder.Services.AddScoped<DictionaryDeletionService>();
 builder.Services.AddScoped<DictionaryPublicationService>();
 

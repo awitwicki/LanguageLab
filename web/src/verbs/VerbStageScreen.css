@@ -1,0 +1,14 @@
+.stage-back {
+  margin-bottom: 12px;
+}
+
+.stage-caption {
+  margin: 8px 0 0;
+}
+
+.stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0 24px;
+}

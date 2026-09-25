@@ -19,16 +19,10 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] `ChapterStatsService.GetChapterViewsAsync`: one COUNT query per returned chapter (plus 3 whole-book queries per call) — also backs `GET /api/chapters/starred` on the home screen now, not just `GET /api/dictionaries/{id}`; merge into one GROUP BY if this ever becomes slow
 - [ ] Shelf admin panel: list of all words in the DB, list of "know", list of "don't know", list of excluded — with the ability to un-mark (move back between shelves) right there
 - [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
-- [ ] Irregular-verbs review ("tonus") mode: SM-2-style scheduling (ease, interval, next-review date), the `Mastered` state, and the priority score for picking which due verbs to show (`VerbProgress.Ease`/`IntervalDays`/`NextReviewAt` are already stored, not read yet)
-- [ ] Irregular-verbs final exam: one-time 40-question mixed session after all groups are learned, 85% to pass, failing verbs become `Forgotten`
-- [ ] Irregular-verbs RAPID and SENTENCE_BUILD exercise types (not in the Phase 1 exercise catalog)
-- [ ] Irregular-verbs "My words" screen: every verb with a state/group filter and a way to un-flag or jump straight to reviewing it
-- [ ] Irregular-verbs statistics screen: mistakes by group, family and `ErrorKind` (`VerbAttempt` already logs everything needed)
-- [ ] Irregular-verbs response-time signal: `VerbAttempt.ResponseMs` is logged but not used by the (future) review scheduling
 - [x] Pronunciation trainer: a manual "reset progress" action for a word (`PronunciationProgressService`)
 - [ ] Pronunciation trainer: minimal-pair discrimination exercises (hear two words, pick which was said)
 - [ ] Pronunciation trainer: a cross-family mixed review session
-- [ ] Pronunciation trainer: spaced-repetition scheduling for resurfacing mastered words (same idea as the irregular-verbs trainer's own deferred SM-2 item)
+- [ ] Pronunciation trainer: spaced-repetition scheduling for resurfacing mastered words
 - [ ] Pronunciation trainer: record-and-replay the learner's own attempt for self-comparison
 - [ ] Top-100/200/500/1000 English word dictionaries, public
 - [ ] Edit a personal word's translation after it was added (`web/src/screens/PersonalDictionaryScreen.tsx`, `PersonalDictionaryService`)
