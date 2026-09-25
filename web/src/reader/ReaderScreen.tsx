@@ -287,10 +287,20 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
     [counts],
   )
 
-  const onStatusChange = useCallback(
-    (lemma: string, status: 'learning' | 'known') => setStatuses((previous) => new Map(previous).set(lemma, status)),
-    [],
-  )
+  // 'new' is the panel's undo: the word goes back to having no standing, and is highlighted again.
+  const onStatusChange = useCallback((lemma: string, status: 'learning' | 'known' | 'new') => {
+    setStatuses((previous) => {
+      const next = new Map(previous)
+
+      if (status === 'new') {
+        next.delete(lemma)
+      } else {
+        next.set(lemma, status)
+      }
+
+      return next
+    })
+  }, [])
 
   const onBodyClick = (event: MouseEvent) => {
     if (!(event.target as Element).closest('.reader-word, button')) setSelection(null)

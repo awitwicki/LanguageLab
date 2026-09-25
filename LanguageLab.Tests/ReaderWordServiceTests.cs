@@ -82,7 +82,7 @@ public class ReaderWordServiceTests
 
         var view = await Service(db).GetAsync(User, UserRole.User, "adjust", 10, CancellationToken.None);
 
-        Assert.Equal(new ReaderWordView("adjust", "налаштувати", TranslationSource.Dictionary, ReaderWordStatus.New, LearnTarget.Book), view);
+        Assert.Equal(new ReaderWordView("adjust", "налаштувати", TranslationSource.Dictionary, ReaderWordShelf.New, false, LearnTarget.Book), view);
     }
 
     /// <summary>A word the provider just translated is in no book: it can only go to My words.</summary>
@@ -228,5 +228,104 @@ public class ReaderWordServiceTests
 
         Assert.Equal(1, await db.Words.CountAsync(w => w.Word == "frank"));
         Assert.Equal(1, await db.ExcludedWords.CountAsync(e => e.UserId == User));
+    }
+
+    /// <summary>The panel's undo: offered for a shelved word, withheld once the word is in training.</summary>
+    [Fact]
+    public async Task A_shelved_word_can_be_reset_but_one_in_training_cannot()
+    {
+        await using var db = await ArrangeAsync();
+
+        var shelved = await Service(db).GetAsync(User, UserRole.User, "silo", 10, CancellationToken.None);
+
+        Assert.Equal(ReaderWordShelf.Known, shelved.Shelf);
+        Assert.True(shelved.CanReset);
+
+        db.WordProgresses.Add(new WordProgress { UserId = User, WordPairId = 3, Box = 2 });
+        await db.SaveChangesAsync();
+
+        Assert.False((await Service(db).GetAsync(User, UserRole.User, "silo", 10, CancellationToken.None)).CanReset);
+    }
+
+    [Fact]
+    public async Task Reset_takes_a_known_word_off_the_shelf()
+    {
+        await using var db = await ArrangeAsync();
+
+        var outcome = await Service(db).ResetAsync(User, "silo");
+
+        Assert.Equal(ResetOutcome.Cleared, outcome);
+        Assert.Equal(ReaderWordShelf.New, (await new ReaderWordStatusService(db).GetShelfAsync(User, "silo")).Shelf);
+    }
+
+    [Fact]
+    public async Task Reset_takes_an_ignored_word_off_the_shelf()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        await service.IgnoreAsync(User, "frank", Now);
+
+        await service.ResetAsync(User, "frank");
+
+        Assert.False(await db.ExcludedWords.AnyAsync(e => e.UserId == User));
+    }
+
+    [Fact]
+    public async Task Reset_takes_a_word_of_this_book_off_dont_know()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        await service.LearnAsync(User, UserRole.User, "adjust", 10, null, Now);
+
+        await service.ResetAsync(User, "adjust");
+
+        Assert.False(await db.UnknownWords.AnyAsync(u => u.UserId == User && u.WordPairId == 1));
+    }
+
+    /// <summary>Undoing "Add to training" has to take the word out of My words, or it keeps being trained.</summary>
+    [Fact]
+    public async Task Reset_removes_a_word_that_went_to_my_words()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        await service.LearnAsync(User, UserRole.User, "cold", 10, null, Now);
+
+        await service.ResetAsync(User, "cold");
+
+        Assert.False(await db.Words.AnyAsync(w => w.Word == "cold" && w.OwnerId == User));
+        Assert.False(await db.UnknownWords.AnyAsync(u => u.UserId == User));
+    }
+
+    [Fact]
+    public async Task Reset_is_refused_for_a_word_already_in_training()
+    {
+        await using var db = await ArrangeAsync();
+        db.WordProgresses.Add(new WordProgress { UserId = User, WordPairId = 3, Box = 2 });
+        await db.SaveChangesAsync();
+
+        var outcome = await Service(db).ResetAsync(User, "silo");
+
+        Assert.Equal(ResetOutcome.InTraining, outcome);
+        Assert.True(await db.KnownWords.AnyAsync(k => k.UserId == User && k.WordPairId == 3));
+    }
+
+    [Fact]
+    public async Task Resetting_a_word_on_no_shelf_is_harmless()
+    {
+        await using var db = await ArrangeAsync();
+
+        Assert.Equal(ResetOutcome.Cleared, await Service(db).ResetAsync(User, "adjust"));
+    }
+
+    [Fact]
+    public async Task Reset_leaves_another_learners_shelf_alone()
+    {
+        await using var db = await ArrangeAsync();
+        db.KnownWords.Add(new KnownWord { UserId = Other, WordPairId = 1, CreatedAt = Now });
+        await db.SaveChangesAsync();
+
+        await Service(db).ResetAsync(User, "adjust");
+
+        Assert.True(await db.KnownWords.AnyAsync(k => k.UserId == Other && k.WordPairId == 1));
     }
 }

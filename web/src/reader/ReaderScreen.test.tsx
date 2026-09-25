@@ -18,6 +18,7 @@ const apiMock = vi.hoisted(() => ({
   learnWord: vi.fn(),
   knowWord: vi.fn(),
   ignoreWord: vi.fn(),
+  resetWord: vi.fn(),
   translateSentence: vi.fn(),
   importDictionary: vi.fn(),
 }))
@@ -117,9 +118,11 @@ beforeEach(() => {
     lemma: 'adjust',
     translation: 'налаштувати',
     source: 'dictionary',
-    status: 'learning',
+    shelf: 'learning',
+    canReset: true,
     learnTarget: 'personal',
   })
+  apiMock.resetWord.mockReset().mockResolvedValue(null)
   apiMock.translateSentence.mockReset().mockResolvedValue({ status: 'ok', translation: 'Більшість чоловіків намагалися пристосуватися.' })
   FakeWorker.instances = []
   vi.stubGlobal('Worker', FakeWorker)
@@ -146,6 +149,20 @@ describe('ReaderScreen', () => {
 
     const adjust = [...container.querySelectorAll('.reader-word')].find((w) => w.textContent === 'adjust')!
     expect(adjust.className).toContain('reader-word-learning')
+  })
+
+  it('highlights a word as new again once the panel undoes its shelf', async () => {
+    const { container } = await openReader()
+    const word = () => [...container.querySelectorAll('.reader-word')].find((w) => w.textContent === 'adjust')!
+
+    await click(word())
+    await flush()
+    await click([...container.querySelectorAll('button')].find((b) => b.textContent === 'Add to training')!)
+    await flush()
+
+    expect(apiMock.resetWord).toHaveBeenCalledWith('adjust')
+    expect(word().className).toContain('reader-word-new')
+    expect(word().className).not.toContain('reader-word-learning')
   })
 
   it('says the book is missing when its file is not on this device', async () => {

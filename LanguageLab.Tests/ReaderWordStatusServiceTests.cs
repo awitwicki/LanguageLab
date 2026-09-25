@@ -77,4 +77,36 @@ public class ReaderWordStatusServiceTests
 
         Assert.Equal(expected, await new ReaderWordStatusService(db).GetAsync(User, word));
     }
+
+    /// <summary>
+    /// The word panel needs the shelf itself, not the highlight status: an ignored word is a
+    /// word the learner threw away, a known one is a word they already have.
+    /// </summary>
+    [Theory]
+    [InlineData("abide", ReaderWordShelf.Learning)]
+    [InlineData("silo", ReaderWordShelf.Known)]
+    [InlineData("holston", ReaderWordShelf.Ignored)]
+    [InlineData("run", ReaderWordShelf.Learning)]
+    [InlineData("ghost", ReaderWordShelf.New)]
+    [InlineData("nothing", ReaderWordShelf.New)]
+    public async Task One_word_sits_on_one_shelf(string word, ReaderWordShelf expected)
+    {
+        await using var db = await ArrangeAsync();
+
+        Assert.Equal(expected, (await new ReaderWordStatusService(db).GetShelfAsync(User, word)).Shelf);
+    }
+
+    /// <summary>What the panel's undo is guarded by: a Leitner row means the word is really being trained.</summary>
+    [Theory]
+    [InlineData("adjust", true)]
+    [InlineData("cold", true)]
+    [InlineData("abide", false)]
+    [InlineData("holston", false)]
+    [InlineData("nothing", false)]
+    public async Task A_word_with_a_leitner_row_is_in_training(string word, bool expected)
+    {
+        await using var db = await ArrangeAsync();
+
+        Assert.Equal(expected, (await new ReaderWordStatusService(db).GetShelfAsync(User, word)).InTraining);
+    }
 }
