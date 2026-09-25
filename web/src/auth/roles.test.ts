@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { canImport, ROLES, roleLabel } from './roles'
+import { canPublishDirectly, ROLES, roleLabel } from './roles'
 
 describe('roles', () => {
-  it('lets uploaders and admins import, not regular users', () => {
-    expect(canImport('user')).toBe(false)
-    expect(canImport('uploader')).toBe(true)
-    expect(canImport('admin')).toBe(true)
+  it('lets uploaders and admins publish directly, not regular users', () => {
+    expect(canPublishDirectly('user')).toBe(false)
+    expect(canPublishDirectly('uploader')).toBe(true)
+    expect(canPublishDirectly('admin')).toBe(true)
   })
 
   it('names every role for the screen', () => {

@@ -1,5 +1,6 @@
 using LanguageLab.Application.Translation;
 using LanguageLab.Domain;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace LanguageLab.Api.Endpoints;
 
@@ -30,7 +31,8 @@ public static class TranslationEndpoints
             }
 
             return Results.Ok(await translation.LookupAsync(normalized, cancellationToken));
-        }).RequireAuthorization();
+        }).RequireAuthorization()
+          .RequireRateLimiting(UserRateLimits.Translate);
 
         app.MapPost("/api/translate/sentence", TranslateSentenceAsync).RequireAuthorization();
     }

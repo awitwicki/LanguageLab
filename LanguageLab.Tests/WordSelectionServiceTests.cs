@@ -27,8 +27,10 @@ public class WordSelectionServiceTests
     {
         var db = NewContext();
 
-        var silo = new LanguageLab.Domain.Entities.Dictionary { Id = 1, Name = "silo1", WordsCount = 6 };
-        var other = new LanguageLab.Domain.Entities.Dictionary { Id = 2, Name = "other", WordsCount = 1 };
+        var silo = new LanguageLab.Domain.Entities.Dictionary
+        { Id = 1, Name = "silo1", WordsCount = 6, PublicationStatus = PublicationStatus.Published };
+        var other = new LanguageLab.Domain.Entities.Dictionary
+        { Id = 2, Name = "other", WordsCount = 1, PublicationStatus = PublicationStatus.Published };
 
         var learnableOne = Word(1, "abide", "дотримуватися");
         var learnableTwo = Word(2, "abdomen", "черевна порожнина");
@@ -371,9 +373,16 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
         db.Users.Add(new TelegramUser { Id = 2, TelegramUserId = 2222 });
-        db.Words.AddRange(
-            new WordPair { Id = 20, Word = "theirs", Translation = "їхнє", OwnerId = 2 },
-            new WordPair { Id = 21, Word = "mine", Translation = "моє", OwnerId = UserId });
+
+        // Each word sits in its owner's own personal dictionary, as it would in production —
+        // a personal word never floats free of a Dictionary row.
+        var theirPersonal = new Domain.Entities.Dictionary
+        { Name = "My words", WordsCount = 1, OwnerId = 2, PublicationStatus = PublicationStatus.Private, IsPersonal = true };
+        var myPersonal = new Domain.Entities.Dictionary
+        { Name = "My words", WordsCount = 1, OwnerId = UserId, PublicationStatus = PublicationStatus.Private, IsPersonal = true };
+        theirPersonal.Words = [new WordPair { Id = 20, Word = "theirs", Translation = "їхнє", OwnerId = 2 }];
+        myPersonal.Words = [new WordPair { Id = 21, Word = "mine", Translation = "моє", OwnerId = UserId }];
+        db.Dictionaries.AddRange(theirPersonal, myPersonal);
         await db.SaveChangesAsync();
 
         var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, dictionaryId: null, size: 60, new Random(1));
@@ -516,5 +525,51 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeAsync();
 
         Assert.Empty(await new WordSelectionService(db).GetLearnableByIdsAsync(UserId, DictionaryId, null, ids: []));
+    }
+
+    [Fact]
+    public async Task The_pool_never_reaches_into_a_dictionary_the_user_cannot_see()
+    {
+        await using var db = NewContext();
+
+        var mine = new Domain.Entities.Dictionary { Name = "Mine", WordsCount = 1, OwnerId = 1, PublicationStatus = PublicationStatus.Private };
+        var theirs = new Domain.Entities.Dictionary { Name = "Theirs", WordsCount = 1, OwnerId = 2, PublicationStatus = PublicationStatus.Private };
+        mine.Words = [new WordPair { Word = "silo", Translation = "бункер" }];
+        theirs.Words = [new WordPair { Word = "secret", Translation = "таємниця" }];
+
+        db.Dictionaries.AddRange(mine, theirs);
+
+        // A word cached by a reader lookup that never joined a dictionary: also out of the pool.
+        db.Words.Add(new WordPair { Word = "orphan", Translation = "сирота" });
+        await db.SaveChangesAsync();
+
+        var service = new WordSelectionService(db);
+        var pool = await service.GetDistractorPoolAsync(userId: 1, dictionaryId: mine.Id, size: 60, new Random(1));
+
+        Assert.DoesNotContain(pool, w => w.Word == "secret");
+        Assert.DoesNotContain(pool, w => w.Word == "orphan");
+        Assert.Contains(pool, w => w.Word == "silo");
+    }
+
+    [Fact]
+    public async Task A_public_dictionarys_words_still_fill_the_pool()
+    {
+        await using var db = NewContext();
+
+        var personal = new Domain.Entities.Dictionary
+        { Name = "My words", WordsCount = 1, OwnerId = 1, PublicationStatus = PublicationStatus.Private, IsPersonal = true };
+        personal.Words = [new WordPair { Word = "silo", Translation = "бункер", OwnerId = 1 }];
+
+        var shared = new Domain.Entities.Dictionary { Name = "Wool", WordsCount = 1, PublicationStatus = PublicationStatus.Published };
+        shared.Words = [new WordPair { Word = "cleaning", Translation = "чистка" }];
+
+        db.Dictionaries.AddRange(personal, shared);
+        await db.SaveChangesAsync();
+
+        var service = new WordSelectionService(db);
+        var pool = await service.GetDistractorPoolAsync(userId: 1, dictionaryId: personal.Id, size: 60, new Random(1));
+
+        Assert.Contains(pool, w => w.Word == "cleaning");
+        Assert.Contains(pool, w => w.Word == "silo");
     }
 }

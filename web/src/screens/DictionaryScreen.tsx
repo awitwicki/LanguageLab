@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react'
-import { api, type ChapterView, type DictionaryDetail, type TopWord, type TrainingStarted, type UserRole } from '../api/client'
+import {
+  api,
+  type ChapterView,
+  type DictionaryDetail,
+  type PublicationStatus,
+  type TopWord,
+  type TrainingStarted,
+  type UserRole,
+} from '../api/client'
 import { ChapterRow } from '../components/ChapterRow'
 import { ScopeProgress } from '../components/ScopeProgress'
 import { chaptersLabel, formatInt, wordsLabel } from '../lib/format'
 import { WHOLE_BOOK, chapterLabel } from '../lib/labels'
+import { PUBLICATION_STATUSES, publicationStatusLabel } from '../lib/publicationStatus'
 import './DictionaryScreen.css'
 
 interface Props {
@@ -23,6 +32,8 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
   const [visibilityBusy, setVisibilityBusy] = useState(false)
   const [visibilityError, setVisibilityError] = useState<string | null>(null)
+  const [publicationBusy, setPublicationBusy] = useState(false)
+  const [publicationError, setPublicationError] = useState<string | null>(null)
   const [deleteConfirming, setDeleteConfirming] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -78,20 +89,56 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
     }
   }
 
-  const toggleVisibility = async (isPublic: boolean) => {
+  const changeStatus = async (status: PublicationStatus) => {
     if (!detail) return
-    const previous = detail.isPublic
+    const previous = detail.status
     setVisibilityBusy(true)
     setVisibilityError(null)
-    setDetail({ ...detail, isPublic })
+    setDetail({ ...detail, status })
 
     try {
-      await api.setDictionaryVisibility(id, isPublic)
+      await api.setDictionaryStatus(id, status)
     } catch (e) {
-      setDetail((d) => (d ? { ...d, isPublic: previous } : d))
+      setDetail((d) => (d ? { ...d, status: previous } : d))
       setVisibilityError(String(e))
     } finally {
       setVisibilityBusy(false)
+    }
+  }
+
+  // The owner's own path, separate from the admin's direct status picker above: offers a
+  // private (or rejected) dictionary for review, optimistically, and reverts on failure.
+  const submitForReview = async () => {
+    if (!detail) return
+    const previous = detail.status
+    setPublicationBusy(true)
+    setPublicationError(null)
+    setDetail({ ...detail, status: 'pending' })
+
+    try {
+      await api.requestPublication(id)
+    } catch (e) {
+      setDetail((d) => (d ? { ...d, status: previous } : d))
+      setPublicationError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPublicationBusy(false)
+    }
+  }
+
+  const withdrawOffer = async () => {
+    if (!detail) return
+    const previous = detail.status
+    setPublicationBusy(true)
+    setPublicationError(null)
+    setDetail({ ...detail, status: 'private' })
+
+    try {
+      await api.withdrawPublication(id)
+    } catch (e) {
+      setDetail((d) => (d ? { ...d, status: previous } : d))
+      setPublicationError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setPublicationBusy(false)
     }
   }
 
@@ -313,19 +360,66 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
         )}
       </div>
 
+      {/* The owner's own publication request, separate from the admin's direct status picker
+          below: a non-admin viewer of a private/pending/rejected dictionary is necessarily its
+          owner (those statuses 404 for anyone else — DictionaryAccessService.Visible). */}
+      {role !== 'admin' && (
+        <section className="section dict-sharing">
+          <h2 className="title">Sharing</h2>
+          {detail.status === 'private' && (
+            <>
+              <p className="footnote">Only you can see this dictionary.</p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={publicationBusy}
+                onClick={() => void submitForReview()}
+              >
+                Submit for review
+              </button>
+            </>
+          )}
+          {detail.status === 'pending' && (
+            <>
+              <p className="footnote">Waiting for review.</p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={publicationBusy}
+                onClick={() => void withdrawOffer()}
+              >
+                Withdraw
+              </button>
+            </>
+          )}
+          {detail.status === 'published' && (
+            <p className="footnote">Everyone who signs in can see this dictionary.</p>
+          )}
+          {detail.status === 'rejected' && (
+            <p className="footnote">An administrator did not approve this dictionary.</p>
+          )}
+          {publicationError && <p className="footnote error">{publicationError}</p>}
+        </section>
+      )}
+
       {/* Admin-only housekeeping lives after the content: it is rare, and one of its buttons is irreversible. */}
       {role === 'admin' && (
         <section className="section dict-admin">
           <h2 className="title">Manage</h2>
           <label className="dict-visibility">
-            <input
-              type="checkbox"
-              checked={detail.isPublic}
+            Status
+            <select
+              value={detail.status}
               disabled={visibilityBusy}
-              onChange={(e) => void toggleVisibility(e.target.checked)}
-            />
-            Public
-            <span className="caption">everyone who signs in can see and sort it</span>
+              onChange={(e) => void changeStatus(e.target.value as PublicationStatus)}
+            >
+              {PUBLICATION_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {publicationStatusLabel(status)}
+                </option>
+              ))}
+            </select>
+            <span className="caption">published dictionaries are visible to everyone who signs in</span>
           </label>
           {visibilityError && <p className="footnote error">{visibilityError}</p>}
           <div className="dict-danger-zone">

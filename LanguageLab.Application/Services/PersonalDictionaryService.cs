@@ -33,6 +33,9 @@ public class PersonalDictionaryService
 {
     public const string Name = "My words";
 
+    /// <summary>Entries one bulk request may carry. Each one commits, so the list is a round-trip count.</summary>
+    public const int MaxBulkEntries = 500;
+
     private readonly ApplicationDbContext _dbContext;
     private readonly WordSelectionService _selection;
     private readonly LearningProgressService _learningProgress;
@@ -58,7 +61,7 @@ public class PersonalDictionaryService
         {
             Name = Name,
             OwnerId = userId,
-            IsPublic = false,
+            PublicationStatus = PublicationStatus.Private,
             IsPersonal = true,
             WordsCount = 0,
         };
@@ -148,6 +151,11 @@ public class PersonalDictionaryService
     public async Task<IReadOnlyList<BulkWordOutcome>> AddManyAsync(
         long userId, IReadOnlyList<BulkWordEntry> entries, DateTime nowUtc)
     {
+        if (entries.Count > MaxBulkEntries)
+        {
+            throw new ArgumentException($"Add at most {MaxBulkEntries} words at a time.");
+        }
+
         var outcomes = new List<BulkWordOutcome>(entries.Count);
 
         foreach (var entry in entries)

@@ -3,22 +3,25 @@ import { decodeFb2 } from '../fb2/decode'
 import { flattenChapters, parseBook, type ChapterMode, type SectionNode } from '../fb2/chapters'
 import { createWordExtractor, type WordExtractor } from '../fb2/wordExtractor'
 import type { AggregatedChapter } from '../fb2/aggregate'
-import { api } from '../api/client'
+import { api, type ImportResult, type UserRole } from '../api/client'
 import type { BookStore } from '../reader/bookStore'
 import { sha256Hex } from '../reader/hash'
 import { addBookToReader } from '../reader/openBook'
 import { openOutsideTelegram, telegramInitData } from '../auth/telegram'
+import { canPublishDirectly } from '../auth/roles'
 import { ProgressBar } from '../components/ProgressBar'
 import { formatBytes, formatInt, percentOf } from '../lib/format'
 import './ImportScreen.css'
 
 interface Props {
   onImported: (dictionaryId: number) => void
+  /** Decides whether the publication checkbox publishes directly or only requests review. */
+  role: UserRole
   /** The reader's store: an imported book is also put in the reader. Absent in tests of the import alone. */
   bookStore?: BookStore
 }
 
-type Stage = 'idle' | 'parsing' | 'preview' | 'aggregating' | 'uploading'
+type Stage = 'idle' | 'parsing' | 'preview' | 'aggregating' | 'uploading' | 'done'
 
 /** Chapters lemmatized so far; null until the worker has picked the request up. */
 type Extraction = { done: number; total: number } | null
@@ -26,17 +29,18 @@ type Extraction = { done: number; total: number } | null
 /** Bytes of the JSON body the browser has pushed out; null until it reports the first chunk. */
 type Upload = { sent: number; total: number } | null
 
-export function ImportScreen({ onImported, bookStore }: Props) {
+export function ImportScreen({ onImported, role, bookStore }: Props) {
   const [stage, setStage] = useState<Stage>('idle')
   const [error, setError] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [sections, setSections] = useState<SectionNode[]>([])
   const [maxDepth, setMaxDepth] = useState(1)
   const [mode, setMode] = useState<ChapterMode>('leaf')
-  const [isPublic, setIsPublic] = useState(true)
+  const [requestPublication, setRequestPublication] = useState(false)
   const [extraction, setExtraction] = useState<Extraction>(null)
   const [upload, setUpload] = useState<Upload>(null)
   const [fileHash, setFileHash] = useState<string | null>(null)
+  const [result, setResult] = useState<ImportResult | null>(null)
 
   const extractor = useRef<WordExtractor | null>(null)
   // The chosen file, kept for the reader once the import succeeds.
@@ -104,10 +108,10 @@ export function ImportScreen({ onImported, bookStore }: Props) {
     setUpload(null)
 
     try {
-      const result = await api.importDictionary(
+      const importResult = await api.importDictionary(
         {
           name,
-          isPublic,
+          requestPublication,
           fileHash: fileHash ?? undefined,
           chapters: extracted.map((c) => ({
             order: c.order,
@@ -125,12 +129,13 @@ export function ImportScreen({ onImported, bookStore }: Props) {
         void addBookToReader(bookStore, file.current.bytes, file.current.name, fileHash).catch(() => undefined)
       }
 
-      onImported(result.dictionaryId)
+      setResult(importResult)
+      setStage('done')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
       setStage('preview')
     }
-  }, [sections, mode, name, isPublic, fileHash, onImported, bookStore])
+  }, [sections, mode, name, requestPublication, fileHash, onImported, bookStore])
 
   const working = stage === 'aggregating' || stage === 'uploading'
 
@@ -208,31 +213,59 @@ export function ImportScreen({ onImported, bookStore }: Props) {
             ))}
           </ol>
 
-          <label className="field checkbox">
-            <input
-              type="checkbox"
-              checked={isPublic}
-              disabled={stage !== 'preview'}
-              onChange={(e) => setIsPublic(e.target.checked)}
-            />
-            Visible to all users
-          </label>
+          {stage !== 'done' && (
+            <>
+              <label className="field checkbox">
+                <input
+                  type="checkbox"
+                  checked={requestPublication}
+                  disabled={stage !== 'preview'}
+                  onChange={(e) => setRequestPublication(e.target.checked)}
+                />
+                {canPublishDirectly(role) ? 'Visible to all users' : 'Submit for review after import'}
+              </label>
 
-          <div>
-            <button
-              type="button"
-              className="btn btn-primary btn-lg"
-              disabled={stage !== 'preview' || chapters.length === 0}
-              onClick={onUpload}
-            >
-              {stage === 'aggregating' && 'Extracting words…'}
-              {stage === 'uploading' && 'Uploading…'}
-              {stage === 'preview' && 'Import'}
-            </button>
-          </div>
+              {!canPublishDirectly(role) && (
+                <p className="footnote">An administrator checks the dictionary before other users see it.</p>
+              )}
+
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-lg"
+                  disabled={stage !== 'preview' || chapters.length === 0}
+                  onClick={onUpload}
+                >
+                  {stage === 'aggregating' && 'Extracting words…'}
+                  {stage === 'uploading' && 'Uploading…'}
+                  {stage === 'preview' && 'Import'}
+                </button>
+              </div>
+            </>
+          )}
 
           {working && (
             <ImportStatus stage={stage} extraction={extraction} upload={upload} />
+          )}
+
+          {result && (
+            <>
+              <p className="footnote">
+                Dictionary created: <strong className="num">{formatInt(result.totalWords)}</strong> unique words
+              </p>
+              {result.droppedWords > 0 && (
+                <p className="footnote">
+                  Skipped: <strong className="num">{formatInt(result.droppedWords)}</strong> entries that are not English words.
+                </p>
+              )}
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => onImported(result.dictionaryId)}
+              >
+                Continue
+              </button>
+            </>
           )}
         </>
       )}

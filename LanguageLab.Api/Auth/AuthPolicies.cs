@@ -13,13 +13,8 @@ public static class AuthPolicies
     /// <summary>Curates dictionaries and the user list.</summary>
     public const string Admin = nameof(UserRole.Admin);
 
-    /// <summary>May import a book: uploaders, and admins as a superset.</summary>
-    public const string Importer = "Importer";
-
     public static void Configure(AuthorizationOptions options)
     {
         options.AddPolicy(Admin, policy => policy.RequireClaim(ClaimTypes.Role, nameof(UserRole.Admin)));
-        options.AddPolicy(Importer, policy => policy.RequireClaim(
-            ClaimTypes.Role, nameof(UserRole.Admin), nameof(UserRole.Uploader)));
     }
 }

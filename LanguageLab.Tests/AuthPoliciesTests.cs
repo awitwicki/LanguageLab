@@ -33,13 +33,4 @@ public class AuthPoliciesTests
     {
         Assert.Equal(expected, await AllowsAsync(AuthPolicies.Admin, role));
     }
-
-    [Theory]
-    [InlineData(UserRole.User, false)]
-    [InlineData(UserRole.Uploader, true)]
-    [InlineData(UserRole.Admin, true)]
-    public async Task Importer_policy_admits_uploaders_and_admins(UserRole role, bool expected)
-    {
-        Assert.Equal(expected, await AllowsAsync(AuthPolicies.Importer, role));
-    }
 }

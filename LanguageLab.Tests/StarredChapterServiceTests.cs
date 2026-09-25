@@ -26,9 +26,9 @@ public class StarredChapterServiceTests
             new TelegramUser { Id = Stranger, TelegramUserId = 22 });
 
         db.Dictionaries.AddRange(
-            new Domain.Entities.Dictionary { Id = 10, Name = "Wool", OwnerId = Owner, IsPublic = true },
-            new Domain.Entities.Dictionary { Id = 20, Name = "Private", OwnerId = Owner, IsPublic = false },
-            new Domain.Entities.Dictionary { Id = 30, Name = "Dune", OwnerId = null, IsPublic = true });
+            new Domain.Entities.Dictionary { Id = 10, Name = "Wool", OwnerId = Owner, PublicationStatus = PublicationStatus.Published },
+            new Domain.Entities.Dictionary { Id = 20, Name = "Private", OwnerId = Owner, PublicationStatus = PublicationStatus.Private },
+            new Domain.Entities.Dictionary { Id = 30, Name = "Dune", OwnerId = null, PublicationStatus = PublicationStatus.Published });
 
         db.Chapters.AddRange(
             new Chapter { Id = 1, DictionaryId = 10, Order = 0, Title = "Holston", WordsCount = 3 },
@@ -145,7 +145,7 @@ public class StarredChapterServiceTests
         var service = Service(db);
         await service.StarAsync(Stranger, UserRole.User, 1, Now);
 
-        (await db.Dictionaries.SingleAsync(d => d.Id == 10)).IsPublic = false;
+        (await db.Dictionaries.SingleAsync(d => d.Id == 10)).PublicationStatus = PublicationStatus.Private;
         await db.SaveChangesAsync();
 
         Assert.Empty(await service.GetStarredAsync(Stranger, UserRole.User, Now));

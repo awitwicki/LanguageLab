@@ -22,7 +22,7 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   `Auth/` (claims, session validation, the OIDC event handlers), `/api/auth/*`
   (telegram/start, the handler-owned telegram/callback, telegram/webapp, me, logout), `/api/admin/users*`
   (list, ban, unban, role, delete);
-  `GET /api/dictionaries/personal`, `POST|DELETE /api/dictionaries/personal/words[/{id}]` — the personal dictionary; `GET /api/translate?word=` — a translation suggestion.
+  `GET /api/dictionaries/personal`, `POST|DELETE /api/dictionaries/personal/words[/{id}]` — the personal dictionary; `GET /api/translate?word=` — a translation suggestion. `POST|DELETE /api/dictionaries/{id}/publication` — the owner offers a dictionary for publication or withdraws the offer; `GET /api/admin/dictionaries` — the moderation queue (`status` query param, defaults to `pending`), `POST /api/admin/dictionaries/{id}/approve|reject`, `DELETE /api/admin/users/{id}/dictionaries` — bulk-delete a user's dictionaries, for use alongside a ban.
   `/api/reader` — `GET /capabilities` (`sentenceTranslation`, always true — `FallbackSentenceTranslator` always has MyMemory to fall back on), `GET /books` (the reader's library), `PUT /books/{hash}` (register/refresh a book by its file hash, idempotent), `DELETE /books/{hash}`, `PUT /books/{hash}/position`, `GET /word-statuses`, `GET /words/{lemma}?dictionaryId=` (the word panel's lookup), `POST /words/{lemma}/learn`, `POST /words/{lemma}/known`, `POST /words/{lemma}/ignore`. `POST /api/translate/sentence` — the reader's sentence translation (DeepL when `Translation:DeepLApiKey` is set, MyMemory otherwise), 413 for a sentence MyMemory cannot take (over 500 bytes), 429 past the user's 20 000-characters-a-day quota (`SentenceQuota`), nothing stored.
 - `LanguageLab.TgBot/` — the Telegram bot: a Generic Host console app on `Telegram.Bot` (long polling), no database, no project references. `/start` (any private message) answers with the bot name, a description and an **Open LanguageLab** `web_app` button; the chat menu button is set to the same URL at startup. Config `Telegram:BotToken`, `WebApp:Url` (`BotOptions`); copy and keyboard in `StartMessage`; polling in `BotService`. Own Dockerfile and compose service.
 - `web/` — React + Vite SPA: fb2 import in the browser, dictionary stats, word sorting. `src/layout/` (shell: top bar + sidebar), `src/screens/`, `src/components/`, `src/lib/` (formatters), tests `*.test.ts(x)` next to the code (vitest + jsdom, helper `src/test/render.ts`). Details in [web/README.md](web/README.md).
@@ -51,13 +51,40 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   `UserLoginService`. The SPA asks `/api/auth/me` first and posts only on a 401
   (`web/src/auth/useAuth.ts`; `web/src/auth/telegram.ts` is the only file touching
   `window.Telegram`). Telegram Web (browser iframe) is unsupported: `SameSite=Lax`.
-- Roles (`UserRole`: `User`, `Admin`, `Uploader` — appended, the column is an int): an uploader
-  may import books and nothing more. The named policies live in
-  `LanguageLab.Api/Auth/AuthPolicies.cs` (`Admin`, `Importer` = admin or uploader); the SPA
-  mirrors them in `web/src/auth/roles.ts` (`canImport`, `roleLabel`). Admins set a user's role
-  from the admin screen's picker.
-- Dictionaries have an owner and an `IsPublic` flag: import is for admins and uploaders, delete
-  and visibility changes are admin-only, and non-admins see public dictionaries plus their own.
+- Roles (`UserRole`: `User`, `Admin`, `Uploader` — appended, the column is an int): the `Importer`
+  policy is gone — importing a book takes no role at all, any signed-in user may. `Admin` is the
+  only named policy left (`LanguageLab.Api/Auth/AuthPolicies.cs`). `UserRoles.CanPublishDirectly(role)`
+  (`LanguageLab.Domain/Entities/UserRoles.cs`), mirrored by `web/src/auth/roles.ts`'s
+  `canPublishDirectly` (renamed from `canImport`), is true for `Uploader`/`Admin` and is the one
+  thing that still separates an uploader from a plain user: whether their import is published
+  without review. Admins set a user's role from the admin screen's picker.
+- Dictionaries have an owner and a `PublicationStatus` (`Private | Pending | Published |
+  Rejected`, default `Private`) in place of the old `IsPublic` flag. `POST /api/dictionaries/import`
+  takes no role; its `requestPublication` flag only asks —
+  `BookImportService.StatusFor(role, requestPublication)` decides the outcome: `Private` when
+  publication wasn't requested, `Published` when it was and `CanPublishDirectly(role)`, `Pending`
+  otherwise. The owner offers or withdraws the request
+  (`POST|DELETE /api/dictionaries/{id}/publication`); an admin decides from the moderation queue
+  (`GET /api/admin/dictionaries`, `POST /api/admin/dictionaries/{id}/approve|reject`). Non-admins
+  see `Published` dictionaries plus their own; admins see every non-personal one. Delete
+  (`DELETE /api/dictionaries/{id}`) stays admin-only and now also removes any shared `WordPair`
+  rows the deletion orphans — rows left in no dictionary and carrying no shelf/progress/training
+  row for anyone (`DictionaryDeletionService`); `DELETE /api/admin/users/{id}/dictionaries`
+  bulk-deletes a user's dictionaries the same way, for use alongside a ban.
+- Import validation (`BookImportService`, `LanguageLab.Domain`): a word must be lowercase ASCII
+  letters, 3-64 characters (`ImportWordText`) or it's dropped from the import; an import where
+  more than 20% of its distinct words are invalid is refused outright. Limits: 50,000 distinct
+  words and 2,000 chapters per import (`BookImportService.MaxWords`/`MaxChapters`), names and
+  chapter titles truncated at 300 characters (`TitleText.MaxLength`), a 16 MB request-body cap on
+  `/api/dictionaries/import` itself, and bulk personal-word import capped at 500 entries
+  (`PersonalDictionaryService.MaxBulkEntries`). `Dictionary.FileHash` (set on import, a SHA-256 of
+  the fb2 — see "The reader" below) is kept only when the importer's own `ReaderBook` library
+  already has that hash; otherwise it's dropped even if the client sent one. This is not proof
+  the hash is genuine — a client can register any hash first — but it raises the bar past a
+  casual collision or a drive-by import with no `ReaderBook` at all. The real backstop against a
+  stranger's junk import reaching other readers is publication review, not this check: an
+  unreviewed import is `Private`, invisible to everyone but its owner and admins regardless of
+  what hash it claims.
 - Personal dictionary: one private `Dictionary` per user (`IsPersonal`, created on first use by
   `GET /api/dictionaries`), words are `WordPair` rows with `OwnerId` set (unique on `(Word, OwnerId)`,
   `NULLS NOT DISTINCT`), shelved "don't know" on add. Shared vocabulary = `OwnerId IS NULL`; any
@@ -75,7 +102,13 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   `Translation:DeepLApiKey` is optional — without it MyMemory translates sentences too, capped by
   `MyMemorySentenceBudget`: a server-wide daily budget of 40 % of MyMemory's own daily limit
   (2 000 characters without `Translation:MyMemoryEmail`, 20 000 with it), spent only on a sentence
-  actually sent, so the reader cannot exhaust the quota the word lookups also share. Provider word
+  actually sent, so the reader cannot exhaust the quota the word lookups also share; the word
+  lookups get the remaining 60 % as `MyMemoryWordBudget`, the same `DailyCharacterBudget`
+  mechanism (`LanguageLab.Application/Translation/DailyCharacterBudget.cs`) wrapped the other way
+  round. Per-user daily rate limits (`UserRateLimits`, sliding windows, in-memory like
+  `SentenceQuota`) sit in front of the three endpoints one account could otherwise make expensive
+  for everybody: 20 `/api/dictionaries/import` requests, 500 `GET /api/translate` lookups, 20
+  bulk personal-word-import requests, per day. Provider word
   translations (`TranslationService.LookupAsync`, used both by `GET /api/translate` and the
   reader's word panel) are cached into the shared vocabulary as a `WordPair` row with
   `TranslationOrigin = Machine`, so the same word is looked up at most once; a `Manual` translation

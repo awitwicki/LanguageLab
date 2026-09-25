@@ -31,6 +31,7 @@ public class TrainingSessionServiceTests
             Id = DictionaryId,
             Name = "silo1",
             WordsCount = words.Count,
+            PublicationStatus = PublicationStatus.Published,
             Words = words
         };
 

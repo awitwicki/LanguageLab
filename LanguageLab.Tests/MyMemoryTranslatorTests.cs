@@ -12,22 +12,34 @@ public class MyMemoryTranslatorTests
     private sealed class StubHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _respond;
+        private readonly Action? _onRequest;
 
         public HttpRequestMessage? LastRequest { get; private set; }
 
-        public StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) => _respond = respond;
+        public StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond, Action? onRequest = null)
+        {
+            _respond = respond;
+            _onRequest = onRequest;
+        }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             LastRequest = request;
+            _onRequest?.Invoke();
             return Task.FromResult(_respond(request));
         }
     }
 
-    private static MyMemoryTranslator Translator(StubHandler handler, string? email = null) =>
+    // A generous default so the ~10 tests below, each doing a single short lookup, never come
+    // anywhere near the new word budget by accident; only the budget test below overrides it.
+    private static MyMemoryWordBudget GenerousBudget() =>
+        new(Options.Create(new TranslationOptions()));
+
+    private static MyMemoryTranslator Translator(StubHandler handler, string? email = null, MyMemoryWordBudget? budget = null) =>
         new(
             new HttpClient(handler) { BaseAddress = new Uri(MyMemoryTranslator.BaseUrl) },
             Options.Create(new TranslationOptions { MyMemoryEmail = email }),
+            budget ?? GenerousBudget(),
             NullLogger<MyMemoryTranslator>.Instance);
 
     private static HttpResponseMessage Json(string body, HttpStatusCode status = HttpStatusCode.OK) =>
@@ -134,5 +146,26 @@ public class MyMemoryTranslatorTests
         var handler = new StubHandler(_ => throw new IOException("connection reset"));
 
         Assert.Null(await Translator(handler).TranslateAsync("apple", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task A_lookup_past_the_daily_budget_never_reaches_the_provider()
+    {
+        var calls = 0;
+        var handler = new StubHandler(_ => Json(Apple), onRequest: () => calls++);
+        var budget = new MyMemoryWordBudget(Options.Create(new TranslationOptions()));
+        var translator = Translator(handler, budget: budget);
+
+        // 3 000 characters is the anonymous word budget (5 000 * 0.6); spend it, then ask once more.
+        for (var i = 0; i < 600; i++)
+        {
+            await translator.TranslateAsync("abcde", CancellationToken.None);
+        }
+
+        var spent = calls;
+        var result = await translator.TranslateAsync("abcde", CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Equal(spent, calls);
     }
 }

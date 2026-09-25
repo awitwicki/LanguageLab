@@ -9,6 +9,7 @@ using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
@@ -168,6 +169,7 @@ if (telegram.IsConfigured)
 }
 
 builder.Services.AddAuthorization(AuthPolicies.Configure);
+builder.Services.AddRateLimiter(UserRateLimits.Configure);
 
 builder.Services.AddScoped<BookImportService>();
 builder.Services.AddScoped<WordSortingService>();
@@ -183,9 +185,14 @@ builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<VerbProgressService>();
 builder.Services.AddScoped<PronunciationProgressService>();
 builder.Services.AddScoped<VerbSessionService>();
+builder.Services.AddScoped<DictionaryDeletionService>();
+builder.Services.AddScoped<DictionaryPublicationService>();
 
 // MyMemory is keyless; the optional contact email only raises its daily quota.
 builder.Services.Configure<TranslationOptions>(builder.Configuration.GetSection(TranslationOptions.SectionName));
+// Word lookups through MyMemory get 60% of its daily quota, server-wide — see MyMemoryWordBudget
+// — so one account looping over GET /api/translate cannot empty the day for everyone else.
+builder.Services.AddSingleton<MyMemoryWordBudget>();
 builder.Services.AddHttpClient<ITranslator, MyMemoryTranslator>(client =>
 {
     client.BaseAddress = new Uri(MyMemoryTranslator.BaseUrl);
@@ -262,6 +269,7 @@ app.UseStaticFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 
 app.MapAuthEndpoints();
 app.MapDictionaryEndpoints();

@@ -1,6 +1,6 @@
 import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AdminUser, AdminUserPage } from '../api/client'
+import { api, type AdminUser, type AdminUserPage, type PendingDictionaryPage } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { AdminScreen } from './AdminScreen'
 
@@ -53,9 +53,14 @@ function choose(select: HTMLSelectElement, value: string) {
   })
 }
 
+function buttons(container: HTMLElement) {
+  return [...container.querySelectorAll<HTMLButtonElement>('button')]
+}
+
 afterEach(() => {
   vi.unstubAllGlobals()
   vi.useRealTimers()
+  vi.restoreAllMocks()
 })
 
 describe('AdminScreen', () => {
@@ -197,6 +202,33 @@ describe('AdminScreen', () => {
     expect(deleted).toBe(true)
   })
 
+  it('asks for confirmation before deleting a user\'s dictionaries', async () => {
+    let sent: { path: string; method: string } | null = null
+
+    respond((path, method) => {
+      if (method === 'DELETE' && path === '/api/admin/users/2/dictionaries') {
+        sent = { path, method }
+        return { status: 200, body: { count: 3 } }
+      }
+
+      return { status: 200, body: page(users) }
+    })
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    const row = container.querySelectorAll('tbody tr')[1]
+
+    await click(row.querySelector('.delete-dictionaries')!)
+    expect(sent).toBeNull()
+    expect(row.querySelector('.delete-dictionaries')?.textContent).toBe('Confirm deletion')
+
+    await click(row.querySelector('.delete-dictionaries')!)
+    await flush()
+
+    expect(sent).toEqual({ path: '/api/admin/users/2/dictionaries', method: 'DELETE' })
+  })
+
   it('shows how many users match', async () => {
     respond(() => ({ status: 200, body: page(users, { total: 41 }) }))
 
@@ -290,5 +322,73 @@ describe('AdminScreen', () => {
 
     expect(container.querySelector('.user-name')?.textContent).toBe('Ada Vance')
     expect(container.querySelector('.admin-pager')).toBeNull()
+  })
+})
+
+describe('AdminScreen — dictionaries tab', () => {
+  const queue: PendingDictionaryPage = {
+    items: [
+      {
+        id: 7,
+        name: 'Wool',
+        ownerId: 3,
+        ownerName: 'Juliette N',
+        wordsCount: 4210,
+        status: 'pending',
+        topWords: ['silo', 'cleaning', 'abide'],
+      },
+    ],
+    total: 1,
+    page: 1,
+    pageSize: 25,
+  }
+
+  it('lists the dictionaries waiting for review', async () => {
+    respond(() => ({ status: 200, body: page(users) }))
+    const list = vi.spyOn(api, 'listPendingDictionaries').mockResolvedValue(queue)
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    await click(buttons(container).find((b) => b.textContent === 'Dictionaries')!)
+    await flush()
+
+    expect(list).toHaveBeenCalled()
+    expect(container.textContent).toContain('Wool')
+    expect(container.textContent).toContain('Juliette N')
+    expect(container.textContent).toContain('silo')
+  })
+
+  it('approves a dictionary and reloads the queue', async () => {
+    respond(() => ({ status: 200, body: page(users) }))
+    const list = vi.spyOn(api, 'listPendingDictionaries').mockResolvedValue(queue)
+    const approve = vi.spyOn(api, 'approveDictionary').mockResolvedValue(null)
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    await click(buttons(container).find((b) => b.textContent === 'Dictionaries')!)
+    await flush()
+    await click(buttons(container).find((b) => b.textContent === 'Approve')!)
+    await flush()
+
+    expect(approve).toHaveBeenCalledWith(7)
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects a dictionary', async () => {
+    respond(() => ({ status: 200, body: page(users) }))
+    vi.spyOn(api, 'listPendingDictionaries').mockResolvedValue(queue)
+    const reject = vi.spyOn(api, 'rejectDictionary').mockResolvedValue(null)
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+
+    await click(buttons(container).find((b) => b.textContent === 'Dictionaries')!)
+    await flush()
+    await click(buttons(container).find((b) => b.textContent === 'Reject')!)
+    await flush()
+
+    expect(reject).toHaveBeenCalledWith(7)
   })
 })

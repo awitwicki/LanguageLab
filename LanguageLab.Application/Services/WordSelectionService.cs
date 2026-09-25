@@ -154,9 +154,15 @@ public class WordSelectionService
     /// </summary>
     public async Task<IReadOnlyList<WordPair>> GetDistractorPoolAsync(long userId, long? dictionaryId, int size, Random rng)
     {
+        // Only words the user could meet on their own screens. The top-up branch below used to
+        // reach the whole table, so any translated shared row — including one cached by someone
+        // else's reader lookup — could appear as an option in this user's exercise.
+        // Deliberately not the admin superset: an admin's exercise reads better from the books
+        // they can actually see, and a distractor is not a curation tool.
         var visible = _dbContext.Words
             .Where(w => w.Translation != "")
-            .Where(w => w.OwnerId == null || w.OwnerId == userId);
+            .Where(w => w.OwnerId == null || w.OwnerId == userId)
+            .Where(w => w.Dictionaries.Any(d => d.PublicationStatus == PublicationStatus.Published || d.OwnerId == userId));
 
         var picked = new List<long>(size);
 

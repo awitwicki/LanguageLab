@@ -1,3 +1,4 @@
+using LanguageLab.Domain;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
@@ -25,8 +26,6 @@ public sealed record ReaderBookView(
 /// </summary>
 public class ReaderBookService
 {
-    public const int MaxTitleLength = 300;
-
     private readonly ApplicationDbContext _dbContext;
     private readonly DictionaryAccessService _access;
 
@@ -56,8 +55,8 @@ public class ReaderBookService
     public async Task<ReaderBookView> RegisterAsync(
         long userId, UserRole role, string fileHash, string title, string author, int chaptersCount, DateTime nowUtc)
     {
-        title = Truncate(title.Trim());
-        author = Truncate(author.Trim());
+        title = TitleText.Truncate(title.Trim());
+        author = TitleText.Truncate(author.Trim());
 
         if (title.Length == 0)
         {
@@ -170,8 +169,11 @@ public class ReaderBookService
             .GroupBy(d => d.FileHash!)
             .ToDictionary(g => g.Key, g => g.Min(d => d.Id));
 
+        // A name match is a courtesy for dictionaries imported before FileHash existed. It is
+        // not evidence, so it is not allowed to reach across users: only the caller's own
+        // dictionaries and ownerless system ones qualify. A hash match still wins over it.
         var byTitle = (await visible
-                .Where(d => d.FileHash == null && titles.Contains(d.Name))
+                .Where(d => d.FileHash == null && titles.Contains(d.Name) && (d.OwnerId == null || d.OwnerId == userId))
                 .Select(d => new { d.Id, d.Name })
                 .ToListAsync())
             .GroupBy(d => d.Name)
@@ -206,7 +208,4 @@ public class ReaderBookService
             book.Progress,
             book.UpdatedAt,
             dictionaries.TryGetValue(book.FileHash, out var id) ? id : null);
-
-    private static string Truncate(string value) =>
-        value.Length <= MaxTitleLength ? value : value[..MaxTitleLength];
 }

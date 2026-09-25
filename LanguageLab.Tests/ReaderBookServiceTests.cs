@@ -13,6 +13,13 @@ public class ReaderBookServiceTests
     private static readonly string Wool = new('a', 64);
     private static readonly string Hidden = new('b', 64);
     private static readonly string Dune = new('c', 64);
+    private static readonly string Hash = new('f', 64);
+
+    /// <summary>A bare, unseeded context — for the two tests below that need full control over which dictionaries exist.</summary>
+    private static ApplicationDbContext NewContext() =>
+        new(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options);
 
     /// <summary>"Wool" is a public dictionary imported from file Wool; "Hidden" is Other's private one from file Hidden.</summary>
     private static async Task<ApplicationDbContext> ArrangeAsync()
@@ -26,8 +33,8 @@ public class ReaderBookServiceTests
             new TelegramUser { Id = Other, TelegramUserId = 22 });
 
         db.Dictionaries.AddRange(
-            new Domain.Entities.Dictionary { Id = 10, Name = "Wool", IsPublic = true, FileHash = Wool },
-            new Domain.Entities.Dictionary { Id = 20, Name = "Hidden", OwnerId = Other, IsPublic = false, FileHash = Hidden });
+            new Domain.Entities.Dictionary { Id = 10, Name = "Wool", PublicationStatus = PublicationStatus.Published, FileHash = Wool },
+            new Domain.Entities.Dictionary { Id = 20, Name = "Hidden", OwnerId = Other, PublicationStatus = PublicationStatus.Private, FileHash = Hidden });
 
         await db.SaveChangesAsync();
         return db;
@@ -107,7 +114,7 @@ public class ReaderBookServiceTests
     public async Task A_legacy_dictionary_with_no_file_hash_is_linked_by_the_books_title()
     {
         await using var db = await ArrangeAsync();
-        db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 30, Name = "Legacy Book", IsPublic = true, FileHash = null });
+        db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 30, Name = "Legacy Book", PublicationStatus = PublicationStatus.Published, FileHash = null });
         await db.SaveChangesAsync();
 
         var view = await Service(db).RegisterAsync(Reader, UserRole.User, new('d', 64), "Legacy Book", "", 3, Now);
@@ -119,7 +126,7 @@ public class ReaderBookServiceTests
     public async Task A_same_titled_dictionary_with_a_different_file_hash_is_not_linked_by_name()
     {
         await using var db = await ArrangeAsync();
-        db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 31, Name = "Legacy Book", IsPublic = true, FileHash = new('e', 64) });
+        db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 31, Name = "Legacy Book", PublicationStatus = PublicationStatus.Published, FileHash = new('e', 64) });
         await db.SaveChangesAsync();
 
         var view = await Service(db).RegisterAsync(Reader, UserRole.User, new('d', 64), "Legacy Book", "", 3, Now);
@@ -133,8 +140,8 @@ public class ReaderBookServiceTests
         await using var db = await ArrangeAsync();
         var hash = new string('d', 64);
         db.Dictionaries.AddRange(
-            new Domain.Entities.Dictionary { Id = 32, Name = "Something else", IsPublic = true, FileHash = hash },
-            new Domain.Entities.Dictionary { Id = 33, Name = "Legacy Book", IsPublic = true, FileHash = null });
+            new Domain.Entities.Dictionary { Id = 32, Name = "Something else", PublicationStatus = PublicationStatus.Published, FileHash = hash },
+            new Domain.Entities.Dictionary { Id = 33, Name = "Legacy Book", PublicationStatus = PublicationStatus.Published, FileHash = null });
         await db.SaveChangesAsync();
 
         var view = await Service(db).RegisterAsync(Reader, UserRole.User, hash, "Legacy Book", "", 3, Now);
@@ -148,7 +155,7 @@ public class ReaderBookServiceTests
         await using var db = await ArrangeAsync();
         db.Dictionaries.Add(new Domain.Entities.Dictionary
         {
-            Id = 34, Name = "Their Legacy Book", OwnerId = Other, IsPublic = false, FileHash = null,
+            Id = 34, Name = "Their Legacy Book", OwnerId = Other, PublicationStatus = PublicationStatus.Private, FileHash = null,
         });
         await db.SaveChangesAsync();
 
@@ -163,7 +170,7 @@ public class ReaderBookServiceTests
         await using var db = await ArrangeAsync();
         db.Dictionaries.Add(new Domain.Entities.Dictionary
         {
-            Id = 35, Name = "My words", OwnerId = Reader, IsPersonal = true, IsPublic = false, FileHash = null,
+            Id = 35, Name = "My words", OwnerId = Reader, IsPersonal = true, PublicationStatus = PublicationStatus.Private, FileHash = null,
         });
         await db.SaveChangesAsync();
 
@@ -235,5 +242,48 @@ public class ReaderBookServiceTests
 
         Assert.True(await service.RemoveAsync(Reader, Wool));
         Assert.Empty(await service.ListAsync(Reader, UserRole.User));
+    }
+
+    [Fact]
+    public async Task A_legacy_name_match_only_links_the_users_own_or_a_system_dictionary()
+    {
+        await using var db = NewContext();
+
+        // Someone else's public dictionary named exactly like the book must not be linked.
+        db.Dictionaries.Add(new Domain.Entities.Dictionary
+        {
+            Name = "Wool", WordsCount = 1, OwnerId = 99, PublicationStatus = PublicationStatus.Published, FileHash = null,
+        });
+        await db.SaveChangesAsync();
+
+        var service = Service(db);
+        await service.RegisterAsync(userId: 1, UserRole.User, Hash, "Wool", "Howey", 2, DateTime.UtcNow);
+
+        var books = await service.ListAsync(userId: 1, UserRole.User);
+
+        Assert.Null(books.Single().DictionaryId);
+    }
+
+    // Review Focus 4: two dictionaries of the same file must resolve the same way every time.
+    [Fact]
+    public async Task Two_dictionaries_with_the_same_hash_resolve_to_the_lowest_id()
+    {
+        await using var db = NewContext();
+
+        db.Dictionaries.Add(new Domain.Entities.Dictionary
+        { Name = "Wool", WordsCount = 1, OwnerId = 1, PublicationStatus = PublicationStatus.Private, FileHash = Hash });
+        db.Dictionaries.Add(new Domain.Entities.Dictionary
+        { Name = "Wool again", WordsCount = 1, OwnerId = 1, PublicationStatus = PublicationStatus.Private, FileHash = Hash });
+        await db.SaveChangesAsync();
+
+        var service = Service(db);
+        await service.RegisterAsync(userId: 1, UserRole.User, Hash, "Wool", "Howey", 2, DateTime.UtcNow);
+
+        var first = (await service.ListAsync(userId: 1, UserRole.User)).Single().DictionaryId;
+        var second = (await service.ListAsync(userId: 1, UserRole.User)).Single().DictionaryId;
+
+        var lowest = await db.Dictionaries.Where(d => d.FileHash == Hash).MinAsync(d => d.Id);
+        Assert.Equal(lowest, first);
+        Assert.Equal(first, second);
     }
 }

@@ -232,7 +232,7 @@ public class AdminUserServiceTests
         await using var db = await SeedAsync();
         db.Dictionaries.Add(new Domain.Entities.Dictionary
         {
-            Id = 1, Name = "My words", OwnerId = MemberId, IsPublic = false, IsPersonal = true,
+            Id = 1, Name = "My words", OwnerId = MemberId, PublicationStatus = PublicationStatus.Private, IsPersonal = true,
         });
         await db.SaveChangesAsync();
 

@@ -324,7 +324,7 @@ describe('ReaderScreen', () => {
 
     expect(apiMock.importDictionary).toHaveBeenCalledWith({
       name: "Death's End",
-      isPublic: false,
+      requestPublication: false,
       fileHash: HASH,
       chapters: [{ order: 0, title: 'One', words: [{ word: 'silo', count: 2 }] }],
     })

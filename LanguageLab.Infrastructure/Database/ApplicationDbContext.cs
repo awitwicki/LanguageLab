@@ -66,7 +66,7 @@ public class ApplicationDbContext : DbContext
 
         // Listing dictionaries always filters on visibility.
         builder.Entity<Dictionary>()
-            .HasIndex(d => new { d.IsPublic, d.OwnerId });
+            .HasIndex(d => new { d.PublicationStatus, d.OwnerId });
 
         // One personal dictionary per user, enforced where the get-or-create race lives.
         builder.Entity<Dictionary>()

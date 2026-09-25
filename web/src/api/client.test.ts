@@ -50,8 +50,8 @@ class FakeXhr {
   }
 }
 
-const payload = { name: 'Wool', words: [{ word: 'abide', count: 1 }], isPublic: false }
-const result = { dictionaryId: 1, totalWords: 1, newWords: 1, reusedWords: 0 }
+const payload = { name: 'Wool', words: [{ word: 'abide', count: 1 }], requestPublication: false }
+const result = { dictionaryId: 1, totalWords: 1, newWords: 1, reusedWords: 0, droppedWords: 0 }
 
 beforeEach(() => {
   FakeXhr.instances = []
@@ -71,7 +71,7 @@ describe('importDictionary', () => {
     expect(xhr.method).toBe('POST')
     expect(xhr.url).toBe('/api/dictionaries/import')
     expect(xhr.headers['Content-Type']).toBe('application/json')
-    expect(JSON.parse(String(xhr.body))).toMatchObject({ isPublic: false })
+    expect(JSON.parse(String(xhr.body))).toMatchObject({ requestPublication: false })
 
     xhr.respond(200, JSON.stringify(result))
 

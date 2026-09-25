@@ -29,7 +29,7 @@ public class DictionaryAccessService
             ? _dbContext.Dictionaries.Where(d => !d.IsPersonal || d.OwnerId == userId)
             : _dbContext.Dictionaries.Where(d => d.IsPersonal
                 ? d.OwnerId == userId
-                : d.IsPublic || d.OwnerId == userId);
+                : d.PublicationStatus == PublicationStatus.Published || d.OwnerId == userId);
 
     public Task<bool> IsVisibleAsync(long dictionaryId, long userId, UserRole role) =>
         Visible(userId, role).AnyAsync(d => d.Id == dictionaryId);

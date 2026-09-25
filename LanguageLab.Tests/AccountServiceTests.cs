@@ -103,8 +103,8 @@ public class AccountServiceTests
     {
         await using var db = await SeedAsync();
         db.Dictionaries.AddRange(
-            new Domain.Entities.Dictionary { Id = 1, Name = "My words", OwnerId = MemberId, IsPublic = false, IsPersonal = true },
-            new Domain.Entities.Dictionary { Id = 2, Name = "Wool", OwnerId = MemberId, IsPublic = true });
+            new Domain.Entities.Dictionary { Id = 1, Name = "My words", OwnerId = MemberId, PublicationStatus = PublicationStatus.Private, IsPersonal = true },
+            new Domain.Entities.Dictionary { Id = 2, Name = "Wool", OwnerId = MemberId, PublicationStatus = PublicationStatus.Published });
         await db.SaveChangesAsync();
 
         await new AccountService(db).DeleteOwnAsync(MemberId);

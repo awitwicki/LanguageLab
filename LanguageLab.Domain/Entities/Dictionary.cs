@@ -18,8 +18,11 @@ public class Dictionary : BaseEntity
     [ForeignKey(nameof(Owner))]
     public long? OwnerId { get; set; }
 
-    /// <summary>Public dictionaries are visible to every signed-in user; private ones only to their owner and admins.</summary>
-    public bool IsPublic { get; set; } = true;
+    /// <summary>
+    /// Published dictionaries are visible to every signed-in user; everything else only to its
+    /// owner and (except for personal lists) to admins.
+    /// </summary>
+    public PublicationStatus PublicationStatus { get; set; } = PublicationStatus.Private;
 
     /// <summary>
     /// The user's own word list ("My words"): one per user, private, no chapters, words typed

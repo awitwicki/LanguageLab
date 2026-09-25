@@ -1,6 +1,6 @@
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { UploadProgress } from '../api/client'
+import type { UploadProgress, UserRole } from '../api/client'
 import type { WorkerResponse } from '../worker/parseBook.worker'
 import { click, flush, render } from '../test/render'
 import { MemoryBookStore } from '../reader/bookStore'
@@ -75,9 +75,9 @@ function progressValue(container: HTMLElement) {
 }
 
 /** Renders the screen and takes it to the preview: a book chosen, "Import" ready to press. */
-async function preview(bookStore?: MemoryBookStore) {
+async function preview(bookStore?: MemoryBookStore, role: UserRole = 'user') {
   const onImported = vi.fn()
-  const { container } = await render(<ImportScreen onImported={onImported} bookStore={bookStore} />)
+  const { container } = await render(<ImportScreen onImported={onImported} role={role} bookStore={bookStore} />)
   const input = container.querySelector<HTMLInputElement>('input[type="file"]')!
 
   Object.defineProperty(input, 'files', { value: [new File([book], 'wool.fb2')] })
@@ -108,7 +108,7 @@ describe('ImportScreen', () => {
       WebApp: { initData: 'auth_date=1&hash=abc', ready: vi.fn(), expand: vi.fn(), openLink },
     })
 
-    const { container } = await render(<ImportScreen onImported={() => {}} />)
+    const { container } = await render(<ImportScreen onImported={() => {}} role="user" />)
 
     expect(container.querySelector('input[type="file"]')).toBeNull()
 
@@ -127,6 +127,20 @@ describe('ImportScreen', () => {
     expect(container.querySelector<HTMLInputElement>('.field input')?.value).toBe('Wool')
     expect(container.querySelectorAll('.chapter-preview li')).toHaveLength(2)
     expect(importButton(container).disabled).toBe(false)
+  })
+
+  it('offers a plain user publication as a request, not a switch', async () => {
+    const { container } = await preview(undefined, 'user')
+
+    expect(container.querySelector('.field.checkbox')?.textContent).toContain('Submit for review after import')
+    expect(container.textContent).toContain('An administrator checks the dictionary before other users see it.')
+  })
+
+  it('offers an uploader a plain visibility switch', async () => {
+    const { container } = await preview(undefined, 'uploader')
+
+    expect(container.querySelector('.field.checkbox')?.textContent).toContain('Visible to all users')
+    expect(container.textContent).not.toContain('An administrator checks the dictionary')
   })
 
   it('shows how far the word extraction is, chapter by chapter', async () => {
@@ -165,7 +179,7 @@ describe('ImportScreen', () => {
 
   it('shows the upload advancing, then the server saving, then hands over the new book', async () => {
     let report: UploadProgress | undefined
-    let finish: (value: { dictionaryId: number }) => void = () => {}
+    let finish: (value: { dictionaryId: number; totalWords: number; newWords: number; reusedWords: number; droppedWords: number }) => void = () => {}
 
     apiMock.importDictionary.mockImplementation((_payload: unknown, onProgress: UploadProgress) => {
       report = onProgress
@@ -192,9 +206,20 @@ describe('ImportScreen', () => {
     await act(async () => report?.(1200, 1200))
     expect(status(container)).toContain('Saving on the server')
 
-    await act(async () => finish({ dictionaryId: 42 }))
+    await act(async () =>
+      finish({
+        dictionaryId: 42,
+        totalWords: 1,
+        newWords: 1,
+        reusedWords: 0,
+        droppedWords: 0,
+      }),
+    )
     await flush()
 
+    // Click Continue button to navigate
+    const continueBtn = container.querySelector<HTMLButtonElement>('button:not(.btn-lg)')
+    await click(continueBtn!)
     expect(onImported).toHaveBeenCalledWith(42)
   })
 
@@ -215,7 +240,13 @@ describe('ImportScreen', () => {
   })
 
   it('puts the imported book in the reader too', async () => {
-    apiMock.importDictionary.mockResolvedValue({ dictionaryId: 42 })
+    apiMock.importDictionary.mockResolvedValue({
+      dictionaryId: 42,
+      totalWords: 1,
+      newWords: 1,
+      reusedWords: 0,
+      droppedWords: 0,
+    })
     const store = new MemoryBookStore()
     const { container, worker, onImported } = await preview(store)
 
@@ -227,11 +258,21 @@ describe('ImportScreen', () => {
     expect(stored).toMatchObject({ title: 'Wool', fileName: 'wool.fb2' })
     expect(stored.hash).toMatch(/^[0-9a-f]{64}$/)
     expect(apiMock.registerReaderBook).toHaveBeenCalledWith(stored.hash, { title: 'Wool', author: '', chaptersCount: 2 })
+
+    // Click Continue button to navigate
+    const continueBtn = container.querySelector<HTMLButtonElement>('button:not(.btn-lg)')
+    await click(continueBtn!)
     expect(onImported).toHaveBeenCalledWith(42)
   })
 
   it('still finishes the import when the reader could not take the book', async () => {
-    apiMock.importDictionary.mockResolvedValue({ dictionaryId: 42 })
+    apiMock.importDictionary.mockResolvedValue({
+      dictionaryId: 42,
+      totalWords: 1,
+      newWords: 1,
+      reusedWords: 0,
+      droppedWords: 0,
+    })
     apiMock.registerReaderBook.mockRejectedValue(new Error('offline'))
     const { container, worker, onImported } = await preview(new MemoryBookStore())
 
@@ -239,6 +280,64 @@ describe('ImportScreen', () => {
     await worker.reply(aggregated)
     await flush()
 
+    // Click Continue button to navigate
+    const continueBtn = container.querySelector<HTMLButtonElement>('button:not(.btn-lg)')
+    await click(continueBtn!)
     expect(onImported).toHaveBeenCalledWith(42)
+  })
+
+  it('shows the import result with dropped words and requires clicking Continue', async () => {
+    apiMock.importDictionary.mockResolvedValue({
+      dictionaryId: 42,
+      totalWords: 10,
+      newWords: 9,
+      reusedWords: 1,
+      droppedWords: 3,
+    })
+    const { container, worker, onImported } = await preview()
+
+    await click(importButton(container))
+    await worker.reply(aggregated)
+    await flush()
+
+    // Result summary should be visible with dropped words count
+    expect(container.textContent).toContain('Dictionary created')
+    expect(container.textContent).toContain('10')
+    expect(container.textContent).toContain('Skipped')
+    expect(container.textContent).toContain('3')
+    expect(container.textContent).toContain('entries that are not English words')
+
+    // onImported should NOT have been called yet
+    expect(onImported).not.toHaveBeenCalled()
+
+    // Click the Continue button
+    const continueBtn = container.querySelector<HTMLButtonElement>('button:not(.btn-lg)')
+    expect(continueBtn?.textContent).toContain('Continue')
+    await click(continueBtn!)
+
+    // Now onImported should be called
+    expect(onImported).toHaveBeenCalledWith(42)
+  })
+
+  it('does not show the uploading progress once the result is showing', async () => {
+    apiMock.importDictionary.mockResolvedValue({
+      dictionaryId: 42,
+      totalWords: 10,
+      newWords: 9,
+      reusedWords: 1,
+      droppedWords: 0,
+    })
+    const { container, worker } = await preview()
+
+    await click(importButton(container))
+    await worker.reply(aggregated)
+    await flush()
+
+    expect(container.textContent).toContain('Dictionary created')
+    expect(container.textContent).not.toContain('Saving on the server')
+    expect(container.querySelector('.import-status')).toBeNull()
+    // The now-pointless Import button and publication checkbox are gone too.
+    expect(container.querySelector('.field.checkbox')).toBeNull()
+    expect(container.querySelector('.btn-lg')).toBeNull()
   })
 })

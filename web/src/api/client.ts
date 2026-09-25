@@ -73,6 +73,8 @@ export interface TopWord {
   frequency: number
 }
 
+export type PublicationStatus = 'private' | 'pending' | 'published' | 'rejected'
+
 export interface DictionaryDetail {
   id: number
   name: string
@@ -83,7 +85,25 @@ export interface DictionaryDetail {
   learning: LearningProgress
   chapters: ChapterView[]
   topWords: TopWord[]
-  isPublic: boolean
+  status: PublicationStatus
+}
+
+/** A row in the admin's moderation queue — a dictionary its owner offered for publication. */
+export interface PendingDictionary {
+  id: number
+  name: string
+  ownerId: number | null
+  ownerName: string
+  wordsCount: number
+  status: PublicationStatus
+  topWords: string[]
+}
+
+export interface PendingDictionaryPage {
+  items: PendingDictionary[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export type TranslationSource = 'dictionary' | 'myMemory' | 'none'
@@ -188,6 +208,7 @@ export interface ImportResult {
   totalWords: number
   newWords: number
   reusedWords: number
+  droppedWords: number
 }
 
 export interface QueueWord {
@@ -656,6 +677,14 @@ export const api = {
 
   deleteDictionary: (id: number) => request<null>(`/api/dictionaries/${id}`, { method: 'DELETE' }),
 
+  /** The owner offers a private (or rejected) dictionary for publication; it becomes pending. */
+  requestPublication: (id: number) =>
+    request<null>(`/api/dictionaries/${id}/publication`, { method: 'POST' }),
+
+  /** The owner takes back a pending offer; it becomes private again. */
+  withdrawPublication: (id: number) =>
+    request<null>(`/api/dictionaries/${id}/publication`, { method: 'DELETE' }),
+
   translate: (word: string) =>
     request<TranslationLookup>(`/api/translate?${new URLSearchParams({ word })}`) as Promise<TranslationLookup>,
 
@@ -769,7 +798,7 @@ export const api = {
       name: string
       chapters?: ImportChapter[]
       words?: ImportWord[]
-      isPublic?: boolean
+      requestPublication?: boolean
       fileHash?: string
     },
     onUploadProgress?: UploadProgress,
@@ -953,11 +982,29 @@ export const api = {
 
   deleteUser: (id: number) => request<null>(`/api/admin/users/${id}`, { method: 'DELETE' }),
 
-  setDictionaryVisibility: (id: number, isPublic: boolean) =>
+  deleteUserDictionaries: (id: number) =>
+    request<{ count: number }>(`/api/admin/users/${id}/dictionaries`, { method: 'DELETE' }) as Promise<{
+      count: number
+    }>,
+
+  setDictionaryStatus: (id: number, status: PublicationStatus) =>
     request<null>(`/api/dictionaries/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ isPublic }),
+      body: JSON.stringify({ status }),
     }),
+
+  /** The moderation queue: defaults to the dictionaries waiting for a decision. */
+  listPendingDictionaries: (params: { status?: PublicationStatus; page?: number } = {}) => {
+    const query = new URLSearchParams()
+    if (params.status) query.set('status', params.status)
+    if (params.page) query.set('page', String(params.page))
+
+    return request<PendingDictionaryPage>(`/api/admin/dictionaries?${query}`) as Promise<PendingDictionaryPage>
+  },
+
+  approveDictionary: (id: number) => request<null>(`/api/admin/dictionaries/${id}/approve`, { method: 'POST' }),
+
+  rejectDictionary: (id: number) => request<null>(`/api/admin/dictionaries/${id}/reject`, { method: 'POST' }),
 
   /** Ordered by book name, then chapter order; only books the user can still see. */
   getStarredChapters: () => request<StarredChapter[]>('/api/chapters/starred') as Promise<StarredChapter[]>,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, type DictionaryListItem, type SessionStarted, type TrainingStarted } from './api/client'
-import { canImport } from './auth/roles'
+import { canPublishDirectly } from './auth/roles'
 import { useAuth } from './auth/useAuth'
 import { AppShell } from './layout/AppShell'
 import { modeOf, type AppMode } from './layout/mode'
@@ -151,7 +151,7 @@ export default function App() {
         key={route.hash}
         hash={route.hash}
         store={books.store}
-        canImport={canImport(state.user.role)}
+        canImport={canPublishDirectly(state.user.role)}
         onBack={() => setRoute({ name: 'reader' })}
         onOpenDictionary={(id) => setRoute({ name: 'dictionary', id })}
       />
@@ -177,7 +177,6 @@ export default function App() {
             error={listError}
             activeId={activeId}
             importActive={route.name === 'import'}
-            canImport={canImport(state.user.role)}
             onSelect={openDictionary}
             onImport={() => setRoute({ name: 'import' })}
             personalActive={route.name === 'personal'}
@@ -206,7 +205,9 @@ export default function App() {
         />
       )}
 
-      {route.name === 'import' && <ImportScreen onImported={openDictionary} bookStore={books?.store} />}
+      {route.name === 'import' && (
+        <ImportScreen onImported={openDictionary} role={state.user.role} bookStore={books?.store} />
+      )}
 
       {route.name === 'personal' && (
         <PersonalDictionaryScreen

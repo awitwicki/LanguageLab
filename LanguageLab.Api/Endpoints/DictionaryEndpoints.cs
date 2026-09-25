@@ -1,6 +1,8 @@
 using LanguageLab.Api.Auth;
 using LanguageLab.Application.Services;
-using LanguageLab.Infrastructure.Database;
+using LanguageLab.Domain.Entities;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Api.Endpoints;
@@ -26,9 +28,9 @@ public sealed record DictionaryDetail(
     LearningProgress Learning,
     IReadOnlyList<ChapterView> Chapters,
     IReadOnlyList<TopWord> TopWords,
-    bool IsPublic);
+    PublicationStatus Status);
 
-public sealed record VisibilityRequest(bool IsPublic);
+public sealed record StatusRequest(PublicationStatus Status);
 
 public static class DictionaryEndpoints
 {
@@ -94,14 +96,22 @@ public static class DictionaryEndpoints
         group.MapPost("/personal/words/import", async (
             AddPersonalWordsRequest request, PersonalDictionaryService personal, ICurrentUser currentUser) =>
         {
-            var entries = (request.Words ?? [])
-                .Select(w => new BulkWordEntry(w.Word ?? string.Empty, w.Translation ?? string.Empty))
-                .ToList();
+            try
+            {
+                var entries = (request.Words ?? [])
+                    .Select(w => new BulkWordEntry(w.Word ?? string.Empty, w.Translation ?? string.Empty))
+                    .ToList();
 
-            var outcomes = await personal.AddManyAsync(await currentUser.GetIdAsync(), entries, DateTime.UtcNow);
+                var outcomes = await personal.AddManyAsync(await currentUser.GetIdAsync(), entries, DateTime.UtcNow);
 
-            return Results.Ok(outcomes);
-        });
+                return Results.Ok(outcomes);
+            }
+            catch (ArgumentException e)
+            {
+                return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+        }).WithMetadata(new RequestSizeLimitAttribute(1L * 1024 * 1024))
+          .RequireRateLimiting(UserRateLimits.BulkWords);
 
         group.MapDelete("/personal/words/{wordPairId:long}", async (
             long wordPairId, PersonalDictionaryService personal, ICurrentUser currentUser) =>
@@ -124,7 +134,7 @@ public static class DictionaryEndpoints
 
             var dictionary = await access.Visible(userId, role)
                 .Where(d => d.Id == id)
-                .Select(d => new { d.Id, d.Name, d.WordsCount, d.IsPublic })
+                .Select(d => new { d.Id, d.Name, d.WordsCount, d.PublicationStatus })
                 .FirstOrDefaultAsync();
 
             if (dictionary == null)
@@ -154,16 +164,18 @@ public static class DictionaryEndpoints
                 learning,
                 chapterViews,
                 topWords,
-                dictionary.IsPublic));
+                dictionary.PublicationStatus));
         });
 
         group.MapPost("/import", async (
             ImportRequest request, BookImportService import, ICurrentUserContext currentUser) =>
         {
+            var (userId, role) = currentUser.Require();
+
             try
             {
                 var result = await import.ImportAsync(
-                    request, currentUser.Require().Id, request.IsPublic ?? true);
+                    request, userId, BookImportService.StatusFor(role, request.RequestPublication));
 
                 return Results.Ok(result);
             }
@@ -173,42 +185,48 @@ public static class DictionaryEndpoints
                 // message says which: a bare 500 would leave them staring at a status code.
                 return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status400BadRequest);
             }
-        }).RequireAuthorization(AuthPolicies.Importer);
+        })
+          // A 50 000-word book is a few megabytes of JSON; the global 64 MB is headroom this
+          // endpoint does not need, and it is the only one a stranger can make large.
+          .WithMetadata(new RequestSizeLimitAttribute(16L * 1024 * 1024))
+          .RequireRateLimiting(UserRateLimits.Import);
 
-        group.MapDelete("/{id:long}", async (long id, ApplicationDbContext db) =>
+        // A personal dictionary is invisible to everyone but its owner, even an admin — same
+        // rule as the read paths (DictionaryAccessService.Visible); DictionaryDeletionService
+        // never touches one, so its id falls through to the ordinary NotFound path, not a 403.
+        group.MapDelete("/{id:long}", async (long id, DictionaryDeletionService deletion) =>
+            await deletion.DeleteAsync(id) ? Results.NoContent() : Results.NotFound())
+            .RequireAuthorization(AuthPolicies.Admin);
+
+        group.MapPatch("/{id:long}", async (long id, StatusRequest request, DictionaryPublicationService publication) =>
         {
-            // A personal dictionary is invisible to everyone but its owner, even an admin —
-            // same rule as the read paths (DictionaryAccessService.Visible). Excluding it here
-            // makes its id fall through to the ordinary NotFound path, not a 403.
-            var dictionary = await db.Dictionaries.FirstOrDefaultAsync(d => d.Id == id && !d.IsPersonal);
-
-            if (dictionary == null)
+            if (!Enum.IsDefined(request.Status))
             {
-                return Results.NotFound();
+                return Results.BadRequest();
             }
 
-            // Cascades take down Chapters, ChapterWords and DictionaryWords.
-            // WordPair and the user's shelves stay — they are global.
-            db.Dictionaries.Remove(dictionary);
-            await db.SaveChangesAsync();
-
-            return Results.NoContent();
+            return MapPublication(await publication.SetStatusAsync(id, request.Status));
         }).RequireAuthorization(AuthPolicies.Admin);
 
-        group.MapPatch("/{id:long}", async (long id, VisibilityRequest request, ApplicationDbContext db) =>
-        {
-            // Same personal-dictionary exclusion as the DELETE handler above.
-            var dictionary = await db.Dictionaries.FirstOrDefaultAsync(d => d.Id == id && !d.IsPersonal);
+        // The owner offers a dictionary for publication and may take the offer back; the
+        // decision itself is an admin's — the PATCH handler above, or the moderation queue under
+        // /api/admin/dictionaries (AdminEndpoints.cs).
+        group.MapPost("/{id:long}/publication", async (
+            long id, DictionaryPublicationService publication, ICurrentUser currentUser) =>
+            MapPublication(await publication.RequestAsync(await currentUser.GetIdAsync(), id)));
 
-            if (dictionary == null)
-            {
-                return Results.NotFound();
-            }
-
-            dictionary.IsPublic = request.IsPublic;
-            await db.SaveChangesAsync();
-
-            return Results.NoContent();
-        }).RequireAuthorization(AuthPolicies.Admin);
+        group.MapDelete("/{id:long}/publication", async (
+            long id, DictionaryPublicationService publication, ICurrentUser currentUser) =>
+            MapPublication(await publication.WithdrawAsync(await currentUser.GetIdAsync(), id)));
     }
+
+    private static IResult MapPublication(PublicationActionResult result) => result switch
+    {
+        PublicationActionResult.Ok => Results.NoContent(),
+        PublicationActionResult.NotFound => Results.NotFound(),
+        PublicationActionResult.WrongState => Results.Json(
+            new DictionaryError("This dictionary is not waiting for that."),
+            statusCode: StatusCodes.Status409Conflict),
+        _ => Results.StatusCode(StatusCodes.Status500InternalServerError),
+    };
 }

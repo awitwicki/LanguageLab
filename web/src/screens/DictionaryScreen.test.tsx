@@ -1,3 +1,4 @@
+import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DictionaryDetail, LearningProgress, TrainingStarted } from '../api/client'
 import { click, flush, render } from '../test/render'
@@ -6,7 +7,9 @@ import { DictionaryScreen } from './DictionaryScreen'
 const apiMock = vi.hoisted(() => ({
   getDictionary: vi.fn(),
   startReview: vi.fn(),
-  setDictionaryVisibility: vi.fn(),
+  setDictionaryStatus: vi.fn(),
+  requestPublication: vi.fn(),
+  withdrawPublication: vi.fn(),
   deleteDictionary: vi.fn(),
   mark: vi.fn(),
   undo: vi.fn(),
@@ -15,6 +18,14 @@ const apiMock = vi.hoisted(() => ({
 }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
+
+/** Picks an option the way a user would: React hears a select through its change event. */
+function choose(select: HTMLSelectElement, value: string) {
+  return act(async () => {
+    select.value = value
+    select.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+}
 
 const noLearning: LearningProgress = { notStarted: 0, boxes: [0, 0, 0, 0, 0], learned: 0, total: 0 }
 // notStarted == learnableCount (42) — same as on the server. (9 + 10 + 12 + 60) / (5 · 71) → 26%.
@@ -44,7 +55,7 @@ const detail: DictionaryDetail = {
     { wordPairId: 1, word: 'silo', frequency: 1500 },
     { wordPairId: 2, word: 'abide', frequency: 750 },
   ],
-  isPublic: true,
+  status: 'published',
 }
 
 const reviewStarted: TrainingStarted = { trainingId: 9, mode: 'review', words: [], totalQuestions: 12 }
@@ -71,7 +82,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   apiMock.getDictionary.mockResolvedValue(detail)
   apiMock.startReview.mockResolvedValue(reviewStarted)
-  apiMock.setDictionaryVisibility.mockResolvedValue(null)
+  apiMock.setDictionaryStatus.mockResolvedValue(null)
+  apiMock.requestPublication.mockResolvedValue(null)
+  apiMock.withdrawPublication.mockResolvedValue(null)
   apiMock.deleteDictionary.mockResolvedValue(null)
   apiMock.mark.mockResolvedValue(null)
   apiMock.undo.mockResolvedValue(null)
@@ -326,31 +339,55 @@ describe('DictionaryScreen — visibility', () => {
     expect(container.querySelector('.dict-visibility')).toBeNull()
   })
 
-  it('an admin sees the current visibility and can toggle it', async () => {
+  it('an admin sees the current status and can change it', async () => {
     const { container } = await render(screen({ role: 'admin' }))
     await flush()
 
-    const toggle = container.querySelector<HTMLInputElement>('.dict-visibility input[type="checkbox"]')!
-    expect(toggle.checked).toBe(true)
+    const select = container.querySelector<HTMLSelectElement>('.dict-visibility select')!
+    expect(select.value).toBe('published')
 
-    await click(toggle)
+    await choose(select, 'private')
     await flush()
 
-    expect(apiMock.setDictionaryVisibility).toHaveBeenCalledWith(7, false)
-    expect(toggle.checked).toBe(false)
+    expect(apiMock.setDictionaryStatus).toHaveBeenCalledWith(7, 'private')
+    expect(select.value).toBe('private')
   })
 
-  it('reverts the toggle and shows an error when the request fails', async () => {
-    apiMock.setDictionaryVisibility.mockRejectedValue(new Error('network error'))
+  it('reverts the status and shows an error when the request fails', async () => {
+    apiMock.setDictionaryStatus.mockRejectedValue(new Error('network error'))
     const { container } = await render(screen({ role: 'admin' }))
     await flush()
 
-    const toggle = container.querySelector<HTMLInputElement>('.dict-visibility input[type="checkbox"]')!
-    await click(toggle)
+    const select = container.querySelector<HTMLSelectElement>('.dict-visibility select')!
+    await choose(select, 'private')
     await flush()
 
-    expect(toggle.checked).toBe(true)
+    expect(select.value).toBe('published')
     expect(container.textContent).toContain('network error')
+  })
+})
+
+describe('DictionaryScreen — sharing', () => {
+  it('lets the owner offer a private dictionary for publication', async () => {
+    apiMock.getDictionary.mockResolvedValue({ ...detail, status: 'private' })
+    const { container } = await render(screen({ role: 'user' }))
+    await flush()
+
+    expect(container.textContent).toContain('Only you can see this dictionary')
+
+    await click(buttons(container).find((b) => b.textContent === 'Submit for review')!)
+    await flush()
+
+    expect(apiMock.requestPublication).toHaveBeenCalledWith(7)
+  })
+
+  it('shows a pending dictionary as waiting, with a way to take it back', async () => {
+    apiMock.getDictionary.mockResolvedValue({ ...detail, status: 'pending' })
+    const { container } = await render(screen({ role: 'user' }))
+    await flush()
+
+    expect(container.textContent).toContain('Waiting for review')
+    expect(buttons(container).find((b) => b.textContent === 'Withdraw')).toBeTruthy()
   })
 })
 
@@ -465,7 +502,7 @@ describe('DictionaryScreen — starred', () => {
     const { container } = await render(screen())
     await flush()
 
-    expect(headings(container)).toEqual(['Chapters', 'Most frequent words'])
+    expect(headings(container)).toEqual(['Chapters', 'Most frequent words', 'Sharing'])
     expect(container.querySelectorAll('.chapter-list')).toHaveLength(1)
   })
 
@@ -474,7 +511,7 @@ describe('DictionaryScreen — starred', () => {
     const { container } = await render(screen())
     await flush()
 
-    expect(headings(container)).toEqual(['Starred', 'Chapters', 'Most frequent words'])
+    expect(headings(container)).toEqual(['Starred', 'Chapters', 'Most frequent words', 'Sharing'])
 
     const lists = container.querySelectorAll('.chapter-list')
     expect(lists).toHaveLength(2)
@@ -526,7 +563,7 @@ describe('DictionaryScreen — starred', () => {
     await flush()
 
     expect(apiMock.unstarChapter).toHaveBeenCalledWith(11)
-    expect(headings(container)).toEqual(['Chapters', 'Most frequent words'])
+    expect(headings(container)).toEqual(['Chapters', 'Most frequent words', 'Sharing'])
     expect(container.querySelectorAll('.chapter-row')[0].querySelector('.chapter-star')?.getAttribute('aria-pressed')).toBe('false')
   })
 
@@ -538,7 +575,7 @@ describe('DictionaryScreen — starred', () => {
     await click(container.querySelectorAll('.chapter-row')[0].querySelector('.chapter-star')!)
     await flush()
 
-    expect(headings(container)).toEqual(['Chapters', 'Most frequent words'])
+    expect(headings(container)).toEqual(['Chapters', 'Most frequent words', 'Sharing'])
     expect(container.querySelectorAll('.chapter-row')[0].querySelector('.chapter-star')?.getAttribute('aria-pressed')).toBe('false')
     expect(container.querySelector('.error')?.textContent).toBe('PUT /api/chapters/11/star → 404')
   })

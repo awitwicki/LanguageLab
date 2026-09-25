@@ -116,7 +116,7 @@ public class SchemaTests
         db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = DateTime.UtcNow });
         db.Dictionaries.Add(new Domain.Entities.Dictionary
         {
-            Id = 1, Name = "Wool", WordsCount = 0, OwnerId = 1, IsPublic = true,
+            Id = 1, Name = "Wool", WordsCount = 0, OwnerId = 1, PublicationStatus = PublicationStatus.Published,
         });
         await db.SaveChangesAsync();
 
@@ -128,7 +128,7 @@ public class SchemaTests
         var dictionary = await db.Dictionaries.FirstAsync(d => d.Id == 1);
 
         Assert.Null(dictionary.OwnerId);
-        Assert.True(dictionary.IsPublic);
+        Assert.Equal(PublicationStatus.Published, dictionary.PublicationStatus);
     }
 
     /// <summary>The trainer's rows hang off the user like shelves do: deleting the account deletes them all.</summary>
@@ -255,6 +255,25 @@ public class SchemaTests
         Assert.True(index.IsUnique);
         Assert.Equal("\"IsPersonal\"", index.GetFilter());
         Assert.Equal(new[] { "OwnerId" }, index.Properties.Select(p => p.Name));
+    }
+
+    /// <summary>
+    /// The partial unique index that holds "one personal dictionary per user" must survive the
+    /// publication-status migration, and the visibility index must move to the new column.
+    /// </summary>
+    [Fact]
+    public void Dictionary_indexes_survive_the_publication_status_change()
+    {
+        using var db = NewContext();
+        var entity = db.Model.FindEntityType(typeof(Domain.Entities.Dictionary))!;
+
+        Assert.Contains(entity.GetIndexes(), i =>
+            i.Properties.Select(p => p.Name).SequenceEqual(new[] { "PublicationStatus", "OwnerId" }));
+
+        Assert.Contains(entity.GetIndexes(), i =>
+            i.GetDatabaseName() == "IX_Dictionaries_OwnerId_Personal" && i.IsUnique);
+
+        Assert.DoesNotContain(entity.GetProperties(), p => p.Name == "IsPublic");
     }
 
     /// <summary>A personal word has no life outside its owner: the FK cascades.</summary>

@@ -10,7 +10,10 @@ namespace LanguageLab.Application.Translation;
 /// exhausted quota, an untranslated echo of the input, or anything else that can go wrong
 /// talking to a third party over the network — becomes null plus a warning in the log.
 /// <see cref="TranslateAsync"/> never throws: the caller's fallback is the user typing the
-/// translation themselves, and no provider hiccup should turn into a 500.
+/// translation themselves, and no provider hiccup should turn into a 500. MyMemory's daily quota
+/// is shared with sentence translation (MyMemorySentenceTranslator), so word lookups are
+/// additionally capped by <see cref="MyMemoryWordBudget"/>, a server-wide daily share — the
+/// budget is asked, and refused, before a request is made.
 /// </summary>
 public sealed class MyMemoryTranslator : ITranslator
 {
@@ -19,17 +22,30 @@ public sealed class MyMemoryTranslator : ITranslator
 
     private readonly HttpClient _http;
     private readonly TranslationOptions _options;
+    private readonly MyMemoryWordBudget _budget;
     private readonly ILogger<MyMemoryTranslator> _logger;
 
-    public MyMemoryTranslator(HttpClient http, IOptions<TranslationOptions> options, ILogger<MyMemoryTranslator> logger)
+    public MyMemoryTranslator(
+        HttpClient http,
+        IOptions<TranslationOptions> options,
+        MyMemoryWordBudget budget,
+        ILogger<MyMemoryTranslator> logger)
     {
         _http = http;
         _options = options.Value;
+        _budget = budget;
         _logger = logger;
     }
 
     public async Task<string?> TranslateAsync(string word, CancellationToken cancellationToken)
     {
+        // Spent only on a lookup that actually goes out, so a cache hit upstream costs nothing.
+        if (!_budget.TryConsume(word.Length, DateTime.UtcNow))
+        {
+            _logger.LogWarning("MyMemory's daily word budget is spent.");
+            return null;
+        }
+
         var query = $"get?q={Uri.EscapeDataString(word)}&langpair=en%7Cuk";
 
         if (!string.IsNullOrWhiteSpace(_options.MyMemoryEmail))

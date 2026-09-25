@@ -10,6 +10,11 @@ public class DictionaryAccessServiceTests
     private const long Owner = 1;
     private const long Stranger = 2;
 
+    private static ApplicationDbContext NewContext() =>
+        new(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options);
+
     private static async Task<ApplicationDbContext> SeedAsync()
     {
         var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -17,10 +22,10 @@ public class DictionaryAccessServiceTests
             .Options);
 
         db.Dictionaries.AddRange(
-            new Domain.Entities.Dictionary { Id = 10, Name = "public", OwnerId = Owner, IsPublic = true },
-            new Domain.Entities.Dictionary { Id = 20, Name = "private", OwnerId = Owner, IsPublic = false },
-            new Domain.Entities.Dictionary { Id = 30, Name = "system", OwnerId = null, IsPublic = true },
-            new Domain.Entities.Dictionary { Id = 40, Name = "My words", OwnerId = Owner, IsPublic = false, IsPersonal = true });
+            new Domain.Entities.Dictionary { Id = 10, Name = "public", OwnerId = Owner, PublicationStatus = PublicationStatus.Published },
+            new Domain.Entities.Dictionary { Id = 20, Name = "private", OwnerId = Owner, PublicationStatus = PublicationStatus.Private },
+            new Domain.Entities.Dictionary { Id = 30, Name = "system", OwnerId = null, PublicationStatus = PublicationStatus.Published },
+            new Domain.Entities.Dictionary { Id = 40, Name = "My words", OwnerId = Owner, PublicationStatus = PublicationStatus.Private, IsPersonal = true });
 
         await db.SaveChangesAsync();
 
@@ -110,5 +115,38 @@ public class DictionaryAccessServiceTests
         Assert.True(await access.IsVisibleAsync(40, Owner, UserRole.Admin));
         Assert.False(await access.IsVisibleAsync(40, Stranger, UserRole.User));
         Assert.False(await access.IsVisibleAsync(40, Stranger, UserRole.Admin));
+    }
+
+    [Theory]
+    [InlineData(PublicationStatus.Private, false)]
+    [InlineData(PublicationStatus.Pending, false)]
+    [InlineData(PublicationStatus.Rejected, false)]
+    [InlineData(PublicationStatus.Published, true)]
+    public async Task Only_a_published_dictionary_is_visible_to_a_stranger(PublicationStatus status, bool expected)
+    {
+        await using var db = NewContext();
+
+        db.Dictionaries.Add(new Domain.Entities.Dictionary
+        { Name = "Wool", WordsCount = 1, OwnerId = 2, PublicationStatus = status });
+        await db.SaveChangesAsync();
+
+        var visible = await new DictionaryAccessService(db).Visible(userId: 1, UserRole.User).AnyAsync();
+
+        Assert.Equal(expected, visible);
+    }
+
+    [Theory]
+    [InlineData(PublicationStatus.Private)]
+    [InlineData(PublicationStatus.Pending)]
+    [InlineData(PublicationStatus.Rejected)]
+    public async Task The_owner_sees_their_own_dictionary_in_every_state(PublicationStatus status)
+    {
+        await using var db = NewContext();
+
+        db.Dictionaries.Add(new Domain.Entities.Dictionary
+        { Name = "Wool", WordsCount = 1, OwnerId = 1, PublicationStatus = status });
+        await db.SaveChangesAsync();
+
+        Assert.True(await new DictionaryAccessService(db).Visible(userId: 1, UserRole.User).AnyAsync());
     }
 }

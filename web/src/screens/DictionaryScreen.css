@@ -35,7 +35,9 @@
   color: var(--text-2);
 }
 
-/* The admin section closes the page under a hairline, apart from the learner's content. */
+/* Both close the page under a hairline, apart from the learner's content above; mutually
+   exclusive (owner vs admin), so only one of the two ever renders. */
+.dict-sharing,
 .dict-admin {
   gap: 10px;
   padding-top: 24px;

@@ -42,7 +42,7 @@ public class PersonalDictionaryServiceTests
         Assert.Equal(1, await db.Dictionaries.CountAsync());
         Assert.Equal(PersonalDictionaryService.Name, first.Name);
         Assert.True(first.IsPersonal);
-        Assert.False(first.IsPublic);
+        Assert.Equal(PublicationStatus.Private, first.PublicationStatus);
         Assert.Equal(UserId, first.OwnerId);
     }
 
@@ -258,5 +258,22 @@ public class PersonalDictionaryServiceTests
         Assert.Null(outcomes[2].Error);
 
         Assert.Equal(1, await db.Words.CountAsync());
+    }
+
+    [Fact]
+    public async Task A_bulk_import_larger_than_the_cap_is_refused_before_any_row_is_written()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+
+        var entries = Enumerable.Range(0, PersonalDictionaryService.MaxBulkEntries + 1)
+            .Select(i => new BulkWordEntry($"word{i}", "переклад"))
+            .ToList();
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.AddManyAsync(userId: 1, entries, DateTime.UtcNow));
+
+        Assert.Contains("at a time", error.Message);
+        Assert.False(await db.Words.AnyAsync());
     }
 }

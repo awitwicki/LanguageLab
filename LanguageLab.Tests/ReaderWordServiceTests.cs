@@ -37,11 +37,13 @@ public class ReaderWordServiceTests
         var hidden = new WordPair { Id = 5, Word = "hidden", Translation = "прихований" };
         db.Words.AddRange(adjust, orphan, silo, cold, hidden);
 
-        var wool = new Domain.Entities.Dictionary { Id = 10, Name = "Wool", WordsCount = 2 };
+        var wool = new Domain.Entities.Dictionary
+        { Id = 10, Name = "Wool", WordsCount = 2, PublicationStatus = PublicationStatus.Published };
         wool.Words = [adjust, silo];
-        var dune = new Domain.Entities.Dictionary { Id = 20, Name = "Dune", WordsCount = 1 };
+        var dune = new Domain.Entities.Dictionary
+        { Id = 20, Name = "Dune", WordsCount = 1, PublicationStatus = PublicationStatus.Published };
         dune.Words = [cold];
-        var secret = new Domain.Entities.Dictionary { Id = 30, Name = "Secret", OwnerId = Other, IsPublic = false, WordsCount = 1 };
+        var secret = new Domain.Entities.Dictionary { Id = 30, Name = "Secret", OwnerId = Other, PublicationStatus = PublicationStatus.Private, WordsCount = 1 };
         secret.Words = [hidden];
         db.Dictionaries.AddRange(wool, dune, secret);
 

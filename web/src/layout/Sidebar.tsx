@@ -9,7 +9,6 @@ interface Props {
   error: string | null
   activeId: number | null
   importActive: boolean
-  canImport: boolean
   onSelect: (id: number) => void
   onImport: () => void
   personalActive: boolean
@@ -26,7 +25,6 @@ export function Sidebar({
   error,
   activeId,
   importActive,
-  canImport,
   onSelect,
   onImport,
   personalActive,
@@ -110,20 +108,18 @@ export function Sidebar({
         ))}
       </ul>
 
-      {canImport && (
-        <div className="sidebar-footer">
-          <button
-            type="button"
-            className={`btn ${importActive ? 'btn-primary' : 'btn-secondary'}`}
-            aria-label="Import a book"
-            onClick={onImport}
-          >
-            {/* The short label is what a phone shows: it shares the row with the picker. */}
-            <span className="import-label">Import a book</span>
-            <span className="import-label-short">Import</span>
-          </button>
-        </div>
-      )}
+      <div className="sidebar-footer">
+        <button
+          type="button"
+          className={`btn ${importActive ? 'btn-primary' : 'btn-secondary'}`}
+          aria-label="Import a book"
+          onClick={onImport}
+        >
+          {/* The short label is what a phone shows: it shares the row with the picker. */}
+          <span className="import-label">Import a book</span>
+          <span className="import-label-short">Import</span>
+        </button>
+      </div>
     </nav>
   )
 }

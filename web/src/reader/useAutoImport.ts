@@ -54,7 +54,7 @@ export function useAutoImport({ enabled, hash, title, bytes, onImported }: Optio
 
       return api.importDictionary({
         name: title,
-        isPublic: false,
+        requestPublication: false,
         fileHash: hash,
         chapters: chapters.map((c) => ({ order: c.order, title: c.title, words: c.words })),
       })

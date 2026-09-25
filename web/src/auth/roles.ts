@@ -13,7 +13,7 @@ export function roleLabel(role: UserRole) {
   return labels[role]
 }
 
-/** Mirrors the API's Importer policy: uploaders import books, admins can do anything. */
-export function canImport(role: UserRole) {
+/** Mirrors UserRoles.CanPublishDirectly: an uploader's import is shared without review. */
+export function canPublishDirectly(role: UserRole) {
   return role === 'uploader' || role === 'admin'
 }

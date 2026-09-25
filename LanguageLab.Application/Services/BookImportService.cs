@@ -17,10 +17,10 @@ public sealed record ImportRequest(
     string Name,
     IReadOnlyList<ImportChapter>? Chapters,
     IReadOnlyList<ImportWord>? Words,
-    bool? IsPublic = null,
+    bool RequestPublication = false,
     string? FileHash = null);
 
-public sealed record ImportResult(long DictionaryId, int TotalWords, int NewWords, int ReusedWords);
+public sealed record ImportResult(long DictionaryId, int TotalWords, int NewWords, int ReusedWords, int DroppedWords);
 
 /// <summary>
 /// Loads a book parsed on the client into the DB. Raw text never gets here —
@@ -28,6 +28,12 @@ public sealed record ImportResult(long DictionaryId, int TotalWords, int NewWord
 /// </summary>
 public class BookImportService
 {
+    /// <summary>Distinct words one dictionary may hold. A long novel lemmatizes to 10-15k.</summary>
+    public const int MaxWords = 50_000;
+
+    /// <summary>Chapters one book may have; leaf chapters of a very long book stay well under this.</summary>
+    public const int MaxChapters = 2_000;
+
     private readonly ApplicationDbContext _dbContext;
 
     public BookImportService(ApplicationDbContext dbContext)
@@ -35,20 +41,37 @@ public class BookImportService
         _dbContext = dbContext;
     }
 
-    public async Task<ImportResult> ImportAsync(ImportRequest request, long ownerId, bool isPublic)
+    /// <summary>
+    /// Where an import lands. A plain user's "share this" is a request, not a decision — that is
+    /// the whole trust boundary behind opening import to everyone.
+    /// </summary>
+    public static PublicationStatus StatusFor(UserRole role, bool requestPublication)
+    {
+        if (!requestPublication)
+        {
+            return PublicationStatus.Private;
+        }
+
+        return UserRoles.CanPublishDirectly(role) ? PublicationStatus.Published : PublicationStatus.Pending;
+    }
+
+    public async Task<ImportResult> ImportAsync(ImportRequest request, long ownerId, PublicationStatus status)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
         {
             throw new ArgumentException("The dictionary name cannot be empty.", nameof(request));
         }
 
-        var chapters = Normalize(request.Chapters);
-        var flat = NormalizeWords(request.Words);
-
-        if (chapters.Count == 0 && flat.Count == 0)
+        if (request.Chapters is { Count: > MaxChapters })
         {
-            throw new ArgumentException("The import is empty: neither chapters nor words.", nameof(request));
+            throw new ArgumentException(
+                $"The book has too many chapters: {request.Chapters.Count}, and the limit is {MaxChapters}.",
+                nameof(request));
         }
+
+        var dropped = new HashSet<string>(StringComparer.Ordinal);
+        var chapters = Normalize(request.Chapters, dropped);
+        var flat = NormalizeWords(request.Words, dropped);
 
         // Book frequency is the sum over chapters. Flat imports have no chapters,
         // so the sum is taken straight from the list.
@@ -60,6 +83,28 @@ public class BookImportService
             {
                 totals[word] = totals.GetValueOrDefault(word) + count;
             }
+        }
+
+        // The junk check comes before the emptiness check: a file of nothing but junk empties
+        // every chapter, and "the import is empty" would blame the wrong thing.
+        var seen = totals.Count + dropped.Count;
+
+        if (seen > 0 && (double)dropped.Count / seen > ImportWordText.MaxJunkShare)
+        {
+            throw new ArgumentException(
+                $"{dropped.Count} of {seen} words are not English words — this file is not a book LanguageLab can use.",
+                nameof(request));
+        }
+
+        if (chapters.Count == 0 && flat.Count == 0)
+        {
+            throw new ArgumentException("The import is empty: neither chapters nor words.", nameof(request));
+        }
+
+        if (totals.Count > MaxWords)
+        {
+            throw new ArgumentException(
+                $"The book has too many words: {totals.Count}, and the limit is {MaxWords}.", nameof(request));
         }
 
         var allWords = totals.Keys.ToList();
@@ -88,14 +133,26 @@ public class BookImportService
 
         _dbContext.Words.AddRange(created);
 
+        // The hash is what points a reader's book at this dictionary, and it arrives from the
+        // client with nothing to verify it against — the file itself is never uploaded. Keep it
+        // only when this user already has a ReaderBook row with that hash: it does not prove the
+        // hash is genuine (registering one is just another client-named claim), but it raises the
+        // bar past a casual collision or a drive-by import with no ReaderBook at all. The actual
+        // backstop against a stranger's junk import reaching other readers is publication review
+        // below: an unreviewed import is Private, invisible to everyone but its owner and admins
+        // regardless of what hash it claims.
+        var fileHash = ReaderHash.Normalize(request.FileHash) is { } normalized
+            && await _dbContext.ReaderBooks.AnyAsync(b => b.UserId == ownerId && b.FileHash == normalized)
+                ? normalized
+                : null;
+
         var dictionary = new Domain.Entities.Dictionary
         {
-            Name = request.Name.Trim(),
+            Name = TitleText.Truncate(request.Name.Trim()),
             WordsCount = totals.Count,
             OwnerId = ownerId,
-            IsPublic = isPublic,
-            // A malformed hash is dropped rather than refused: the import itself is still good.
-            FileHash = ReaderHash.Normalize(request.FileHash),
+            PublicationStatus = status,
+            FileHash = fileHash,
         };
 
         _dbContext.Dictionaries.Add(dictionary);
@@ -131,12 +188,13 @@ public class BookImportService
             dictionary.Id,
             TotalWords: totals.Count,
             NewWords: created.Count,
-            ReusedWords: totals.Count - created.Count);
+            ReusedWords: totals.Count - created.Count,
+            DroppedWords: dropped.Count);
     }
 
     private sealed record NormalizedChapter(int Order, string Title, Dictionary<string, int> Words);
 
-    private static List<NormalizedChapter> Normalize(IReadOnlyList<ImportChapter>? chapters)
+    private static List<NormalizedChapter> Normalize(IReadOnlyList<ImportChapter>? chapters, HashSet<string> dropped)
     {
         if (chapters == null)
         {
@@ -145,16 +203,17 @@ public class BookImportService
 
         return chapters
             .OrderBy(c => c.Order)
-            .Select(c => new NormalizedChapter(c.Order, c.Title.Trim(), NormalizeWords(c.Words)))
+            .Select(c => new NormalizedChapter(c.Order, TitleText.Truncate(c.Title.Trim()), NormalizeWords(c.Words, dropped)))
             .Where(c => c.Words.Count > 0)
             .ToList();
     }
 
     /// <summary>
-    /// The client already lowercases the words, but the same word can arrive
-    /// twice — deduplication is needed regardless.
+    /// The client already lowercases the words, but the same word can arrive twice —
+    /// deduplication is needed regardless. Words the fb2 tokenizer could never have produced
+    /// are dropped here and counted, so the caller can refuse a file that is mostly junk.
     /// </summary>
-    private static Dictionary<string, int> NormalizeWords(IReadOnlyList<ImportWord>? words)
+    private static Dictionary<string, int> NormalizeWords(IReadOnlyList<ImportWord>? words, HashSet<string> dropped)
     {
         var result = new Dictionary<string, int>(StringComparer.Ordinal);
 
@@ -169,6 +228,12 @@ public class BookImportService
 
             if (word.Length == 0 || item.Count <= 0)
             {
+                continue;
+            }
+
+            if (!ImportWordText.IsValid(word))
+            {
+                dropped.Add(word);
                 continue;
             }
 

@@ -86,3 +86,46 @@
   justify-content: center;
   gap: 12px;
 }
+
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.admin-queue {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.admin-queue li {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.admin-queue-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.admin-queue-head .num {
+  margin-left: auto;
+  color: var(--text-2);
+}
+
+.admin-queue-words {
+  color: var(--text-2);
+}
+
+.admin-queue-actions {
+  display: flex;
+  gap: 8px;
+}

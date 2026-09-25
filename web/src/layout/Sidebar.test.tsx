@@ -26,7 +26,6 @@ describe('Sidebar', () => {
         error={null}
         activeId={2}
         importActive={false}
-        canImport
         onSelect={onSelect}
         onImport={() => {}}
         personalActive={false}
@@ -53,7 +52,6 @@ describe('Sidebar', () => {
         error={null}
         activeId={null}
         importActive={false}
-        canImport
         onSelect={() => {}}
         onImport={() => {}}
         personalActive={false}
@@ -73,7 +71,6 @@ describe('Sidebar', () => {
         error={null}
         activeId={null}
         importActive
-        canImport
         onSelect={() => {}}
         onImport={onImport}
         personalActive={false}
@@ -94,24 +91,6 @@ describe('Sidebar', () => {
     expect(onImport).toHaveBeenCalledTimes(1)
   })
 
-  it('hides the import button from a user who cannot create dictionaries', async () => {
-    const { container } = await render(
-      <Sidebar
-        items={[]}
-        error={null}
-        activeId={null}
-        importActive={false}
-        canImport={false}
-        onSelect={vi.fn()}
-        onImport={vi.fn()}
-        personalActive={false}
-        onOpenPersonal={() => {}}
-      />,
-    )
-
-    expect(container.querySelector('.sidebar-footer')).toBeNull()
-  })
-
   it('pins the personal dictionary in its own section with a word count', async () => {
     const onOpenPersonal = vi.fn()
     const { container } = await render(
@@ -120,7 +99,6 @@ describe('Sidebar', () => {
         error={null}
         activeId={null}
         importActive={false}
-        canImport={false}
         onSelect={() => {}}
         onImport={() => {}}
         personalActive
@@ -149,7 +127,6 @@ describe('Sidebar', () => {
         error={null}
         activeId={null}
         importActive={false}
-        canImport={false}
         onSelect={() => {}}
         onImport={() => {}}
         personalActive={false}
@@ -171,7 +148,6 @@ describe('picker', () => {
         error={null}
         activeId={2}
         importActive={false}
-        canImport
         onSelect={() => {}}
         onImport={() => {}}
         personalActive={false}
@@ -199,7 +175,6 @@ describe('picker', () => {
         error={null}
         activeId={null}
         importActive={false}
-        canImport={false}
         onSelect={onSelect}
         onImport={() => {}}
         personalActive={false}
@@ -230,7 +205,6 @@ describe('picker', () => {
         error={null}
         activeId={null}
         importActive={false}
-        canImport={false}
         onSelect={() => {}}
         onImport={() => {}}
         personalActive
@@ -247,7 +221,6 @@ describe('picker', () => {
         error={null}
         activeId={3}
         importActive={false}
-        canImport={false}
         onSelect={() => {}}
         onImport={() => {}}
         personalActive={false}
@@ -266,7 +239,6 @@ describe('picker', () => {
         error={null}
         activeId={null}
         importActive={false}
-        canImport={false}
         onSelect={() => {}}
         onImport={() => {}}
         personalActive={false}
@@ -288,7 +260,6 @@ describe('modes', () => {
         error={null}
         activeId={null}
         importActive={false}
-        canImport
         onSelect={() => {}}
         onImport={() => {}}
         personalActive={false}
