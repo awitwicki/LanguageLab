@@ -135,7 +135,8 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   (`PronunciationAnswerChecker` — a word-recognition proxy for pronunciation quality, not
   phoneme-level scoring), and every attempt is logged append-only (`PronunciationAttempt`).
   `/api/pronunciation` (`GET /progress`, `GET /families/{key}`, `GET /families/{key}/next`,
-  `POST /words/{word}/attempts`). Gated off entirely in browsers without `SpeechRecognition`
+  `POST /words/{word}/attempts`, `DELETE /words/{word}/progress` — the word card's Reset
+  progress, which drops the standing and keeps the attempt log). Gated off entirely in browsers without `SpeechRecognition`
   (Firefox, Safari) — no degraded fallback mode.
 - Training requires a non-empty `WordPair.Translation` (both for batch words and distractors). Translations for the "don't know" shelf were backfilled once on 2026-09-07 (`result/translations.txt`, local); auto-translation is in the README TODO.
 - Batch = the scope's most frequent learnable words (chapter or book frequency), deterministic; the web app shows a preview and passes `wordPairIds` explicitly.

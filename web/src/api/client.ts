@@ -914,6 +914,10 @@ export const api = {
       `/api/pronunciation/families/${encodeURIComponent(key)}/next?includeMastered=${includeMastered}`,
     ) as Promise<PronunciationNextWord>,
 
+  /** Back to New, as if never practised; the attempt log on the server is kept. */
+  resetPronunciationWord: (word: string) =>
+    request<null>(`/api/pronunciation/words/${encodeURIComponent(word)}/progress`, { method: 'DELETE' }),
+
   submitPronunciationAttempt: (word: string, accent: Accent, transcript: string) =>
     request<PronunciationAttemptResult>(`/api/pronunciation/words/${encodeURIComponent(word)}/attempts`, {
       method: 'POST',

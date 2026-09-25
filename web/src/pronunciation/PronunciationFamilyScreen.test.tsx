@@ -62,6 +62,7 @@ function freshHookResult(): UsePronunciationFamilyResult {
     reportAttemptError: vi.fn(),
     next: vi.fn(),
     practiceAgain: vi.fn(),
+    resetWord: vi.fn(() => Promise.resolve()),
   }
 }
 
@@ -502,5 +503,21 @@ describe('attempt strip', () => {
 
     expect(micMock.start).not.toHaveBeenCalled()
     expect(recognition.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('resets a word that has been practised', async () => {
+    const { container } = await show({
+      word: { word: 'ship', ipa: '/\u0283\u026Ap/', audioUs: '/a-us.ogg', audioUk: '/a-uk.ogg', state: 'learning', streak: 2 },
+    })
+
+    await click(buttonLabelled(container, 'Reset progress')!)
+
+    expect(hookResult.resetWord).toHaveBeenCalled()
+  })
+
+  it('offers no reset for a word never practised', async () => {
+    const { container } = await show()
+
+    expect(buttonLabelled(container, 'Reset progress')).toBeUndefined()
   })
 })

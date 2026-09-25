@@ -121,6 +121,32 @@ public class PronunciationProgressService
         return new AttemptResult(outcome, score, progress.State, progress.Streak, familyDone);
     }
 
+    /// <summary>
+    /// Puts a word back to New for this user, so it is served as if never practised. The
+    /// attempt log is append-only and stays untouched — only the standing that decides what
+    /// to serve next goes. False is a word the catalog does not have; a word never
+    /// practised is a no-op, not a failure.
+    /// </summary>
+    public async Task<bool> ResetWordAsync(long userId, string word)
+    {
+        var catalogWord = PronunciationCatalog.Find(word);
+        if (catalogWord is null)
+        {
+            return false;
+        }
+
+        var progress = await _dbContext.PronunciationProgresses
+            .SingleOrDefaultAsync(p => p.UserId == userId && p.Word == catalogWord.Word);
+
+        if (progress is not null)
+        {
+            _dbContext.PronunciationProgresses.Remove(progress);
+            await _dbContext.SaveChangesAsync();
+        }
+
+        return true;
+    }
+
     private async Task<Dictionary<string, PronunciationState>> StatesAsync(long userId) =>
         await _dbContext.PronunciationProgresses
             .Where(p => p.UserId == userId)

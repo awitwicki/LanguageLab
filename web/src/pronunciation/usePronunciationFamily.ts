@@ -23,8 +23,8 @@ export interface UsePronunciationFamilyResult {
   error: string | null
   /**
    * A failure of one recording attempt — a denied microphone, a recognizer error, a
-   * rejected POST. Kept apart from `error` because the word stays loaded and usable:
-   * the screen shows this next to the Record button and the learner retries.
+   * rejected POST — or of a reset. Kept apart from `error` because the word stays loaded
+   * and usable: the screen shows this next to the Record button and the learner retries.
    */
   attemptError: string | null
   title: string
@@ -37,6 +37,8 @@ export interface UsePronunciationFamilyResult {
   reportAttemptError: (message: string | null) => void
   next: () => void
   practiceAgain: () => void
+  /** Puts the word on screen back to New and serves the family again. */
+  resetWord: () => Promise<void>
 }
 
 const ACCENT_KEY = 'pronunciation-accent'
@@ -133,6 +135,25 @@ export function usePronunciationFamily(familyKey: string): UsePronunciationFamil
     [state.status, state.word, state.accent],
   )
 
+  const resetWord = useCallback(async () => {
+    const word = state.word
+    if (!word) {
+      return
+    }
+
+    try {
+      await api.resetPronunciationWord(word.word)
+    } catch {
+      setState((s) => ({
+        ...s,
+        attemptError: "Couldn't reset that word — check your connection and try again.",
+      }))
+      return
+    }
+
+    load(false)
+  }, [state.word, load])
+
   const next = useCallback(() => load(false), [load])
   const practiceAgain = useCallback(() => load(true), [load])
 
@@ -149,5 +170,6 @@ export function usePronunciationFamily(familyKey: string): UsePronunciationFamil
     reportAttemptError,
     next,
     practiceAgain,
+    resetWord,
   }
 }
