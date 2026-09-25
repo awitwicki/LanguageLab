@@ -162,6 +162,7 @@ dotnet ef --project LanguageLab.Infrastructure --startup-project LanguageLab.Api
 ## Frontend conventions (`web/`)
 
 - Design tokens (colors, typography, radii, motion) — only in `web/src/index.css`; component CSS uses only `var(--…)`, no hex. Light/dark theme — via `prefers-color-scheme`.
+  `web/src/index.contrast.test.ts` reads the tokens straight out of the CSS and fails if a button's label drops below WCAG AA (4.5:1) in either theme, at rest or hovered — add new filled buttons to its `BUTTONS` table.
 - CSS lives next to its component and is imported from its `.tsx`. New buttons — via `.btn` + `.btn-primary | .btn-secondary | .btn-quiet` (+ `.btn-lg`).
 - UI copy — English, sentence case, verb-first button labels. Keyboard shortcuts are shown as a separate `<kbd>`, not inline in the text.
 - Numbers — via `formatInt`/`wordsLabel` from `web/src/lib/format.ts`, class `.num` for tabular figures.

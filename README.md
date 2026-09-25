@@ -13,7 +13,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService.LookupAsync` (`LanguageLab.Application/Translation`) now caches a provider's answer into the shared vocabulary on every lookup, but nothing calls it from `BookImportService` or `WordSortingService.MarkAsync` yet (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation still don't enter exercises)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
-- [ ] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
+- [x] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
 - [ ] Spacing tokens in the design system: `web/src/index.css` tokenizes color/typography/radii, but not spacing
 - [ ] Move a word back from "know" to "don't know" outside the exercise-start screen: the cross-out in the batch preview (`web/src/training/useBatchPreview.ts`) — "bring back" only works within the current visit; after that the word can only be reached via `POST /api/sorting/mark`
 - [ ] `ChapterStatsService.GetChapterViewsAsync`: one COUNT query per returned chapter (plus 3 whole-book queries per call) — also backs `GET /api/chapters/starred` on the home screen now, not just `GET /api/dictionaries/{id}`; merge into one GROUP BY if this ever becomes slow
