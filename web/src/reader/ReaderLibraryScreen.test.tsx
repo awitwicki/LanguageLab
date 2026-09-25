@@ -137,6 +137,32 @@ describe('ReaderLibraryScreen', () => {
     expect(apiMock.removeReaderBook).toHaveBeenCalledWith(ELSEWHERE)
   })
 
+  it('closes an open row menu on Escape', async () => {
+    const { container } = await openLibrary()
+
+    await click(container.querySelector('[data-section="device"] [aria-label="More actions"]')!)
+    expect(button(container, 'Remove from this device')).toBeDefined()
+
+    await act(async () => {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+
+    expect(button(container, 'Remove from this device')).toBeUndefined()
+  })
+
+  it('closes an open row menu on a press outside it', async () => {
+    const { container } = await openLibrary()
+
+    await click(container.querySelector('[data-section="device"] [aria-label="More actions"]')!)
+    expect(button(container, 'Remove from this device')).toBeDefined()
+
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+
+    expect(button(container, 'Remove from this device')).toBeUndefined()
+  })
+
   it('warns when books cannot be kept on this device', async () => {
     const { container } = await openLibrary({ persistent: false })
 

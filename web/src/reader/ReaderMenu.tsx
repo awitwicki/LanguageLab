@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useDismiss } from '../lib/useDismiss'
 import type { ReaderChapter } from './readerBook'
 import { MAX_DIM, TEXT_SIZES, type ReaderSettings, type ReaderTheme } from './readerSettings'
 import './ReaderMenu.css'
@@ -31,6 +32,9 @@ export function ReaderMenu({
   onClose,
 }: Props) {
   const [tab, setTab] = useState<'contents' | 'display'>('contents')
+
+  // The sheet only exists while it is open, so it is always dismissible.
+  useDismiss(true, onClose)
 
   return (
     <>

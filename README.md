@@ -37,7 +37,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Admin review of machine translations — `WordPair.TranslationOrigin = Machine` rows written by `TranslationService`
 - [ ] Reader: sentence positions and cached translation keys depend on `Intl.Segmenter`'s exact output, which can differ across browser engines/ICU versions — resume is best-effort at the sentence level; chapter/paragraph indices are stable and `clampPosition` (`web/src/reader/readerBook.ts`) prevents a crash either way
 - [ ] Reader: a fb2 with no `<section>` structure renders as a single chapter with the whole book's sentences in the DOM at once (no virtualization by design) — likely slow on a phone for a very long, sectionless book; see `collectChapters` in `web/src/reader/readerBook.ts`
-- [ ] Reader: `ReaderMenu` (`web/src/reader/ReaderMenu.tsx`) and the library's row action menu (`web/src/reader/ReaderLibraryScreen.tsx`, `RowMenu`) have no Escape-key or outside-click handler to close them
+- [x] Reader: `ReaderMenu` (`web/src/reader/ReaderMenu.tsx`) and the library's row action menu (`web/src/reader/ReaderLibraryScreen.tsx`, `RowMenu`) have no Escape-key or outside-click handler to close them
 - [ ] Automatic quality scoring of an import (share of words present in an English lexicon, language detection) so a good dictionary publishes without waiting on an admin — `BookImportService`; needs a server-side lexicon
 - [ ] User-facing reports on a published dictionary ("this is spam") feeding the same admin queue — `DictionaryPublicationService`
 - [ ] A one-off audit of shared `WordPair` rows that predate the import word rule — nothing cleans up what is already in the table
