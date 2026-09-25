@@ -153,5 +153,23 @@ public static class ReaderEndpoints
             await words.IgnoreAsync(await currentUser.GetIdAsync(), word, DateTime.UtcNow);
             return Results.NoContent();
         });
+
+        // The panel's undo. 409 rather than a silent no-op: the panel only offers it when the
+        // word it loaded had no Leitner row, so a refusal here means that view went stale.
+        group.MapDelete("/words/{lemma}/shelf", async (string lemma, ReaderWordService words, ICurrentUser currentUser) =>
+        {
+            var word = WordText.Normalize(lemma);
+
+            if (!WordText.IsValid(word))
+            {
+                return Results.BadRequest();
+            }
+
+            return await words.ResetAsync(await currentUser.GetIdAsync(), word) == ResetOutcome.Cleared
+                ? Results.NoContent()
+                : Results.Json(
+                    new DictionaryError("This word is already in training."),
+                    statusCode: StatusCodes.Status409Conflict);
+        });
     }
 }
