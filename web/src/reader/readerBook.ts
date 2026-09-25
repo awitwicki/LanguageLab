@@ -42,6 +42,19 @@ const PARAGRAPH_TAGS = new Set(['p', 'v', 'subtitle', 'text-author'])
 /** Titles Intl.Segmenter mistakes for a sentence end ("Mr. | Smith"). Lowercase, without the dot. */
 const ABBREVIATION_END = /(?:^|[\s(])(?:mr|mrs|ms|dr|st|mt|jr|sr|prof|gen|col|capt|lt|sgt|vs)\.$/i
 
+/**
+ * Sentences after which a chapter is cut into parts. A book with no structure of its own — an fb2
+ * whose body holds only paragraphs, or an epub that is one XHTML document — would otherwise be a
+ * single chapter holding the whole text: nothing to jump by in the contents, a chapter progress
+ * bar that never moves, and one chapter the reader keeps mounting for a whole book.
+ *
+ * Set well above any real chapter (800 sentences is some 12,000 words) on purpose: a real chapter
+ * cut in two is a worse thing to look at than a long one, and the reader does not need the cut to
+ * keep a long chapter cheap — it puts a few chunks of a chapter in the DOM, never all of it
+ * (chapterWindow.ts). What the cut is for is the book that is one chapter from cover to cover.
+ */
+export const MAX_CHAPTER_SENTENCES = 800
+
 const sentenceSegmenter = new Intl.Segmenter('en', { granularity: 'sentence' })
 const wordSegmenter = new Intl.Segmenter('en', { granularity: 'word' })
 
@@ -80,7 +93,7 @@ function readerBookFromEpub(epub: EpubBook): ReaderBook {
     throw new BookFormatError('invalid')
   }
 
-  return { title: epub.title, author: epub.author, chapters }
+  return { title: epub.title, author: epub.author, chapters: splitLongChapters(chapters) }
 }
 
 /**
@@ -121,7 +134,53 @@ export function parseReaderBook(xml: string, fallbackTitle: string): ReaderBook 
     throw new BookFormatError('invalid')
   }
 
-  return { title, author, chapters }
+  return { title, author, chapters: splitLongChapters(chapters) }
+}
+
+/**
+ * Chapters longer than MAX_CHAPTER_SENTENCES become several, cut between paragraphs — a paragraph
+ * is the unit a position points at, so it is never cut, however long it runs.
+ */
+function splitLongChapters(chapters: ReaderChapter[]): ReaderChapter[] {
+  return chapters.flatMap((chapter) =>
+    sentenceCount(chapter.paragraphs) > MAX_CHAPTER_SENTENCES ? splitChapter(chapter) : [chapter],
+  )
+}
+
+function splitChapter(chapter: ReaderChapter): ReaderChapter[] {
+  const parts: ReaderParagraph[][] = []
+  let current: ReaderParagraph[] = []
+  let sentences = 0
+
+  for (const paragraph of chapter.paragraphs) {
+    if (current.length > 0 && sentences + paragraph.sentences.length > MAX_CHAPTER_SENTENCES) {
+      parts.push(current)
+      current = []
+      sentences = 0
+    }
+
+    current.push(paragraph)
+    sentences += paragraph.sentences.length
+  }
+
+  if (current.length > 0) {
+    parts.push(current)
+  }
+
+  return parts.map((paragraphs, index) => ({ title: partTitle(chapter.title, index), paragraphs }))
+}
+
+/**
+ * A later part says which one it is, so the contents do not repeat one title. A chapter with no
+ * title of its own keeps none — the reader numbers those itself ("Chapter 7"), which is exactly
+ * what the parts of a structureless book should read as.
+ */
+function partTitle(title: string, index: number): string {
+  return index === 0 || title === '' ? title : `${title} (part ${index + 1})`
+}
+
+function sentenceCount(paragraphs: ReaderParagraph[]): number {
+  return paragraphs.reduce((sum, paragraph) => sum + paragraph.sentences.length, 0)
 }
 
 function collectChapters(section: Element, into: ReaderChapter[]) {
@@ -217,19 +276,29 @@ export function comparePositions(a: ReaderPosition, b: ReaderPosition): number {
 /** A stored position may point past the end of an edited or differently parsed book: fall back to a chapter start. */
 export function clampPosition(book: ReaderBook, position: ReaderPosition): ReaderPosition {
   const chapterIndex = Math.min(Math.max(0, position.chapterIndex), book.chapters.length - 1)
-  const start = { chapterIndex, paragraphIndex: 0, sentenceIndex: 0 }
 
   if (chapterIndex !== position.chapterIndex) {
-    return start
+    return { chapterIndex, paragraphIndex: 0, sentenceIndex: 0 }
   }
 
-  const paragraph = book.chapters[chapterIndex].paragraphs[position.paragraphIndex]
+  // A chapter the book no longer has that many paragraphs in — the book was cut into parts since
+  // the position was stored (splitLongChapters), or parsed differently. The paragraphs kept their
+  // order, so carrying the overflow into the chapters after it lands on the same text again.
+  let index = chapterIndex
+  let paragraphIndex = position.paragraphIndex
+
+  while (index < book.chapters.length && paragraphIndex >= book.chapters[index].paragraphs.length) {
+    paragraphIndex -= book.chapters[index].paragraphs.length
+    index++
+  }
+
+  const paragraph = index < book.chapters.length ? book.chapters[index].paragraphs[paragraphIndex] : undefined
 
   if (!paragraph || position.sentenceIndex < 0 || position.sentenceIndex >= paragraph.sentences.length) {
-    return start
+    return { chapterIndex: paragraph ? index : chapterIndex, paragraphIndex: 0, sentenceIndex: 0 }
   }
 
-  return position
+  return { chapterIndex: index, paragraphIndex, sentenceIndex: position.sentenceIndex }
 }
 
 /** Sentences before the position over all sentences, 0..1. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EPUB3_FILES, epub3Bytes, zipBytes } from '../test/epubFixtures'
+import { EPUB3_FILES, epub3Bytes, xhtmlDoc, zipBytes } from '../test/epubFixtures'
 import { bytesOf, READER_BOOK_XML } from '../test/readerFixtures'
 import { BookFormatError } from '../books/formatError'
 import {
@@ -7,6 +7,7 @@ import {
   chapterProgress,
   clampPosition,
   comparePositions,
+  MAX_CHAPTER_SENTENCES,
   parsePositionKey,
   parseReaderBook,
   positionKey,
@@ -55,6 +56,69 @@ describe('parseReaderBook', () => {
     expect(() => parseReaderBook('<FictionBook><body></body></FictionBook>', 'x')).toThrow(
       "This file isn't a readable fb2 or epub book.",
     )
+  })
+})
+
+/** `count` paragraphs of one sentence each, as fb2 <p> elements. */
+const paragraphs = (count: number, from = 0) =>
+  Array.from({ length: count }, (_, index) => `<p>Paragraph ${from + index} said the guard.</p>`).join('')
+
+describe('long chapters', () => {
+  it('cuts a book with no section structure into chapters of its own', () => {
+    const xml = `<FictionBook><body>${paragraphs(MAX_CHAPTER_SENTENCES + 40)}</body></FictionBook>`
+    const long = parseReaderBook(xml, 'wool')
+
+    expect(long.chapters).toHaveLength(2)
+    expect(long.chapters.map((c) => c.paragraphs.length)).toEqual([MAX_CHAPTER_SENTENCES, 40])
+    // No title anywhere in such a book: every part is left to the reader's "Chapter N".
+    expect(long.chapters.map((c) => c.title)).toEqual(['', ''])
+    // The text keeps its order across the cut.
+    expect(long.chapters[1].paragraphs[0].sentences[0].text).toBe(`Paragraph ${MAX_CHAPTER_SENTENCES} said the guard.`)
+  })
+
+  it('says which part of a titled chapter a later part is', () => {
+    const xml = `<FictionBook><body><section><title><p>The Swordholder</p></title>${paragraphs(
+      MAX_CHAPTER_SENTENCES * 2 + 1,
+    )}</section></body></FictionBook>`
+
+    expect(parseReaderBook(xml, 'x').chapters.map((c) => c.title)).toEqual([
+      'The Swordholder',
+      'The Swordholder (part 2)',
+      'The Swordholder (part 3)',
+    ])
+  })
+
+  it('leaves a chapter that fits whole', () => {
+    const xml = `<FictionBook><body><section><title><p>Short</p></title>${paragraphs(
+      MAX_CHAPTER_SENTENCES,
+    )}</section></body></FictionBook>`
+    const chapters = parseReaderBook(xml, 'x').chapters
+
+    expect(chapters).toHaveLength(1)
+    expect(chapters[0].paragraphs).toHaveLength(MAX_CHAPTER_SENTENCES)
+  })
+
+  it('never cuts a paragraph in two, however long it is', () => {
+    const sentences = Array.from({ length: MAX_CHAPTER_SENTENCES + 10 }, (_, i) => `Sentence ${i} ran on.`).join(' ')
+    const xml = `<FictionBook><body><p>${sentences}</p><p>After it.</p></body></FictionBook>`
+    const chapters = parseReaderBook(xml, 'x').chapters
+
+    expect(chapters).toHaveLength(2)
+    expect(chapters[0].paragraphs[0].sentences).toHaveLength(MAX_CHAPTER_SENTENCES + 10)
+    expect(chapters[1].paragraphs[0].sentences[0].text).toBe('After it.')
+  })
+
+  it('cuts an epub whose whole text is one document the same way', () => {
+    const one = xhtmlDoc(`<h2>Chapter Three</h2>${paragraphs(MAX_CHAPTER_SENTENCES + 5)}`)
+    const epub = readBookFile(epub3Bytes({ 'OEBPS/text/ch03.xhtml': one }), 'deaths-end.epub')
+
+    expect(epub.chapters.map((c) => c.title)).toEqual([
+      'The Swordholder',
+      'Year 62',
+      'Chapter Three',
+      'Chapter Three (part 2)',
+    ])
+    expect(epub.chapters[3].paragraphs).toHaveLength(5)
   })
 })
 
@@ -163,6 +227,16 @@ describe('positions', () => {
       chapterIndex: 0,
       paragraphIndex: 0,
       sentenceIndex: 1,
+    })
+  })
+
+  it('carries a paragraph past the end of its chapter into the chapter after it', () => {
+    // A book re-parsed since the position was stored (a long chapter is now parts): chapter 0 has
+    // 2 paragraphs, so its paragraph 2 is chapter 1's paragraph 0 — the same place in the text.
+    expect(clampPosition(book, { chapterIndex: 0, paragraphIndex: 2, sentenceIndex: 0 })).toEqual({
+      chapterIndex: 1,
+      paragraphIndex: 0,
+      sentenceIndex: 0,
     })
   })
 

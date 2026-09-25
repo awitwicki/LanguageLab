@@ -103,3 +103,20 @@
 .reader .btn-quiet {
   color: var(--reader-muted);
 }
+
+/* Stands in for a chunk of sentences that is not in the DOM yet. Its height can only be a guess —
+   those sentences have never been laid out — and being off is harmless: a gap below the screen
+   moves nothing as it fills, and one above it is compensated as it mounts (ReaderScreen.tsx).
+   Measured against real text at the reader's own line-height: about 3.5 times the text size per
+   sentence at the body's full width, half again as much on a phone, where every sentence wraps
+   over more lines. */
+.reader-gap {
+  height: calc(var(--reader-gap-sentences, 20) * 3.5em);
+  contain: size layout;
+}
+
+@media (max-width: 600px) {
+  .reader-gap {
+    height: calc(var(--reader-gap-sentences, 20) * 5em);
+  }
+}
