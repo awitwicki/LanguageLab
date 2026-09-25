@@ -12,8 +12,21 @@ public enum LearnTarget
     Personal,
 }
 
+/// <summary>
+/// CanReset: whether the panel may undo the button the word currently sits under. Off when there
+/// is nothing to undo, and off for a word with a Leitner row — undoing would throw progress away.
+/// </summary>
 public sealed record ReaderWordView(
-    string Lemma, string? Translation, TranslationSource Source, ReaderWordStatus Status, LearnTarget LearnTarget);
+    string Lemma, string? Translation, TranslationSource Source, ReaderWordShelf Shelf, bool CanReset,
+    LearnTarget LearnTarget);
+
+public enum ResetOutcome
+{
+    /// <summary>The word is off every shelf — including the case where it was on none to begin with.</summary>
+    Cleared,
+    /// <summary>A Leitner row makes this a word really in training, so the undo left it alone.</summary>
+    InTraining,
+}
 
 public enum LearnOutcome
 {
@@ -62,10 +75,11 @@ public class ReaderWordService
     {
         // First: the lookup may create the shared row, and the target check must see it.
         var lookup = await _translation.LookupAsync(lemma, cancellationToken);
-        var status = await _statuses.GetAsync(userId, lemma);
+        var shelf = await _statuses.GetShelfAsync(userId, lemma);
         var target = await LearnTargetAsync(userId, role, lemma, dictionaryId);
+        var canReset = shelf.Shelf != ReaderWordShelf.New && !shelf.InTraining;
 
-        return new ReaderWordView(lemma, lookup.Translation, lookup.Source, status, target);
+        return new ReaderWordView(lemma, lookup.Translation, lookup.Source, shelf.Shelf, canReset, target);
     }
 
     /// <summary>
@@ -119,6 +133,44 @@ public class ReaderWordService
     /// <summary>The "exclude" shelf — names and other non-words. The reader stops highlighting it.</summary>
     public async Task IgnoreAsync(long userId, string lemma, DateTime nowUtc) =>
         await _sorting.MarkAsync(userId, await SharedRowIdAsync(lemma), SortStatus.Excluded, nowUtc);
+
+    /// <summary>
+    /// The undo behind the panel's selected button: takes the lemma off whichever shelf it sits
+    /// on, and out of "My words" when that is where "Add to training" put it — left there it
+    /// would keep turning up in exercises. Both the shared row and the user's own count, since a
+    /// word can have one of each. Refused for a word with a Leitner row: the learner has real
+    /// progress on it, and a mis-tap undo must not be what throws that away.
+    /// </summary>
+    public async Task<ResetOutcome> ResetAsync(long userId, string lemma)
+    {
+        var rows = await _dbContext.Words
+            .Where(w => w.Word == lemma && (w.OwnerId == null || w.OwnerId == userId))
+            .Select(w => new { w.Id, w.OwnerId })
+            .ToListAsync();
+
+        var ids = rows.Select(r => r.Id).ToList();
+
+        if (await _dbContext.WordProgresses.AnyAsync(p => p.UserId == userId && ids.Contains(p.WordPairId)))
+        {
+            return ResetOutcome.InTraining;
+        }
+
+        _dbContext.KnownWords.RemoveRange(
+            _dbContext.KnownWords.Where(k => k.UserId == userId && ids.Contains(k.WordPairId)));
+        _dbContext.UnknownWords.RemoveRange(
+            _dbContext.UnknownWords.Where(u => u.UserId == userId && ids.Contains(u.WordPairId)));
+        _dbContext.ExcludedWords.RemoveRange(
+            _dbContext.ExcludedWords.Where(e => e.UserId == userId && ids.Contains(e.WordPairId)));
+
+        await _dbContext.SaveChangesAsync();
+
+        foreach (var own in rows.Where(r => r.OwnerId == userId))
+        {
+            await _personal.RemoveAsync(userId, own.Id);
+        }
+
+        return ResetOutcome.Cleared;
+    }
 
     /// <summary>The lemma's shared row, created untranslated when there is none (as book import does).</summary>
     private async Task<long> SharedRowIdAsync(string lemma)

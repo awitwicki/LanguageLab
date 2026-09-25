@@ -114,7 +114,12 @@ export interface TranslationLookup {
   source: TranslationSource
 }
 
-export type ReaderWordStatus = 'new' | 'learning' | 'known'
+/**
+ * The shelf a word sits on, for the word panel's buttons. The highlights know only three states
+ * (GET /api/reader/word-statuses) — an ignored word is not marked, the same as a known one — but
+ * the panel has to show which button the learner pressed, so it tells the two apart.
+ */
+export type ReaderWordShelf = 'new' | 'learning' | 'known' | 'ignored'
 
 /** The server's record of a book read in the reader — the file itself stays on the device. */
 export interface ReaderBookDto {
@@ -149,7 +154,9 @@ export interface ReaderWord {
   lemma: string
   translation: string | null
   source: TranslationSource
-  status: ReaderWordStatus
+  shelf: ReaderWordShelf
+  /** Whether tapping the marked button undoes it: off for a new word and for one in training. */
+  canReset: boolean
   learnTarget: LearnTarget
 }
 
@@ -734,6 +741,10 @@ export const api = {
   /** The "exclude" shelf: a name or another non-word the reader should stop highlighting. */
   ignoreWord: (lemma: string) =>
     request<null>(`/api/reader/words/${encodeURIComponent(lemma)}/ignore`, { method: 'POST' }),
+
+  // 409 carries { message }: the word gained a Leitner row since the panel loaded it.
+  resetWord: (lemma: string) =>
+    request<null>(`/api/reader/words/${encodeURIComponent(lemma)}/shelf`, { method: 'DELETE' }),
 
   /** Never throws: the reader shows each outcome under the sentence. */
   translateSentence: async (text: string): Promise<SentenceTranslationResult> => {

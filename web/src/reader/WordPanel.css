@@ -144,3 +144,9 @@
   border: 1px solid var(--reader-bar);
   color: var(--reader-muted);
 }
+
+/* The shelf the word is on now. A ring rather than a fill: it has to read on all three buttons. */
+.word-panel-marked {
+  outline: 2px solid var(--reader-text);
+  outline-offset: 2px;
+}

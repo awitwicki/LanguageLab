@@ -9,6 +9,7 @@ const apiMock = vi.hoisted(() => ({
   learnWord: vi.fn(),
   knowWord: vi.fn(),
   ignoreWord: vi.fn(),
+  resetWord: vi.fn(),
 }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
@@ -17,7 +18,8 @@ const adjust: ReaderWord = {
   lemma: 'adjust',
   translation: 'налаштувати',
   source: 'dictionary',
-  status: 'new',
+  shelf: 'new',
+  canReset: false,
   learnTarget: 'book',
 }
 
@@ -59,6 +61,7 @@ beforeEach(() => {
   apiMock.learnWord.mockReset().mockResolvedValue(null)
   apiMock.knowWord.mockReset().mockResolvedValue(null)
   apiMock.ignoreWord.mockReset().mockResolvedValue(null)
+  apiMock.resetWord.mockReset().mockResolvedValue(null)
 })
 
 describe('WordPanel', () => {
@@ -174,6 +177,52 @@ describe('WordPanel', () => {
 
     await act(async () => finish())
     await flush()
+  })
+
+  it('names the shelf the word sits on, an ignored word told apart from a known one', async () => {
+    const { container } = await open({ ...adjust, shelf: 'ignored', canReset: true })
+
+    expect(container.querySelector('.word-panel-meta')!.textContent).toBe('Ignored · seen 18× in this book')
+  })
+
+  it('marks the button the word already sits under and offers to undo it', async () => {
+    const { container } = await open({ ...adjust, shelf: 'ignored', canReset: true })
+
+    expect(button(container, 'Ignore').getAttribute('aria-pressed')).toBe('true')
+    expect(button(container, 'I know it').getAttribute('aria-pressed')).toBe('false')
+    expect(container.querySelector('.word-panel-hint')!.textContent).toBe('Tap Ignore again to undo')
+  })
+
+  it('undoes the shelf when the marked button is tapped again, and the word is new once more', async () => {
+    const view = await open({ ...adjust, lemma: 'frank', shelf: 'ignored', canReset: true })
+
+    await click(button(view.container, 'Ignore'))
+    await flush()
+
+    expect(apiMock.resetWord).toHaveBeenCalledWith('frank')
+    expect(apiMock.ignoreWord).not.toHaveBeenCalled()
+    expect(view.onStatusChange).toHaveBeenCalledWith('frank', 'new')
+    await closesAfterSlide(view.container, view.onClose)
+  })
+
+  it('moves the word to another shelf when a different button is tapped', async () => {
+    const { container, onStatusChange } = await open({ ...adjust, shelf: 'ignored', canReset: true })
+
+    await click(button(container, 'I know it'))
+    await flush()
+
+    expect(apiMock.knowWord).toHaveBeenCalledWith('adjust')
+    expect(apiMock.resetWord).not.toHaveBeenCalled()
+    expect(onStatusChange).toHaveBeenCalledWith('adjust', 'known')
+  })
+
+  it('withholds the undo from a word that is really in training', async () => {
+    const { container } = await open({ ...adjust, shelf: 'learning', canReset: false })
+
+    expect(button(container, 'Add to training').getAttribute('aria-pressed')).toBe('true')
+    expect(button(container, 'Add to training').disabled).toBe(true)
+    expect(button(container, 'I know it').disabled).toBe(false)
+    expect(container.querySelector('.word-panel-hint')!.textContent).toBe('In training — progress is kept')
   })
 
   it('says so when the lookup fails', async () => {
