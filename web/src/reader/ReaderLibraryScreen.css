@@ -1,0 +1,129 @@
+.library {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.library-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.library-head .title {
+  margin: 0;
+}
+
+.library-section {
+  margin: 24px 0 8px;
+  color: var(--text-2);
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.library-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.library-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.library-row:last-child {
+  border-bottom: 0;
+}
+
+.library-row-open,
+.library-row-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+
+.library-row-open {
+  cursor: pointer;
+}
+
+.library-row-title {
+  font-size: var(--fs-headline);
+  line-height: var(--lh-headline);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.library-row-meta {
+  color: var(--text-2);
+  font-size: var(--fs-footnote);
+}
+
+.library-row-menu {
+  position: relative;
+}
+
+.library-row-actions {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 1;
+  display: grid;
+  min-width: 220px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-card);
+}
+
+.library-empty,
+.library-notice {
+  color: var(--text-2);
+  font-size: var(--fs-footnote);
+}
+
+.library-error {
+  color: var(--danger);
+}
+
+.library-mismatch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+}
+
+.library-mismatch p {
+  flex: 1;
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .library-row {
+    flex-wrap: wrap;
+  }
+}

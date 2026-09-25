@@ -1,0 +1,89 @@
+.welcome {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  max-width: 520px;
+  padding-top: 24px;
+}
+
+.welcome-hint {
+  font-size: var(--fs-headline);
+  line-height: 26px;
+  color: var(--text-2);
+}
+
+/* The sidebar becomes a picker on phones (Sidebar.css, same breakpoint) — the hint follows it. */
+.hint-phone {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  .hint-desktop {
+    display: none;
+  }
+
+  .hint-phone {
+    display: inline;
+  }
+}
+
+/* The stats card spans the column; the placeholder copy below keeps its own start alignment. */
+.learning-stats {
+  justify-self: stretch;
+  display: grid;
+  gap: 20px;
+  padding: 20px;
+  margin-bottom: 28px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+}
+
+/* dl/dd are not in the global reset. */
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+/* Shelf totals above, Leitner standing below: a hairline keeps the two rows apart. */
+.stat-tiles + .stat-tiles {
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+}
+
+.stat-tile {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* The value and, on the due tile, the review button that acts on it. */
+.stat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+
+/* Starred chapters: the same card as the stats, one list per book. */
+.starred-chapters {
+  justify-self: stretch;
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  margin-bottom: 28px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+}
+
+.starred-book {
+  display: grid;
+  gap: 8px;
+}
+
+.starred-book h3 {
+  color: var(--text-2);
+}

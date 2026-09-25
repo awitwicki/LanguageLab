@@ -1,0 +1,48 @@
+.group-path {
+  display: grid;
+  gap: 16px;
+}
+
+.family-node {
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  display: grid;
+  gap: 10px;
+}
+
+.family-node-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.family-node-title {
+  font-weight: 600;
+}
+
+.family-node-pattern {
+  color: var(--text-2);
+}
+
+.family-node-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.family-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-footnote);
+}
+
+.family-table th,
+.family-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--hairline);
+}

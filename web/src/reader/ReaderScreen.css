@@ -1,0 +1,105 @@
+.reader {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--reader-bg);
+  color: var(--reader-text);
+  font-family: var(--reader-font);
+}
+
+.reader-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  padding: max(8px, env(safe-area-inset-top)) 8px 10px;
+  background: var(--reader-bg);
+  border-bottom: 1px solid var(--reader-hairline);
+  font-family: var(--font);
+}
+
+.reader-icon-btn {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--reader-muted);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.reader-heading {
+  min-width: 0;
+  text-align: center;
+}
+
+.reader-chapter-title,
+.reader-book-title {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.reader-chapter-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.reader-book-title {
+  color: var(--reader-muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reader-progress {
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  width: calc(var(--reader-chapter-progress, 0) * 100%);
+  background: var(--reader-accent);
+  transition: width var(--dur) var(--ease);
+}
+
+.reader-notice {
+  margin: 8px 16px 0;
+  color: var(--reader-muted);
+  font: var(--fs-footnote) / var(--lh-footnote) var(--font);
+  text-align: center;
+}
+
+.reader-body {
+  max-width: 720px;
+  margin: 0 auto;
+  /* Room below the last sentence so it can scroll up past the word panel. */
+  padding: 12px 0 45vh;
+  font-size: var(--reader-size, 20px);
+  line-height: 1.65;
+}
+
+.reader-chapter-nav {
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  font-family: var(--font);
+}
+
+.reader-state {
+  padding: 48px 16px;
+  font-family: var(--font);
+  text-align: center;
+}
+
+/* The app's buttons, in the reader's colors rather than the system theme's. */
+.reader .btn-secondary {
+  background: var(--reader-surface);
+  color: var(--reader-text);
+}
+
+.reader .btn-quiet {
+  color: var(--reader-muted);
+}

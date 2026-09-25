@@ -1,0 +1,78 @@
+.shell {
+  min-height: 100svh;
+  display: grid;
+  grid-template-rows: var(--topbar-h) 1fr;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+}
+
+.shell-no-sidebar {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.shell-no-sidebar .shell-content {
+  grid-column: 1;
+}
+
+.shell-no-sidebar .content {
+  margin: 0 auto;
+}
+
+/* Sticky lives right here: the containing block is the whole page-high .shell, so
+   the top bar rides along with the scroll. Inside a 52px cell it would not budge. */
+.shell-topbar {
+  grid-column: 1 / -1;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.shell-sidebar {
+  grid-row: 2;
+  grid-column: 1;
+}
+
+.shell-content {
+  grid-row: 2;
+  grid-column: 2;
+  min-width: 0;
+}
+
+/* Focused programmatically on a screen change; the region itself needs no ring. */
+.shell-content:focus {
+  outline: none;
+}
+
+.content {
+  max-width: var(--content-max);
+  padding: 40px 48px 64px;
+}
+
+@media (max-width: 800px) {
+  /* The top bar wraps its tabs onto a second row here, so its height is no longer fixed. */
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+  }
+
+  .shell-no-sidebar {
+    grid-template-rows: auto 1fr;
+  }
+
+  .shell-sidebar {
+    grid-row: 2;
+    grid-column: 1;
+  }
+
+  .shell-content {
+    grid-row: 3;
+    grid-column: 1;
+  }
+
+  .shell-no-sidebar .shell-content {
+    grid-row: 2;
+  }
+
+  .content {
+    padding: 24px 20px 48px;
+  }
+}

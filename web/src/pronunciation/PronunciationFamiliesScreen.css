@@ -1,0 +1,54 @@
+.beta-badge {
+  display: inline-block;
+  vertical-align: middle;
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--unknown) 18%, transparent);
+  color: var(--unknown);
+}
+
+.pronunciation-intro {
+  color: var(--text-2);
+  margin-bottom: 8px;
+}
+
+.pronunciation-beta-note {
+  color: var(--text-2);
+  margin-bottom: 24px;
+}
+
+.family-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.family-tile {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  padding: 20px;
+}
+
+.family-tile-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.family-tile-sounds {
+  color: var(--text-3);
+  margin-bottom: 8px;
+}
+
+.family-tile-caption {
+  color: var(--text-2);
+  margin: 8px 0 12px;
+}
+
+.unsupported-message {
+  color: var(--text-2);
+  max-width: 480px;
+}

@@ -1,0 +1,137 @@
+.dict-header {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.dict-meta {
+  color: var(--text-2);
+}
+
+.dict-visibility {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-footnote);
+  color: var(--text-2);
+}
+
+.dict-visibility .caption {
+  margin-left: 4px;
+}
+
+.dict-danger-zone {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.delete-dictionary {
+  color: var(--danger);
+}
+
+.delete-warning {
+  color: var(--text-2);
+}
+
+/* Both close the page under a hairline, apart from the learner's content above; mutually
+   exclusive (owner vs admin), so only one of the two ever renders. */
+.dict-sharing,
+.dict-admin {
+  gap: 10px;
+  padding-top: 24px;
+  border-top: 1px solid var(--hairline);
+}
+
+/* Chapters on the left, top words on the right; on a narrow screen one column, chapters first (DOM order). */
+.dict-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 8px 40px;
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .dict-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The left column: the starred mini-list (when any) above the full chapter list. */
+.dict-chapters {
+  display: grid;
+  min-width: 0;
+}
+
+.dict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 44px;
+}
+
+.dict-actions-hint {
+  margin: -32px 0 44px;
+}
+
+.section {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 44px;
+}
+
+.top-words {
+  display: grid;
+  gap: 2px;
+}
+
+.top-word {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--r-md);
+}
+
+.exclude-word {
+  padding: 0 6px;
+  font-size: var(--fs-body);
+  line-height: 1;
+  color: var(--text-3);
+}
+
+.top-words-notice button {
+  vertical-align: baseline;
+}
+
+.top-word .rank {
+  font-size: var(--fs-footnote);
+  color: var(--text-3);
+}
+
+.word-cell {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.word-cell .word {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.word-cell .bar {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.top-word .count {
+  font-size: var(--fs-footnote);
+  color: var(--text-2);
+}

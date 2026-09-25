@@ -1,0 +1,115 @@
+.pronunciation-word-card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  padding: 32px;
+  text-align: center;
+  max-width: 560px;
+  margin: 0 auto 24px;
+}
+
+.pronunciation-strips {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0 20px;
+}
+
+.pronunciation-word {
+  font-size: var(--fs-large);
+  line-height: var(--lh-large);
+  margin-bottom: 4px;
+}
+
+.pronunciation-ipa {
+  color: var(--text-3);
+  margin-bottom: 20px;
+}
+
+.accent-toggle {
+  display: inline-flex;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.accent-toggle button {
+  border: none;
+  background: var(--surface);
+  color: var(--text-2);
+  padding: 6px 16px;
+  cursor: pointer;
+}
+
+.accent-toggle button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.pronunciation-controls {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.pronunciation-feedback {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: var(--r-md);
+}
+
+.pronunciation-streak {
+  color: var(--text-2);
+  margin: 4px 0 12px;
+}
+
+.pronunciation-feedback.correct {
+  background: color-mix(in srgb, var(--known) 15%, transparent);
+}
+
+.pronunciation-feedback.wrong {
+  background: color-mix(in srgb, var(--unknown) 15%, transparent);
+}
+
+/* Same treatment as the feedback block: the attempt failed rather than scored,
+   and the Record button above stays live so the learner can just try again. */
+.pronunciation-attempt-error {
+  margin-top: 20px;
+  padding: 16px;
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--unknown) 15%, transparent);
+  color: var(--text-2);
+}
+
+.pronunciation-complete-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--text) 45%, transparent);
+}
+
+.pronunciation-complete-dialog {
+  position: relative;
+  background: var(--surface);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-card);
+  padding: 32px;
+  max-width: 360px;
+  text-align: center;
+}
+
+.pronunciation-complete-dialog .dialog-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.pronunciation-complete-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+}

@@ -1,0 +1,845 @@
+using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Training;
+using LanguageLab.Infrastructure.Database;
+using LanguageLab.Application.Services;
+using Microsoft.EntityFrameworkCore;
+
+namespace LanguageLab.Tests;
+
+public class TrainingSessionServiceTests
+{
+    private const long UserId = 1;
+    private const long DictionaryId = 1;
+    private static readonly DateTime Now = new(2026, 8, 30, 12, 0, 0, DateTimeKind.Utc);
+
+    private static ApplicationDbContext NewContext() =>
+        new(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options);
+
+    /// <summary>A 12-word dictionary, every word marked by the user as "want to learn".</summary>
+    private static async Task<ApplicationDbContext> ArrangeAsync()
+    {
+        var db = NewContext();
+
+        var words = Enumerable.Range(1, 12)
+            .Select(i => new WordPair { Id = i, Word = $"word{i}", Translation = $"переклад{i}" })
+            .ToList();
+
+        var dictionary = new LanguageLab.Domain.Entities.Dictionary
+        {
+            Id = DictionaryId,
+            Name = "silo1",
+            WordsCount = words.Count,
+            PublicationStatus = PublicationStatus.Published,
+            Words = words
+        };
+
+        db.Users.Add(new TelegramUser { Id = UserId, TelegramUserId = 1111111111 });
+        db.Dictionaries.Add(dictionary);
+
+        foreach (var word in words)
+        {
+            db.UnknownWords.Add(new UnknownWord { Id = word.Id, UserId = UserId, WordPairId = word.Id });
+        }
+
+        await db.SaveChangesAsync();
+        return db;
+    }
+
+    private static TrainingSessionService Service(ApplicationDbContext db) =>
+        new(db, new WordSelectionService(db));
+
+    private static async Task AnswerEverythingAsync(
+        TrainingSessionService service, long trainingId, params long[] wordIdsToFail)
+    {
+        var failed = new HashSet<long>();
+
+        while (await service.GetNextQuestionAsync(trainingId) is { } question)
+        {
+            // Each "failing" word is answered wrong exactly once — enough for it
+            // not to count as allCorrect.
+            var shouldFail = wordIdsToFail.Contains(question.WordPairId) && failed.Add(question.WordPairId);
+
+            var picked = shouldFail
+                ? question.OptionIds.First(id => id != question.WordPairId)
+                : question.WordPairId;
+
+            await service.AnswerAsync(question.Id, picked, Now);
+        }
+    }
+
+    [Fact]
+    public async Task StartNewBatch_CreatesTenQuestionsForFiveWords()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now);
+
+        Assert.NotNull(training);
+        Assert.Equal(TrainingMode.NewBatch, training.Mode);
+        Assert.Equal(DictionaryId, training.DictionaryId);
+
+        var questions = await db.TrainingQuestions.Where(q => q.TrainingId == training.Id).ToListAsync();
+        Assert.Equal(10, questions.Count);
+        Assert.Equal(5, questions.Select(q => q.WordPairId).Distinct().Count());
+        Assert.All(questions, q => Assert.Equal(QuestionDirection.EnToUa, q.Direction));
+    }
+
+    [Fact]
+    public async Task StartNewBatch_ReturnsNullWhenNothingLeftToLearn()
+    {
+        await using var db = await ArrangeAsync();
+        db.UnknownWords.RemoveRange(db.UnknownWords);
+        await db.SaveChangesAsync();
+
+        Assert.Null(await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now));
+    }
+
+    [Fact]
+    public async Task Answer_RecordsResultAndIgnoresSecondClickOnSameQuestion()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var question = await service.GetNextQuestionAsync(training!.Id);
+
+        var first = await service.AnswerAsync(question!.Id, question.WordPairId, Now);
+        var second = await service.AnswerAsync(question.Id, question.WordPairId, Now);
+
+        Assert.NotNull(first);
+        Assert.True(first.IsCorrect);
+        Assert.Null(second);
+    }
+
+    [Fact]
+    public async Task Answer_MarksWrongPickAsIncorrect()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var question = await service.GetNextQuestionAsync(training!.Id);
+        var wrongPick = question!.OptionIds.First(id => id != question.WordPairId);
+
+        var outcome = await service.AnswerAsync(question.Id, wrongPick, Now);
+
+        Assert.False(outcome!.IsCorrect);
+    }
+
+    [Fact]
+    public async Task MarkKnown_LearnsWordAndDropsItsRemainingQuestions()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var question = await service.GetNextQuestionAsync(training!.Id);
+        var wordPairId = question!.WordPairId;
+
+        await service.MarkKnownAsync(question.Id, Now);
+
+        Assert.True(await db.KnownWords.AnyAsync(k => k.UserId == UserId && k.WordPairId == wordPairId));
+
+        var progress = await db.WordProgresses.SingleAsync(p => p.UserId == UserId && p.WordPairId == wordPairId);
+        Assert.True(progress.IsLearned);
+        Assert.Null(progress.DueAt);
+
+        Assert.False(await db.TrainingQuestions.AnyAsync(q => q.TrainingId == training.Id && q.WordPairId == wordPairId));
+    }
+
+    [Fact]
+    public async Task MarkKnown_MovesTheWordOffTheUnknownShelfInsteadOfDuplicatingIt()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var question = await service.GetNextQuestionAsync(training!.Id);
+        var wordPairId = question!.WordPairId;
+
+        // A word enters training only from the "don't know" shelf — so the row is there.
+        Assert.True(await db.UnknownWords.AnyAsync(u => u.UserId == UserId && u.WordPairId == wordPairId));
+
+        await service.MarkKnownAsync(question.Id, Now);
+
+        var known = await db.KnownWords.SingleAsync(k => k.UserId == UserId && k.WordPairId == wordPairId);
+        Assert.Equal(Now, known.CreatedAt);
+        Assert.False(await db.UnknownWords.AnyAsync(u => u.UserId == UserId && u.WordPairId == wordPairId));
+    }
+
+    [Fact]
+    public async Task DeleteWord_RemovesWordAndEverythingPointingAtIt()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var question = await service.GetNextQuestionAsync(training!.Id);
+        var wordPairId = question!.WordPairId;
+
+        var deleted = await service.DeleteWordAsync(question.Id);
+
+        Assert.NotNull(deleted);
+        Assert.False(await db.Words.AnyAsync(w => w.Id == wordPairId));
+        Assert.False(await db.UnknownWords.AnyAsync(u => u.WordPairId == wordPairId));
+        Assert.False(await db.TrainingQuestions.AnyAsync(q => q.WordPairId == wordPairId));
+    }
+
+    [Fact]
+    public async Task Finish_PromotesCleanWordsAndDemotesTheOneWithAMistake()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var failedWordId = (await db.TrainingQuestions
+            .Where(q => q.TrainingId == training!.Id)
+            .Select(q => q.WordPairId)
+            .FirstAsync());
+
+        await AnswerEverythingAsync(service, training!.Id, failedWordId);
+
+        var summary = await service.FinishAsync(training.Id, Now);
+
+        Assert.Equal(10, summary.Total);
+        Assert.Equal(9, summary.Correct);
+        Assert.True(summary.Passed);
+
+        var promoted = await db.WordProgresses
+            .Where(p => p.UserId == UserId && p.WordPairId != failedWordId)
+            .ToListAsync();
+
+        Assert.Equal(4, promoted.Count);
+        Assert.All(promoted, p =>
+        {
+            Assert.Equal(2, p.Box);
+            Assert.Equal(Now.AddDays(3), p.DueAt);
+        });
+
+        var demoted = await db.WordProgresses.SingleAsync(p => p.UserId == UserId && p.WordPairId == failedWordId);
+        Assert.Equal(1, demoted.Box);
+        Assert.Equal(Now.AddDays(1), demoted.DueAt);
+        Assert.Equal(1, demoted.WrongCount);
+        Assert.Equal(1, demoted.CorrectCount);
+    }
+
+    [Fact]
+    public async Task Finish_BelowThreshold_IsNotPassed()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training!.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+
+        await AnswerEverythingAsync(service, training!.Id, wordIds.Take(3).ToArray());
+
+        var summary = await service.FinishAsync(training.Id, Now);
+
+        Assert.Equal(7, summary.Correct);
+        Assert.Equal(10, summary.Total);
+        Assert.False(summary.Passed);
+    }
+
+    [Fact]
+    public async Task Finish_IgnoresWordsSkippedByKnownButton()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var first = await service.GetNextQuestionAsync(training!.Id);
+        await service.MarkKnownAsync(first!.Id, Now);
+
+        await AnswerEverythingAsync(service, training.Id);
+
+        var summary = await service.FinishAsync(training.Id, Now);
+
+        Assert.Equal(8, summary.Total);
+        Assert.Equal(8, summary.Correct);
+        Assert.Equal(4, summary.Words.Count);
+        Assert.DoesNotContain(summary.Words, w => w.Word == first.WordPair.Word);
+    }
+
+    [Fact]
+    public async Task Review_UsesDueWordsAndAsksEachOnce()
+    {
+        await using var db = await ArrangeAsync();
+        db.WordProgresses.AddRange(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now },
+            new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 3, DueAt = Now.AddDays(-2), LastSeenAt = Now });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartReviewAsync(UserId, Now);
+
+        Assert.NotNull(training);
+        Assert.Equal(TrainingMode.Review, training.Mode);
+        Assert.Null(training.DictionaryId);
+
+        var questions = await db.TrainingQuestions.Where(q => q.TrainingId == training.Id).ToListAsync();
+        Assert.Equal(2, questions.Count);
+        Assert.Equal(new[] { 1L, 2L }, questions.Select(q => q.WordPairId).OrderBy(id => id));
+    }
+
+    /// <summary>
+    /// A chapter's "Review" must not drag in due words from elsewhere, and the session
+    /// remembers the book so the summary can lead back to it.
+    /// </summary>
+    [Fact]
+    public async Task Review_WithChapterScope_TakesOnlyThatChaptersDueWords_AndRecordsTheDictionary()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.Add(new Chapter { Id = 1, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 2 });
+        db.ChapterWords.AddRange(
+            new ChapterWord { ChapterId = 1, WordPairId = 1, Count = 1 },
+            new ChapterWord { ChapterId = 1, WordPairId = 2, Count = 1 });
+        db.WordProgresses.AddRange(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now },
+            new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 3, DueAt = Now.AddDays(5), LastSeenAt = Now },
+            new WordProgress { Id = 3, UserId = UserId, WordPairId = 3, Box = 2, DueAt = Now.AddDays(-2), LastSeenAt = Now });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartReviewAsync(UserId, Now, DictionaryId, [1]);
+
+        Assert.NotNull(training);
+        Assert.Equal(TrainingMode.Review, training.Mode);
+        Assert.Equal(DictionaryId, training.DictionaryId);
+
+        var asked = await db.TrainingQuestions.Where(q => q.TrainingId == training.Id).Select(q => q.WordPairId).ToListAsync();
+        Assert.Equal(new[] { 1L }, asked);
+    }
+
+    [Fact]
+    public async Task Review_WithChapterScope_IsNullWhenNothingThereIsDue()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.Add(new Chapter { Id = 1, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 1 });
+        db.ChapterWords.Add(new ChapterWord { ChapterId = 1, WordPairId = 1, Count = 1 });
+        db.WordProgresses.AddRange(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 2, DueAt = Now.AddDays(3), LastSeenAt = Now },
+            new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now });
+        await db.SaveChangesAsync();
+
+        Assert.Null(await Service(db).StartReviewAsync(UserId, Now, DictionaryId, [1]));
+    }
+
+    [Fact]
+    public async Task Retry_RebuildsSessionFromFailedWordsOnly()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training!.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        var failed = wordIds.Take(2).ToArray();
+
+        await AnswerEverythingAsync(service, training!.Id, failed);
+        await service.FinishAsync(training.Id, Now);
+
+        var retry = await service.StartRetryAsync(UserId, training.Id, Now);
+
+        Assert.NotNull(retry);
+        var retryQuestions = await db.TrainingQuestions.Where(q => q.TrainingId == retry.Id).ToListAsync();
+        Assert.Equal(4, retryQuestions.Count);
+        Assert.Equal(failed.OrderBy(id => id), retryQuestions.Select(q => q.WordPairId).Distinct().OrderBy(id => id));
+    }
+
+    [Fact]
+    public async Task Finish_IsIdempotent_AndDoesNotRegradeOnASecondCall()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+
+        await AnswerEverythingAsync(service, training!.Id);
+        await service.FinishAsync(training.Id, Now);
+
+        var before = await db.WordProgresses
+            .Where(p => p.UserId == UserId)
+            .Select(p => new { p.WordPairId, p.Box, p.DueAt, p.CorrectCount, p.WrongCount })
+            .ToListAsync();
+        Assert.Equal(5, before.Count);
+
+        // A later nowUtc to catch a regression: if the guard fails, DueAt shifts, whereas
+        // a test with the same time could stay green by accident.
+        await service.FinishAsync(training.Id, Now.AddDays(10));
+
+        var after = await db.WordProgresses
+            .Where(p => p.UserId == UserId)
+            .Select(p => new { p.WordPairId, p.Box, p.DueAt, p.CorrectCount, p.WrongCount })
+            .ToListAsync();
+
+        Assert.Equal(before.Count, after.Count);
+
+        foreach (var b in before)
+        {
+            var a = after.Single(x => x.WordPairId == b.WordPairId);
+            Assert.Equal(b.Box, a.Box);
+            Assert.Equal(b.DueAt, a.DueAt);
+            Assert.Equal(b.CorrectCount, a.CorrectCount);
+            Assert.Equal(b.WrongCount, a.WrongCount);
+        }
+    }
+
+    [Fact]
+    public async Task MarkKnown_AfterAWrongAnswerOnTheSameWord_KeepsTheWordLearned()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+
+        var first = await service.GetNextQuestionAsync(training!.Id);
+        var wordPairId = first!.WordPairId;
+        var wrongPick = first.OptionIds.First(id => id != wordPairId);
+        await service.AnswerAsync(first.Id, wrongPick, Now);
+
+        // The queue deliberately never places the same word twice in a row — so take this
+        // word's second question by Order rather than relying on GetNextQuestionAsync.
+        var questionsForWord = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training.Id && q.WordPairId == wordPairId)
+            .OrderBy(q => q.Order)
+            .ToListAsync();
+        var secondQuestionForWord = questionsForWord[1];
+
+        await service.MarkKnownAsync(secondQuestionForWord.Id, Now);
+
+        await AnswerEverythingAsync(service, training.Id);
+
+        var summary = await service.FinishAsync(training.Id, Now);
+
+        var progress = await db.WordProgresses.SingleAsync(p => p.UserId == UserId && p.WordPairId == wordPairId);
+        Assert.True(progress.IsLearned);
+        Assert.Null(progress.DueAt);
+
+        var word = await db.Words.SingleAsync(w => w.Id == wordPairId);
+        Assert.DoesNotContain(summary.Words, w => w.Word == word.Word);
+        Assert.Equal(8, summary.Total);
+    }
+
+    [Fact]
+    public async Task GetStats_AggregatesBoxHistogramLearnedShelvesDueAndAnswerCounts()
+    {
+        await using var db = await ArrangeAsync();
+
+        // The histogram is deliberately uneven (2/1/1/0/1) so that an off-by-one index
+        // (box N landing in cell N instead of N-1) fails the test.
+        db.WordProgresses.AddRange(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 1, CorrectCount = 2, WrongCount = 1, LastSeenAt = Now },
+            new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 1, CorrectCount = 1, WrongCount = 0, LastSeenAt = Now },
+            new WordProgress { Id = 3, UserId = UserId, WordPairId = 3, Box = 2, CorrectCount = 3, WrongCount = 1, DueAt = Now.AddDays(-1), LastSeenAt = Now },
+            new WordProgress { Id = 4, UserId = UserId, WordPairId = 4, Box = 3, CorrectCount = 0, WrongCount = 2, DueAt = Now.AddDays(5), LastSeenAt = Now },
+            new WordProgress { Id = 5, UserId = UserId, WordPairId = 5, Box = 5, CorrectCount = 4, WrongCount = 0, LastSeenAt = Now },
+            // A learned word: not in the box histogram (IsLearned == true), only in Learned.
+            new WordProgress { Id = 6, UserId = UserId, WordPairId = 6, Box = 5, IsLearned = true, CorrectCount = 5, WrongCount = 1, LastSeenAt = Now });
+
+        // The fixture starts with all 12 words on the "don't know" shelf; shelves are
+        // exclusive, so moving three of them elsewhere leaves 9 there. Sizes differ
+        // (2/9/1) so a count read off the wrong table fails the test.
+        db.UnknownWords.RemoveRange(db.UnknownWords.Where(u => u.WordPairId >= 7 && u.WordPairId <= 9));
+
+        db.KnownWords.AddRange(
+            new KnownWord { Id = 1, UserId = UserId, WordPairId = 7 },
+            new KnownWord { Id = 2, UserId = UserId, WordPairId = 8 });
+
+        db.ExcludedWords.Add(new ExcludedWord { Id = 1, UserId = UserId, WordPairId = 9 });
+
+        await db.SaveChangesAsync();
+
+        var stats = await Service(db).GetStatsAsync(UserId, Now);
+
+        Assert.Equal(LeitnerScheduler.MaxBox, stats.BoxCounts.Count);
+        Assert.Equal(new[] { 2, 1, 1, 0, 1 }, stats.BoxCounts);
+        Assert.Equal(1, stats.Learned);
+        Assert.Equal(2, stats.Known);
+        Assert.Equal(9, stats.Unknown);
+        Assert.Equal(1, stats.Excluded);
+        Assert.Equal(1, stats.Due);
+        Assert.Equal(15, stats.Correct);
+        Assert.Equal(5, stats.Wrong);
+    }
+
+    [Fact]
+    public async Task Review_RunTwiceOverTheSameDueWords_GradesEachWordOnlyOnce()
+    {
+        await using var db = await ArrangeAsync();
+        db.WordProgresses.AddRange(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 2, CorrectCount = 1, DueAt = Now.AddDays(-1), LastSeenAt = Now.AddDays(-3) },
+            new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 3, CorrectCount = 2, DueAt = Now.AddDays(-2), LastSeenAt = Now.AddDays(-3) });
+        await db.SaveChangesAsync();
+
+        var service = Service(db);
+
+        // Both sessions start before either finishes — so both see the same set of
+        // due words.
+        var sessionA = await service.StartReviewAsync(UserId, Now.AddMinutes(1));
+        var sessionB = await service.StartReviewAsync(UserId, Now.AddMinutes(2));
+
+        Assert.NotNull(sessionA);
+        Assert.NotNull(sessionB);
+
+        var wordsA = await db.TrainingQuestions.Where(q => q.TrainingId == sessionA!.Id)
+            .Select(q => q.WordPairId).Distinct().ToListAsync();
+        var wordsB = await db.TrainingQuestions.Where(q => q.TrainingId == sessionB!.Id)
+            .Select(q => q.WordPairId).Distinct().ToListAsync();
+        Assert.Equal(new[] { 1L, 2L }, wordsA.OrderBy(id => id));
+        Assert.Equal(new[] { 1L, 2L }, wordsB.OrderBy(id => id));
+
+        await AnswerEverythingAsync(service, sessionA!.Id);
+        await service.FinishAsync(sessionA.Id, Now.AddMinutes(3));
+
+        await AnswerEverythingAsync(service, sessionB!.Id);
+        await service.FinishAsync(sessionB.Id, Now.AddMinutes(4));
+
+        var progress1 = await db.WordProgresses.SingleAsync(p => p.WordPairId == 1);
+        var progress2 = await db.WordProgresses.SingleAsync(p => p.WordPairId == 2);
+
+        // Each word should have advanced exactly one box and gained exactly one extra
+        // correct answer — not doubled by the second (identical) session.
+        Assert.Equal(3, progress1.Box);
+        Assert.Equal(2, progress1.CorrectCount);
+        Assert.Equal(4, progress2.Box);
+        Assert.Equal(3, progress2.CorrectCount);
+    }
+
+    [Fact]
+    public async Task MarkKnown_IsNotUndoneByAnotherLiveSessionGradingTheWordWrong()
+    {
+        await using var db = await ArrangeAsync();
+        db.WordProgresses.Add(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now.AddDays(-3) });
+        await db.SaveChangesAsync();
+
+        var service = Service(db);
+
+        var sessionA = await service.StartReviewAsync(UserId, Now);
+        var sessionB = await service.StartReviewAsync(UserId, Now);
+
+        Assert.NotNull(sessionA);
+        Assert.NotNull(sessionB);
+
+        var questionA = await service.GetNextQuestionAsync(sessionA!.Id);
+        Assert.Equal(1, questionA!.WordPairId);
+        await service.MarkKnownAsync(questionA.Id, Now.AddMinutes(1));
+
+        var questionB = await service.GetNextQuestionAsync(sessionB!.Id);
+        Assert.Equal(1, questionB!.WordPairId);
+        var wrongPick = questionB.OptionIds.First(id => id != questionB.WordPairId);
+        await service.AnswerAsync(questionB.Id, wrongPick, Now.AddMinutes(2));
+
+        await service.FinishAsync(sessionB.Id, Now.AddMinutes(2));
+
+        var progress = await db.WordProgresses.SingleAsync(p => p.WordPairId == 1);
+        Assert.True(progress.IsLearned);
+        Assert.Null(progress.DueAt);
+    }
+
+    [Fact]
+    public async Task Retry_StillRegradesAfterTheGuard()
+    {
+        // A single frozen Now everywhere — a regression test on the `>` versus `>=` boundary:
+        // if the guard is loosened to `>=`, LastSeenAt (== Now after the first FinishAsync)
+        // wrongly "covers" the review session's CreatedAt (also == Now), and the boxes do not move.
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training!.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        var failed = wordIds.Take(2).ToArray();
+
+        await AnswerEverythingAsync(service, training!.Id, failed);
+        await service.FinishAsync(training.Id, Now);
+
+        var boxesBefore = await db.WordProgresses
+            .Where(p => failed.Contains(p.WordPairId))
+            .ToDictionaryAsync(p => p.WordPairId, p => p.Box);
+
+        var retry = await service.StartRetryAsync(UserId, training.Id, Now);
+        Assert.NotNull(retry);
+
+        await AnswerEverythingAsync(service, retry!.Id);
+        await service.FinishAsync(retry.Id, Now);
+
+        var boxesAfter = await db.WordProgresses
+            .Where(p => failed.Contains(p.WordPairId))
+            .ToListAsync();
+
+        Assert.All(boxesAfter, p => Assert.True(
+            p.Box > boxesBefore[p.WordPairId],
+            $"word {p.WordPairId} box did not move ({boxesBefore[p.WordPairId]} -> {p.Box})"));
+    }
+
+    [Fact]
+    public async Task CorrectCount_AccumulatesAcrossTwoLegitimateSessions()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+
+        var batch = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var wordId = await db.TrainingQuestions
+            .Where(q => q.TrainingId == batch!.Id)
+            .Select(q => q.WordPairId)
+            .FirstAsync();
+
+        await AnswerEverythingAsync(service, batch!.Id);
+        await service.FinishAsync(batch.Id, Now);
+
+        var afterBatch = await db.WordProgresses.SingleAsync(p => p.WordPairId == wordId);
+        Assert.Equal(TrainingSessionService.NewBatchRepeats, afterBatch.CorrectCount);
+        Assert.Equal(0, afterBatch.WrongCount);
+
+        var reviewNow = Now.AddDays(4);
+        var review = await service.StartReviewAsync(UserId, reviewNow);
+        Assert.NotNull(review);
+        var reviewWords = await db.TrainingQuestions
+            .Where(q => q.TrainingId == review!.Id)
+            .Select(q => q.WordPairId)
+            .ToListAsync();
+        Assert.Contains(wordId, reviewWords);
+
+        await AnswerEverythingAsync(service, review!.Id);
+        await service.FinishAsync(review.Id, reviewNow);
+
+        var afterReview = await db.WordProgresses.SingleAsync(p => p.WordPairId == wordId);
+
+        // += must accumulate across sessions, not overwrite: if FinishAsync wrote "="
+        // instead of "+=", this would be NewBatchRepeats again, not the sum of both sessions.
+        Assert.Equal(TrainingSessionService.NewBatchRepeats + TrainingSessionService.ReviewRepeats, afterReview.CorrectCount);
+        Assert.Equal(0, afterReview.WrongCount);
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithBatchSizeTen_CreatesTwentyQuestions()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, chapterIds: null, batchSize: 10);
+
+        Assert.NotNull(training);
+        var questions = await db.TrainingQuestions.Where(q => q.TrainingId == training.Id).ToListAsync();
+        Assert.Equal(20, questions.Count);
+        Assert.Equal(10, questions.Select(q => q.WordPairId).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task StartNewBatch_ClampsBatchSizeBelowOneToOne()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, chapterIds: null, batchSize: 0);
+
+        Assert.NotNull(training);
+        Assert.Equal(2, await db.TrainingQuestions.CountAsync(q => q.TrainingId == training.Id));
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithChapterScope_UsesOnlyWordsOfThatChapter()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.Add(new Chapter { Id = 1, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 3 });
+        db.ChapterWords.AddRange(
+            new ChapterWord { ChapterId = 1, WordPairId = 1, Count = 1 },
+            new ChapterWord { ChapterId = 1, WordPairId = 2, Count = 1 },
+            new ChapterWord { ChapterId = 1, WordPairId = 3, Count = 1 });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, chapterIds: [1], batchSize: 10);
+
+        Assert.NotNull(training);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(new[] { 1L, 2L, 3L }, wordIds.OrderBy(id => id));
+        Assert.Equal(6, await db.TrainingQuestions.CountAsync(q => q.TrainingId == training.Id));
+    }
+
+    [Fact]
+    public async Task GetNextQuestionView_ReturnsOptionsInOrderAndCounters()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+
+        Assert.NotNull(view.Question);
+        Assert.Equal(0, view.Answered);
+        Assert.Equal(10, view.Total);
+        Assert.Equal(view.Question.OptionIds, view.Options.Select(o => o.Id).ToList());
+        Assert.Contains(view.Options, o => o.Id == view.Question.WordPairId);
+
+        await service.AnswerAsync(view.Question.Id, view.Question.WordPairId, Now);
+
+        var next = await service.GetNextQuestionViewAsync(training.Id);
+        Assert.NotNull(next.Question);
+        Assert.Equal(1, next.Answered);
+        Assert.Equal(10, next.Total);
+        Assert.NotEqual(view.Question.Id, next.Question.Id);
+    }
+
+    [Fact]
+    public async Task GetNextQuestionView_TotalShrinksAfterMarkKnown()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+
+        await service.MarkKnownAsync(view.Question!.Id, Now);
+
+        var next = await service.GetNextQuestionViewAsync(training.Id);
+        // The word is in the queue twice — both of its questions are gone.
+        Assert.Equal(8, next.Total);
+        Assert.Equal(0, next.Answered);
+    }
+
+    [Fact]
+    public async Task GetNextQuestionView_ReinsertsCorrectAnswerWhenItVanishedFromOptions()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var question = (await service.GetNextQuestionAsync(training.Id))!;
+
+        question.OptionIds = question.OptionIds.Where(id => id != question.WordPairId).ToList();
+        await db.SaveChangesAsync();
+
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+
+        Assert.Equal(question.WordPairId, view.Options[0].Id);
+        Assert.Equal(question.OptionIds.Count + 1, view.Options.Count);
+    }
+
+    [Fact]
+    public async Task GetNextQuestionView_ReportsExhaustedQueueWithFinalCounters()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+
+        await AnswerEverythingAsync(service, training.Id);
+
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+        Assert.Null(view.Question);
+        Assert.Empty(view.Options);
+        Assert.Equal(10, view.Answered);
+        Assert.Equal(10, view.Total);
+    }
+
+    [Fact]
+    public async Task GetBatchWords_ReturnsEachWordOnceInAlphabeticalOrder()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+
+        var words = await service.GetBatchWordsAsync(training.Id);
+
+        Assert.Equal(5, words.Count);
+        Assert.Equal(5, words.Select(w => w.Id).Distinct().Count());
+        Assert.Equal(words.Select(w => w.Word).OrderBy(w => w).ToList(), words.Select(w => w.Word).ToList());
+    }
+
+    [Fact]
+    public async Task Find_ReturnsSessionOnlyForItsOwner()
+    {
+        await using var db = await ArrangeAsync();
+        var service = Service(db);
+        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+
+        Assert.NotNull(await service.FindAsync(training.Id, UserId));
+        Assert.Null(await service.FindAsync(training.Id, userId: 999));
+        Assert.Null(await service.FindAsync(trainingId: 12345, UserId));
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithExplicitIds_TrainsExactlyThose()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(
+            UserId, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3, 7, 11]);
+
+        Assert.NotNull(training);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(new long[] { 3, 7, 11 }, wordIds.OrderBy(id => id));
+        Assert.Equal(6, await db.TrainingQuestions.CountAsync(q => q.TrainingId == training.Id));
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithExplicitIds_DropsWordsThatAreNoLongerLearnable()
+    {
+        await using var db = await ArrangeAsync();
+        db.WordProgresses.Add(new WordProgress { Id = 1, UserId = UserId, WordPairId = 3, Box = 1, DueAt = Now, LastSeenAt = Now });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartNewBatchAsync(
+            UserId, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3, 7]);
+
+        Assert.NotNull(training);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(new long[] { 7 }, wordIds);
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithExplicitIds_AllDropped_ReturnsNull()
+    {
+        await using var db = await ArrangeAsync();
+        db.UnknownWords.Remove(await db.UnknownWords.SingleAsync(u => u.WordPairId == 3));
+        await db.SaveChangesAsync();
+
+        Assert.Null(await Service(db).StartNewBatchAsync(
+            UserId, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3]));
+    }
+
+    [Fact]
+    public async Task StartNewBatch_WithExplicitIds_IsCappedByBatchSize()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(
+            UserId, DictionaryId, Now, chapterIds: null, batchSize: 2, wordPairIds: [1, 2, 3, 4]);
+
+        Assert.NotNull(training);
+        var wordIds = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(new long[] { 1, 2 }, wordIds.OrderBy(id => id));
+    }
+
+    /// <summary>Without explicit ids the batch must be exactly what the preview would show — otherwise the start screen lies.</summary>
+    [Fact]
+    public async Task StartNewBatch_WithoutIds_EqualsTopCandidates()
+    {
+        await using var db = await ArrangeAsync();
+        var selection = new WordSelectionService(db);
+
+        var expected = (await selection.GetCandidatesAsync(UserId, DictionaryId, null, take: 5))
+            .Select(c => c.WordPairId)
+            .OrderBy(id => id);
+
+        var training = await new TrainingSessionService(db, selection).StartNewBatchAsync(UserId, DictionaryId, Now);
+
+        var actual = await db.TrainingQuestions
+            .Where(q => q.TrainingId == training!.Id)
+            .Select(q => q.WordPairId)
+            .Distinct()
+            .ToListAsync();
+        Assert.Equal(expected, actual.OrderBy(id => id));
+    }
+}

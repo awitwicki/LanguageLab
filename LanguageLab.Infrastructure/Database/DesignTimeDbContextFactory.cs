@@ -8,9 +8,14 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<Applicatio
     public ApplicationDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
-        // Use a dummy connection string for migration generation 
-        // or read it from environment variables
-        optionsBuilder.UseNpgsql("Host=localhost;Database=dummy;Username=postgres;Password=password");
+
+        // Read the real connection string from the environment (same variable the app uses
+        // at runtime); fall back to a dummy one so design-time scaffolding still works
+        // without a database available.
+        var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")
+            ?? "Host=localhost;Database=dummy;Username=postgres;Password=password";
+
+        optionsBuilder.UseNpgsql(connectionString);
 
         return new ApplicationDbContext(optionsBuilder.Options);
     }

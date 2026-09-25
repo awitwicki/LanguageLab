@@ -1,0 +1,187 @@
+import { useRef, useState, type KeyboardEvent } from 'react'
+import { api, type TrainingStarted } from '../api/client'
+import { LeitnerScale } from '../components/LeitnerScale'
+import { formatInt, wordsLabel } from '../lib/format'
+import { useBatchPreview } from '../training/useBatchPreview'
+import './TrainingStartScreen.css'
+
+const BATCH_SIZES = [5, 10, 20] as const
+export const DEFAULT_BATCH_SIZE = 10
+
+const NO_WORDS = 'No words to learn in this set — mark words as “don’t know” while sorting.'
+
+interface Props {
+  dictionaryId: number
+  dictionaryName: string
+  chapterIds: number[] | null
+  scopeTitle: string
+  onStarted: (started: TrainingStarted, batchSize: number) => void
+  onBack: () => void
+}
+
+export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, scopeTitle, onStarted, onBack }: Props) {
+  const [busy, setBusy] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
+  const { preview, rows, batchIds, batchSize, setBatchSize, crossOut, bringBack, pendingId, error } = useBatchPreview({
+    dictionaryId,
+    chapterIds,
+    initialBatchSize: DEFAULT_BATCH_SIZE,
+  })
+
+  const learnableCount = preview?.learnableCount ?? 0
+  const inChapter = chapterIds !== null && chapterIds.length > 0
+  const radioRefs = useRef<(HTMLButtonElement | null)[]>([])
+
+  // ARIA radiogroup: one tab stop, arrows pick the neighbour (wrapping) and follow it with focus.
+  const onRadioKey = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const step =
+      event.key === 'ArrowRight' || event.key === 'ArrowDown'
+        ? 1
+        : event.key === 'ArrowLeft' || event.key === 'ArrowUp'
+          ? -1
+          : 0
+
+    if (step === 0) {
+      return
+    }
+
+    event.preventDefault()
+    const current = (BATCH_SIZES as readonly number[]).indexOf(batchSize)
+    const index = (current + step + BATCH_SIZES.length) % BATCH_SIZES.length
+    setBatchSize(BATCH_SIZES[index])
+    radioRefs.current[index]?.focus()
+  }
+
+  const start = async () => {
+    setBusy(true)
+    setNotice(null)
+
+    try {
+      const started = await api.startNewBatch(dictionaryId, chapterIds, batchSize, batchIds)
+
+      // 204: the words may have run out between opening the screen and the click — not an error.
+      if (!started) {
+        setNotice(NO_WORDS)
+        return
+      }
+
+      onStarted(started, batchSize)
+    } catch (e) {
+      setNotice(String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Numbers only on active rows: struck ones are not part of the batch.
+  let rank = 0
+
+  return (
+    <section className="training-start">
+      <div className="training-start-nav">
+        <button type="button" className="btn btn-quiet" onClick={onBack}>
+          ‹ {dictionaryName}
+        </button>
+      </div>
+
+      <p className="footnote">
+        {dictionaryName} · {scopeTitle}
+      </p>
+      <h1 className="large-title">How many words?</h1>
+
+      {error && <p className="error">{error}</p>}
+      {!preview && !error && <p className="footnote">Loading…</p>}
+
+      {preview && (
+        <>
+          <LeitnerScale progress={preview.learning} size="large" />
+          <p className="training-start-hint num">{wordsLabel(learnableCount)} to learn in this set</p>
+        </>
+      )}
+
+      {/* The choice and the go button side by side: no scrolling past the preview to start. */}
+      <div className="training-start-controls">
+        <div className="segment" role="radiogroup" aria-label="Batch size">
+          {BATCH_SIZES.map((size, index) => (
+            <button
+              key={size}
+              ref={(el) => {
+                radioRefs.current[index] = el
+              }}
+              type="button"
+              role="radio"
+              aria-checked={size === batchSize}
+              tabIndex={size === batchSize ? 0 : -1}
+              className={`segment-item num${size === batchSize ? ' is-active' : ''}`}
+              onClick={() => setBatchSize(size)}
+              onKeyDown={onRadioKey}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="btn btn-primary btn-lg"
+          disabled={busy || preview === null || batchIds.length === 0}
+          onClick={start}
+        >
+          Start
+        </button>
+      </div>
+
+      {learnableCount > 0 && learnableCount < batchSize && (
+        <p className="footnote">Fewer words than selected — the batch will have {wordsLabel(learnableCount)}.</p>
+      )}
+
+      {preview && learnableCount === 0 && <p className="footnote training-start-notice">{NO_WORDS}</p>}
+
+      {notice && <p className="footnote training-start-notice">{notice}</p>}
+
+      {rows.length > 0 && (
+        <div className="batch-preview">
+          <p className="footnote">Words in this batch · how often each occurs in the {inChapter ? 'chapter' : 'book'}</p>
+          <ol className="batch-preview-list">
+            {rows.map((row) => {
+              const { wordPairId, word, translation, frequency } = row.candidate
+              const number = row.struck ? null : ++rank
+
+              return (
+                <li key={wordPairId} className={`batch-row${row.struck ? ' is-struck' : ''}`}>
+                  <span className="batch-rank num">{number ?? '—'}</span>
+                  <span className="batch-word">
+                    <span className="batch-word-text">{word}</span>
+                    <span className="footnote">{translation}</span>
+                  </span>
+                  <span className="batch-freq footnote num">{formatInt(frequency)}</span>
+                  {row.struck ? (
+                    <button
+                      type="button"
+                      className="btn btn-quiet"
+                      disabled={pendingId !== null}
+                      onClick={() => bringBack(wordPairId)}
+                    >
+                      Bring back
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-quiet batch-know"
+                      aria-label={`Know: ${word}`}
+                      title="I already know this word — take it out of the batch"
+                      disabled={pendingId !== null}
+                      onClick={() => crossOut(wordPairId)}
+                    >
+                      Know
+                    </button>
+                  )}
+                </li>
+              )
+            })}
+          </ol>
+        </div>
+      )}
+
+    </section>
+  )
+}

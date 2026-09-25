@@ -1,0 +1,186 @@
+.sidebar {
+  position: sticky;
+  top: var(--topbar-h);
+  height: calc(100svh - var(--topbar-h));
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px 12px 16px;
+  border-right: 1px solid var(--hairline);
+  background: color-mix(in srgb, var(--bg) 60%, var(--surface));
+}
+
+.sidebar-heading {
+  padding: 0 10px 8px;
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  color: var(--text-3);
+}
+
+.sidebar-note {
+  padding: 6px 10px;
+  font-size: var(--fs-footnote);
+  color: var(--text-3);
+}
+
+.sidebar-note.error {
+  color: var(--danger);
+}
+
+.sidebar-list {
+  display: grid;
+  gap: 2px;
+}
+
+.sidebar-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 10px;
+  row-gap: 8px;
+  align-items: center;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--r-md);
+  text-align: left;
+  color: var(--text);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.sidebar-item:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+.sidebar-item[aria-current='page'] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.personal-item {
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.personal-item[aria-current='page'] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.sidebar-item .name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-item .pct {
+  font-size: var(--fs-footnote);
+  color: var(--text-2);
+}
+
+.sidebar-item .progress {
+  grid-column: 1 / -1;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.sidebar-footer .btn {
+  width: 100%;
+}
+
+/* Phones only — see the media query below. */
+.sidebar-picker,
+.import-label-short {
+  display: none;
+}
+
+@media (max-width: 800px) {
+  /* One row: the picker, then the import button; a note (loading, error, empty) drops onto
+     its own line under them. The lists are swapped for the picker — a row of book chips
+     either overflows a phone or, shrunk to fit, loses the names. */
+  .sidebar {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 10px 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .sidebar-heading,
+  .sidebar-list {
+    display: none;
+  }
+
+  .sidebar-note {
+    order: 2;
+    flex-basis: 100%;
+    padding: 0;
+  }
+
+  .sidebar-picker {
+    position: relative;
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .sidebar-picker select {
+    width: 100%;
+    height: 36px;
+    padding: 0 32px 0 12px;
+    appearance: none;
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md);
+    background: var(--surface);
+    color: var(--text);
+    /* Not a token on purpose: under 16px iOS zooms the page into the control when the
+       picker opens, and the type scale has no 16px step. */
+    font-size: 16px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .sidebar-picker select:focus-visible {
+    outline-offset: 0;
+    border-color: var(--accent);
+  }
+
+  /* The chevron — appearance: none takes the native one away with the native chrome. */
+  .sidebar-picker::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: 14px;
+    width: 7px;
+    height: 7px;
+    border-right: 1.5px solid var(--text-2);
+    border-bottom: 1.5px solid var(--text-2);
+    transform: translateY(-70%) rotate(45deg);
+    pointer-events: none;
+  }
+
+  .sidebar-footer {
+    order: 1;
+    margin-top: 0;
+    padding-top: 0;
+  }
+
+  .sidebar-footer .btn {
+    width: auto;
+  }
+
+  /* Every pixel the button gives up goes to the dictionary's name in the picker. */
+  .import-label {
+    display: none;
+  }
+
+  .import-label-short {
+    display: inline;
+  }
+}
