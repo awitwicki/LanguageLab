@@ -1,10 +1,11 @@
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Pronunciation;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Infrastructure.Database;
 
-public class ApplicationDbContext : DbContext
+public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
 {
     public DbSet<WordPair> Words { get; set; }
     public DbSet<Dictionary> Dictionaries { get; set; }
@@ -26,6 +27,12 @@ public class ApplicationDbContext : DbContext
     public DbSet<ExcludedWord> ExcludedWords { get; set; }
     public DbSet<StarredChapter> StarredChapters { get; set; }
     public DbSet<ReaderBook> ReaderBooks { get; set; }
+
+    /// <summary>
+    /// The keys the session cookie is encrypted with. Kept in the database, not in the
+    /// container's filesystem, so a redeploy does not sign everybody out.
+    /// </summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)

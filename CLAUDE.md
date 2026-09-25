@@ -38,7 +38,9 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 - Auth is Telegram over OpenID Connect → an HttpOnly `ll_session` cookie holding an internal user
   id and role. `ICurrentUser` reads those claims; `ICurrentUserContext` adds the role. The first
   successful login becomes the admin. Bans take effect on the next request via the cookie's
-  `OnValidatePrincipal`. Development can use the same real flow — `http://localhost:5173/...` is
+  `OnValidatePrincipal`. The cookie is persistent (30 days, sliding — `OnSigningIn` sets
+  `IsPersistent`), and the Data Protection keys that encrypt it live in the `DataProtectionKeys`
+  table, so a redeploy does not sign everyone out. Development can use the same real flow — `http://localhost:5173/...` is
   a registered Allowed URL in @BotFather — or `GET /api/auth/dev-login`, a local sign-in as a
   dedicated account (Telegram id 1) that skips the handshake. It is fenced off from production
   three times over (`#if DEBUG` + Release publish, `IsDevelopment()`, `import.meta.env.DEV`) —
