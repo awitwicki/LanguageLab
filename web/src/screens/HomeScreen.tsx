@@ -13,7 +13,9 @@ import { BoxHistogram } from '../components/BoxHistogram'
 import { ChapterRow } from '../components/ChapterRow'
 import { ScopeRow } from '../components/ScopeRow'
 import { formatInt, formatProgress, percentOf, wordsLabel } from '../lib/format'
-import { WHOLE_BOOK, chapterLabel, scopeLabel } from '../lib/labels'
+import { WHOLE_BOOK, chapterLabel, readingProgressLabel, scopeLabel } from '../lib/labels'
+import type { BookStore } from '../reader/bookStore'
+import { useContinueReading } from '../reader/useContinueReading'
 import './HomeScreen.css'
 
 interface Props {
@@ -26,6 +28,9 @@ interface Props {
   onTrain: (dictionaryId: number, chapterIds: number[] | null, scopeTitle: string) => void
   /** A review of one starred chapter; scopeTitle is the chapter's label. */
   onChapterReview: (started: TrainingStarted, dictionaryId: number, scopeTitle: string) => void
+  /** The device's books, for the "Continue" row. null while the store is still opening. */
+  bookStore: BookStore | null
+  onOpenBook: (hash: string) => void
 }
 
 interface StarredBook {
@@ -37,9 +42,21 @@ interface StarredBook {
 /// The list of dictionaries lives in the sidebar, so the home screen is an empty state:
 /// either a hint to pick a dictionary, or an invitation to import the first book.
 /// Once the user has sorted anything, their shelf totals sit on top of it; once they have
-/// trained anything, their global Leitner standing joins them; once they have starred a
-/// chapter, the starred list sits between the two.
-export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrain, onChapterReview }: Props) {
+/// trained anything, their global Leitner standing joins them. Below those comes everything
+/// there is to pick up again — the book being read, the last exercises, the sorting left
+/// unfinished — and then the chapters they starred.
+export function HomeScreen({
+  hasDictionaries,
+  onImport,
+  onReview,
+  onSort,
+  onTrain,
+  onChapterReview,
+  bookStore,
+  onOpenBook,
+}: Props) {
+  const reading = useContinueReading(bookStore)
+
   const [stats, setStats] = useState<TrainingStats | null>(null)
   const [starred, setStarred] = useState<StarredChapter[] | null>(null)
   const [recent, setRecent] = useState<RecentActivity | null>(null)
@@ -227,12 +244,27 @@ export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrai
       )}
 
       {/* Above the starred list on purpose: a star is a shortcut the user can always find
-          again, while these two fade as soon as they are done. */}
-      {recent && (recent.exercises.length > 0 || recent.sorting.length > 0) && (
+          again, while these rows fade as soon as the work behind them is done. */}
+      {(reading !== null || (recent !== null && (recent.exercises.length > 0 || recent.sorting.length > 0))) && (
         <section className="recent-activity">
           <h2 className="title">Pick up where you left off</h2>
 
-          {recent.exercises.length > 0 && (
+          {/* First: one tap back into the book, the cheapest thing on the screen to resume. */}
+          {reading && (
+            <div className="recent-group">
+              <h3 className="headline">Reading</h3>
+              <ul className="scope-list">
+                <ScopeRow
+                  title={reading.title}
+                  sub={readingProgressLabel(reading)}
+                  action="Continue"
+                  onAction={() => onOpenBook(reading.fileHash)}
+                />
+              </ul>
+            </div>
+          )}
+
+          {recent && recent.exercises.length > 0 && (
             <div className="recent-group">
               <h3 className="headline">Exercises</h3>
               <ul className="scope-list">
@@ -250,7 +282,7 @@ export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrai
             </div>
           )}
 
-          {recent.sorting.length > 0 && (
+          {recent && recent.sorting.length > 0 && (
             <div className="recent-group">
               <h3 className="headline">Sorting</h3>
               <ul className="scope-list">

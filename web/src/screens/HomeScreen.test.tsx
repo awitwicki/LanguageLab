@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ChapterView, RecentActivity, StarredChapter, TrainingStarted, TrainingStats } from '../api/client'
+import type {
+  ChapterView,
+  ReaderBookDto,
+  RecentActivity,
+  StarredChapter,
+  TrainingStarted,
+  TrainingStats,
+} from '../api/client'
+import { MemoryBookStore, type BookStore } from '../reader/bookStore'
 import { click, flush, render } from '../test/render'
 import { HomeScreen } from './HomeScreen'
 
@@ -67,6 +75,7 @@ function respond(
   starred: Reply = { status: 200, body: [] },
   unstar: Reply = { status: 204 },
   recent: Reply = { status: 200, body: nothingRecent },
+  readerBooks: Reply = { status: 200, body: [] },
 ) {
   vi.stubGlobal(
     'fetch',
@@ -75,6 +84,7 @@ function respond(
         path === '/api/training/review' && init?.method === 'POST' ? review
         : path === '/api/chapters/starred' ? starred
         : path === '/api/home/recent' ? recent
+        : path === '/api/reader/books' ? readerBooks
         : path.startsWith('/api/chapters/') && init?.method === 'DELETE' ? unstar
         : stats
       expect(reply, `unexpected request ${init?.method ?? 'GET'} ${path}`).toBeDefined()
@@ -98,6 +108,8 @@ function home(overrides: Partial<Parameters<typeof HomeScreen>[0]> = {}) {
       onSort={() => {}}
       onTrain={() => {}}
       onChapterReview={() => {}}
+      bookStore={null}
+      onOpenBook={() => {}}
       {...overrides}
     />
   )
@@ -474,5 +486,99 @@ describe('HomeScreen · pick up where you left off', () => {
 
     expect(container.querySelector('.recent-activity')).toBeNull()
     expect(container.querySelector('.large-title')?.textContent).toBe('Pick a dictionary')
+  })
+})
+
+const WOOL_HASH = 'a'.repeat(64)
+
+const woolOnServer: ReaderBookDto = {
+  fileHash: WOOL_HASH,
+  title: 'Wool',
+  author: 'Hugh Howey',
+  chaptersCount: 30,
+  chapterIndex: 6,
+  paragraphIndex: 0,
+  sentenceIndex: 0,
+  progress: 0.45,
+  updatedAt: '2026-09-26T10:00:00Z',
+  dictionaryId: null,
+}
+
+/// A store holding the book's file, as the device that opened it would.
+async function storeWithWool(): Promise<BookStore> {
+  const store = new MemoryBookStore()
+
+  await store.put(
+    { hash: WOOL_HASH, title: 'Wool', author: 'Hugh Howey', fileName: 'wool.fb2', addedAt: '2026-09-01T00:00:00Z' },
+    new ArrayBuffer(1),
+  )
+
+  return store
+}
+
+function withReader(readerBooks: Reply) {
+  respond({ status: 200, body: untouched }, undefined, { status: 200, body: [] }, { status: 204 }, {
+    status: 200,
+    body: nothingRecent,
+  }, readerBooks)
+}
+
+const readingRow = (container: HTMLElement) =>
+  [...container.querySelectorAll('.recent-group')].find((g) => g.querySelector('h3')?.textContent === 'Reading')
+
+describe('HomeScreen · continue reading', () => {
+  it('offers the last book with its place in it', async () => {
+    withReader({ status: 200, body: [woolOnServer] })
+
+    const { container } = await render(home({ bookStore: await storeWithWool() }))
+    await flush()
+
+    const row = readingRow(container)
+    expect(row?.querySelector('.scope-title')?.textContent).toBe('Wool')
+    expect(row?.querySelector('.scope-sub')?.textContent).toBe('Chapter 7 of 30 · 45 %')
+  })
+
+  it('opens the book by its hash', async () => {
+    withReader({ status: 200, body: [woolOnServer] })
+    const onOpenBook = vi.fn()
+
+    const { container } = await render(home({ bookStore: await storeWithWool(), onOpenBook }))
+    await flush()
+    await click(readingRow(container)!.querySelector('.scope-action')!)
+
+    expect(onOpenBook).toHaveBeenCalledWith(WOOL_HASH)
+  })
+
+  /// A reading book alone is reason enough for the card, with no exercises or sorting behind it.
+  it('brings up the card on its own', async () => {
+    withReader({ status: 200, body: [woolOnServer] })
+
+    const { container } = await render(home({ bookStore: await storeWithWool() }))
+    await flush()
+
+    expect(container.querySelector('.recent-activity')).not.toBeNull()
+    expect(container.querySelectorAll('.recent-group')).toHaveLength(1)
+  })
+
+  /// The file never leaves the browser that opened it, so there is nothing to continue here.
+  it('says nothing about a book read only on another device', async () => {
+    withReader({ status: 200, body: [woolOnServer] })
+
+    const { container } = await render(home({ bookStore: new MemoryBookStore() }))
+    await flush()
+
+    expect(readingRow(container)).toBeUndefined()
+    expect(container.querySelector('.recent-activity')).toBeNull()
+  })
+
+  /// The store opens asynchronously; until it does, the row cannot know what is here.
+  it('asks for nothing before the store is open', async () => {
+    withReader({ status: 200, body: [woolOnServer] })
+
+    const { container } = await render(home({ bookStore: null }))
+    await flush()
+
+    expect(fetch).not.toHaveBeenCalledWith('/api/reader/books', expect.anything())
+    expect(readingRow(container)).toBeUndefined()
   })
 })

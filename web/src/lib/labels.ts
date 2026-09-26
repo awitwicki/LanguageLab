@@ -1,3 +1,5 @@
+import { formatInt } from './format'
+
 export const WHOLE_BOOK = 'Whole book'
 
 /// A review with no book of its own spans the lot.
@@ -16,4 +18,12 @@ export function chapterLabel(chapter: { order: number; title: string }): string 
 export function scopeLabel(bookName: string | null, chapter: { order: number; title: string } | null): string {
   const book = bookName ?? ALL_DICTIONARIES
   return chapter ? `${book} · ${chapterLabel(chapter)}` : book
+}
+
+/// How far into a book the reader got — for the library's rows and the home screen's
+/// "Continue". Takes only the three fields it prints, so it needs no import of `ReaderBookDto`.
+export function readingProgressLabel(book: { chapterIndex: number; chaptersCount: number; progress: number }): string {
+  const chapter = `Chapter ${formatInt(book.chapterIndex + 1)} of ${formatInt(book.chaptersCount)}`
+
+  return `${chapter} · ${formatInt(Math.round(book.progress * 100))} %`
 }

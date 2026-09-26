@@ -51,6 +51,10 @@ button moves it there, and tapping the marked one undoes it. The endpoints are l
 - **`bookStore.ts`** — local storage of the book files themselves, in IndexedDB, never uploaded.
 - **`readerSettings.ts`** — theme, dimming, font size.
 - **`ReaderLibraryScreen.tsx`** — the library screen.
+- **`useContinueReading.ts`** — the home screen's "Continue" row: the newest book of the server's
+  library whose file is in this device's `bookStore`. Both halves are needed, since the server
+  knows every book's position but not which files this browser holds — a book read elsewhere is
+  left out rather than offered, because opening it here needs the file picker the library has.
 - **`ReaderScreen.tsx`, `Sentence.tsx`, `WordPanel.tsx`, `ReaderMenu.tsx`** — the full-screen
   reader.
 - **`wordStatus.ts`** — word-status resolution.

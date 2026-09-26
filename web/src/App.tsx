@@ -198,6 +198,8 @@ export default function App() {
           onSort={sortScope}
           onTrain={trainScope}
           onChapterReview={reviewScope}
+          bookStore={books?.store ?? null}
+          onOpenBook={(hash) => setRoute({ name: 'reader-book', hash })}
         />
       )}
 

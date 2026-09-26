@@ -33,6 +33,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Shelf admin panel: list of all words in the DB, list of "know", list of "don't know", list of excluded — with the ability to un-mark (move back between shelves) right there
 - [x] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
 - [ ] Home screen's recent lists show no time: a row says "38% sorted", never "you left this yesterday". `RecentActivity` already carries `finishedAt`/`lastSortedAt` and the order is newest-first; it needs a relative-time formatter beside `formatDue` (`web/src/lib/format.ts`) to print them
+- [ ] Home screen's "Continue" reading row appears only when the last-read book's file is on this device (`web/src/reader/useContinueReading.ts`) — a book read on another device is silently left out, rather than offering a way into the library's "Open the file to continue" picker for it
 - [ ] `RecentActivityService.GetSortingAsync` counts each listed scope separately — two COUNTs per row, up to `MaxRows` rows plus the fully-sorted ones it skips; merge into one GROUP BY with `ChapterStatsService.GetChapterViewsAsync` if the home screen ever feels slow
 - [ ] Pronunciation trainer: minimal-pair discrimination exercises (hear two words, pick which was said)
 - [ ] Pronunciation trainer: a cross-family mixed review session

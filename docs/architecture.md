@@ -127,6 +127,10 @@ book or one of its chapters; `Training.ChapterId` records the first, a `SortingV
 by `POST /api/sorting/mark`'s optional `{ dictionaryId, chapterId }` the second — the shelves alone
 cannot say where the user was, since one word sits in several books.
 
+The same card carries a third row, **Reading**, which has no endpoint of its own: `GET
+/api/reader/books` already comes back newest-first, and `useContinueReading` keeps the newest book
+whose file this device actually holds. See [reader.md](reader.md).
+
 ### Auth and admin
 
 `/api/auth/*` — `telegram/start`, the handler-owned `telegram/callback`, `telegram/webapp`, `me`,

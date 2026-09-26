@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { api, type ReaderBookDto } from '../api/client'
-import { formatInt } from '../lib/format'
+import { readingProgressLabel } from '../lib/labels'
 import { useDismiss } from '../lib/useDismiss'
 import type { BookMeta, BookStore } from './bookStore'
 import { openBookFile } from './openBook'
@@ -11,10 +11,6 @@ interface Props {
   /** false: IndexedDB is unavailable, books stay only until the tab closes. */
   persistent: boolean
   onOpen: (hash: string) => void
-}
-
-function progressLabel(book: ReaderBookDto): string {
-  return `Chapter ${formatInt(book.chapterIndex + 1)} of ${formatInt(book.chaptersCount)} · ${formatInt(Math.round(book.progress * 100))} %`
 }
 
 function RowMenu({ open, onToggle, onClose, actions }: {
@@ -181,7 +177,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
                   <button type="button" className="library-row-open" onClick={() => onOpen(book.hash)}>
                     <span className="library-row-title">{book.title}</span>
                     {book.author && <span className="library-row-meta">{book.author}</span>}
-                    <span className="library-row-meta num">{record ? progressLabel(record) : 'Not started'}</span>
+                    <span className="library-row-meta num">{record ? readingProgressLabel(record) : 'Not started'}</span>
                   </button>
                   <RowMenu
                     open={menuFor === book.hash}
@@ -207,7 +203,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
               <li key={book.fileHash} className="library-row">
                 <div className="library-row-main">
                   <span className="library-row-title">{book.title}</span>
-                  <span className="library-row-meta num">{progressLabel(book)}</span>
+                  <span className="library-row-meta num">{readingProgressLabel(book)}</span>
                 </div>
                 <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => pick(book)}>
                   Open the file to continue

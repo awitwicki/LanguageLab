@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChapterView } from '../api/client'
-import { ALL_DICTIONARIES, WHOLE_BOOK, chapterLabel, scopeLabel } from './labels'
+import { ALL_DICTIONARIES, WHOLE_BOOK, chapterLabel, readingProgressLabel, scopeLabel } from './labels'
 
 const chapter = (order: number, title: string): ChapterView => ({
   id: order + 100,
@@ -46,5 +46,23 @@ describe('scopeLabel', () => {
   /// A review started from the home screen belongs to no book.
   it('falls back to every dictionary when there is no book', () => {
     expect(scopeLabel(null, null)).toBe(ALL_DICTIONARIES)
+  })
+})
+
+describe('readingProgressLabel', () => {
+  /// Chapters are counted from 1 for the reader, and the share is a whole percent.
+  it('counts the chapter from 1 and rounds the share', () => {
+    expect(readingProgressLabel({ chapterIndex: 6, chaptersCount: 30, progress: 0.452 })).toBe('Chapter 7 of 30 · 45 %')
+  })
+
+  it('groups the thousands of a long book', () => {
+    expect(readingProgressLabel({ chapterIndex: 1200, chaptersCount: 2000, progress: 0.6 })).toBe(
+      'Chapter 1 201 of 2 000 · 60 %',
+    )
+  })
+
+  /// A book opened but never scrolled: still chapter 1, still 0 %.
+  it('reads as the start before anything was read', () => {
+    expect(readingProgressLabel({ chapterIndex: 0, chaptersCount: 12, progress: 0 })).toBe('Chapter 1 of 12 · 0 %')
   })
 })
