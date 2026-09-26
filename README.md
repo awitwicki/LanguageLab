@@ -6,6 +6,20 @@ Web app for learning new words from books
 2. learn new words
 3. GOTO 1
 
+## Documentation
+
+- [docs/architecture.md](docs/architecture.md) — the project map: what each project and service
+  owns, the endpoint inventory, the Postgres and config setup.
+- [docs/auth.md](docs/auth.md) — Telegram sign-in over OIDC, the `ll_session` cookie, dev-login,
+  the Mini App, roles.
+- [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md) — import and publication
+  review, the personal dictionary, translation providers and budgets, Leitner training.
+- [docs/reader.md](docs/reader.md) — Reading mode: what stays in the browser, what the server
+  keeps, the word panel, fb2 and epub parsing.
+- [docs/trainers.md](docs/trainers.md) — the irregular-verbs and pronunciation trainers.
+- [web/README.md](web/README.md) — the SPA up close.
+- [CLAUDE.md](CLAUDE.md) — the conventions and invariants the code is held to.
+
 ## TODO
 
 Backlog of short topics. When something gets deferred (a stub, an inactive button, "we'll do it later") —
