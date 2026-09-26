@@ -93,13 +93,13 @@ describe('AccountMenu', () => {
 
     await click(container.querySelector('.account')!)
     expect(container.querySelector('.delete-account')?.textContent).toBe('Delete account')
-    expect(container.querySelector('.delete-warning')).toBeNull()
+    expect(container.querySelector('.account-delete-warning')).toBeNull()
 
     await click(container.querySelector('.delete-account')!)
 
     expect(onDeleteAccount).not.toHaveBeenCalled()
     expect(container.querySelector('.delete-account')?.textContent).toBe('Confirm deletion')
-    expect(container.querySelector('.delete-warning')?.textContent).toBe(
+    expect(container.querySelector('.account-delete-warning')?.textContent).toBe(
       'This removes your progress and cannot be undone.',
     )
     expect(container.querySelector('.account-panel')).not.toBeNull()
@@ -150,6 +150,6 @@ describe('AccountMenu', () => {
     await click(container.querySelector('.account')!)
 
     expect(container.querySelector('.delete-account')?.textContent).toBe('Delete account')
-    expect(container.querySelector('.delete-warning')).toBeNull()
+    expect(container.querySelector('.account-delete-warning')).toBeNull()
   })
 })

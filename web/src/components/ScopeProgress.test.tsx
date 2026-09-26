@@ -11,7 +11,7 @@ describe('ScopeProgress', () => {
   it('a book: a "Sorted" row with the percent, a "Learned" row with the scale, both captions', async () => {
     const { container } = await render(<ScopeProgress sorting={{ sorted: 500, total: 2000 }} learning={learning} />)
 
-    const rows = [...container.querySelectorAll('.scope-row')]
+    const rows = [...container.querySelectorAll('.progress-row')]
     expect(rows.map((r) => r.querySelector('.scope-label')?.textContent)).toEqual(['Sorted', 'Learned'])
     expect(rows[0].querySelector('.progress-fill')?.getAttribute('style')).toContain('width: 25%')
     expect(rows[0].querySelector('.scope-value')?.textContent).toBe('25%')
@@ -25,7 +25,7 @@ describe('ScopeProgress', () => {
   it('a book nobody has trained yet: the sorted row alone, no scale and no learned caption', async () => {
     const { container } = await render(<ScopeProgress sorting={{ sorted: 500, total: 2000 }} learning={nothing} />)
 
-    expect(container.querySelectorAll('.scope-row')).toHaveLength(1)
+    expect(container.querySelectorAll('.progress-row')).toHaveLength(1)
     expect(container.querySelector('.leitner')).toBeNull()
     expect(container.querySelectorAll('.scope-caption')).toHaveLength(1)
   })

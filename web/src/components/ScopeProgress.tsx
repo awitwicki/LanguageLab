@@ -25,7 +25,7 @@ export function ScopeProgress({ sorting, learning }: Props) {
   return (
     <div className="scope-progress">
       {sorting && (
-        <div className="scope-row scope-row-sorted">
+        <div className="progress-row progress-row-sorted">
           <span className="scope-label footnote">Sorted</span>
           <ProgressBar sorted={sorting.sorted} total={sorting.total} showLabel={false} />
           <span className="scope-value footnote num">{percentOf(sorting.sorted, sorting.total)}%</span>
@@ -33,7 +33,7 @@ export function ScopeProgress({ sorting, learning }: Props) {
       )}
 
       {hasLearning && (
-        <div className="scope-row">
+        <div className="progress-row">
           <span className="scope-label footnote">Learned</span>
           <LeitnerScale progress={learning} />
         </div>
