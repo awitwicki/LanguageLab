@@ -55,6 +55,9 @@ export function VerbStageScreen({ group, onStartDrill, onBack }: Props) {
           type="button"
           className="btn btn-primary stage-train"
           onClick={() => onStartDrill({ mode: 'batch', group }, stage.title)}
+          // Nothing unpassed is left for the window to serve, so ordinary training would
+          // open on the finished-stage screen and go no further.
+          disabled={stage.passed === stage.total}
         >
           Train
         </button>

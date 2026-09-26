@@ -130,15 +130,18 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   examples live in code (`LanguageLab.Domain/IrregularVerbs/IrregularVerbCatalog`), grouped
   into the four stages the learner sees — one per verb type, all open from the start, no
   families and nothing locked. A card shows one of the three forms and blurs the answer; the
-  learner answers "I know" or "I don't know", and that verdict plus how long the click took
-  is the whole signal (`VerbScoring`: quality 1.0 for a click within 1.5 s down to 0.45 at
+  learner answers "I know" or "I don't know" — or taps the blurred answer itself, which only
+  uncovers it and judges nothing, leaving the verdict still to give while the clock runs — and
+  that verdict plus how long the click took is the whole signal (`VerbScoring`: quality 1.0 for a click within 1.5 s down to 0.45 at
   6 s, 0 for a miss, folded into `Mastery` as a moving average with α = 0.4). `Streak` —
   consecutive "I know" answers, four of them to pass a verb — drives nothing but batch
   progression: ordinary training is the first five not-passed verbs of the stage
   (`BatchWindow`), so a new batch opens only once the previous one is done. Free training
   draws at random with 65 % of cards from the weak words (`FreePicker`), over one stage, a
   stage and every earlier one, or all 68. A verb's standing is one `VerbKnowledge` row and
-  every click is appended to `VerbAnswer`; there is no session and no stored queue, so
+  every click is appended to `VerbAnswer`; the row is a cache of that log, replayed from it on
+  every answer (`VerbScoring.Replay`) rather than incremented, so two devices answering at
+  once cannot leave the counters behind the log. There is no session and no stored queue, so
   nothing needs resuming. `/api/irregular-verbs` (`GET /progress`,
   `GET /next?mode=batch|free&group=&scope=stage|cumulative|all&exclude=`, `POST /answers`)
   — the query string is parsed by hand (`ParseDrill`), since minimal API binds a query enum

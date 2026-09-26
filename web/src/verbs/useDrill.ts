@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type DrillCard, type DrillQuery, type VerbAnswerResult } from '../api/client'
 
+/// What the server keeps at most (VerbScoring.MaxResponseMs). Clamping here as well keeps a
+/// card left open for weeks from overflowing the int the request is typed with.
+const MAX_RESPONSE_MS = 60_000
+
 /**
  * One run of the drill: the card on screen, the answer once it is judged, and the card
  * behind it. The next card is fetched only after the answer has been posted — the server
@@ -10,6 +14,7 @@ import { api, type DrillCard, type DrillQuery, type VerbAnswerResult } from '../
 export function useDrill(query: DrillQuery) {
   const [card, setCard] = useState<DrillCard | null>(null)
   const [revealed, setRevealed] = useState<VerbAnswerResult | null>(null)
+  const [peeked, setPeeked] = useState(false)
   const [done, setDone] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,8 +30,20 @@ export function useDrill(query: DrillQuery) {
   const show = useCallback((next: DrillCard | null) => {
     setCard(next)
     setDone(next === null)
+    setPeeked(false)
     shownAt.current = Date.now()
   }, [])
+
+  /// Uncovers the answer without judging the card: the learner still has to say whether
+  /// they knew it. The clock keeps running, so a peeked "I know" scores as the slow answer
+  /// it is rather than a free full mark.
+  const peek = useCallback(() => {
+    if (revealed) {
+      return
+    }
+
+    setPeeked(true)
+  }, [revealed])
 
   useEffect(() => {
     let live = true
@@ -56,7 +73,7 @@ export function useDrill(query: DrillQuery) {
       answering.current = true
       setBusy(true)
       setError(null)
-      const responseMs = Date.now() - shownAt.current
+      const responseMs = Math.min(Math.max(0, Date.now() - shownAt.current), MAX_RESPONSE_MS)
 
       api
         .answerVerbCard({
@@ -77,7 +94,12 @@ export function useDrill(query: DrillQuery) {
             queued.current = null
           }
         })
-        .catch((e) => setError(String(e)))
+        .catch((e) => {
+          setError(String(e))
+          // The card stays up for another try, so time it from here: the failed round trip
+          // and the time spent reading the error are not the learner thinking about the verb.
+          shownAt.current = Date.now()
+        })
         .finally(() => {
           answering.current = false
           setBusy(false)
@@ -121,5 +143,5 @@ export function useDrill(query: DrillQuery) {
       })
   }, [revealed, query, show, card])
 
-  return { card, revealed, done, busy, error, answer, next }
+  return { card, revealed, peeked, done, busy, error, answer, peek, next }
 }

@@ -305,6 +305,7 @@ export default function App() {
         <VerbDrillScreen
           query={route.query}
           title={route.title}
+          onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
           onBack={() =>
             setRoute(
               route.query.group === undefined

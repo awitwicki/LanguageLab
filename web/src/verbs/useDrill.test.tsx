@@ -187,4 +187,105 @@ describe('useDrill', () => {
     expect(read().revealed).toEqual(result)
     expect(read().error).toBeNull()
   })
+
+  it('never reports more elapsed time than the server would keep', async () => {
+    let now = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    apiMock.nextVerbCard.mockResolvedValue(card('cut'))
+    apiMock.answerVerbCard.mockResolvedValue(result)
+    const { Probe, read } = probe()
+
+    await render(<Probe />)
+    await flush()
+
+    now += 5 * 24 * 60 * 60 * 1000 // a card left open for five days
+    await act(async () => read().answer(true))
+    await flush()
+
+    // The server clamps too, but an unclamped int32 would overflow long before this.
+    expect(apiMock.answerVerbCard).toHaveBeenCalledWith(expect.objectContaining({ responseMs: 60_000 }))
+  })
+
+  it('times a retry from the failure, not from the card', async () => {
+    let now = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    apiMock.nextVerbCard.mockResolvedValue(card('cut'))
+    apiMock.answerVerbCard.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(result)
+    const { Probe, read } = probe()
+
+    await render(<Probe />)
+    await flush()
+
+    now += 2_000
+    await act(async () => read().answer(true))
+    await flush()
+
+    expect(read().error).toContain('offline')
+
+    now += 9_000 // reading the error message is not thinking about the verb
+    await act(async () => read().answer(true))
+    await flush()
+
+    expect(apiMock.answerVerbCard).toHaveBeenLastCalledWith(expect.objectContaining({ responseMs: 9_000 }))
+  })
+
+  it('shows the answer on a peek without judging the card', async () => {
+    apiMock.nextVerbCard.mockResolvedValue(card('cut'))
+    const { Probe, read } = probe()
+
+    await render(<Probe />)
+    await flush()
+    await act(async () => read().peek())
+
+    expect(read().peeked).toBe(true)
+    // A peek is only a reveal: nothing is posted and no verdict is recorded, so the
+    // learner still has to say whether they knew it.
+    expect(apiMock.answerVerbCard).not.toHaveBeenCalled()
+    expect(read().revealed).toBeNull()
+  })
+
+  it('still records the verdict after a peek', async () => {
+    apiMock.nextVerbCard.mockResolvedValue(card('cut'))
+    apiMock.answerVerbCard.mockResolvedValue(result)
+    const { Probe, read } = probe()
+
+    await render(<Probe />)
+    await flush()
+    await act(async () => read().peek())
+    await act(async () => read().answer(false))
+    await flush()
+
+    expect(apiMock.answerVerbCard).toHaveBeenCalledWith(expect.objectContaining({ known: false }))
+    expect(read().revealed).toEqual(result)
+  })
+
+  it('forgets the peek when the next card arrives', async () => {
+    apiMock.nextVerbCard.mockResolvedValueOnce(card('cut')).mockResolvedValueOnce(card('put'))
+    apiMock.answerVerbCard.mockResolvedValue(result)
+    const { Probe, read } = probe()
+
+    await render(<Probe />)
+    await flush()
+    await act(async () => read().peek())
+    await act(async () => read().answer(true))
+    await flush()
+    await act(async () => read().next())
+
+    expect(read().card?.verb.v1).toBe('put')
+    expect(read().peeked).toBe(false)
+  })
+
+  it('ignores a peek once the answer is already revealed', async () => {
+    apiMock.nextVerbCard.mockResolvedValue(card('cut'))
+    apiMock.answerVerbCard.mockResolvedValue(result)
+    const { Probe, read } = probe()
+
+    await render(<Probe />)
+    await flush()
+    await act(async () => read().answer(true))
+    await flush()
+    await act(async () => read().peek())
+
+    expect(read().peeked).toBe(false)
+  })
 })

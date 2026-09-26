@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DrillCard, VerbAnswerResult } from '../api/client'
+import type { DrillCard, DrillQuery, VerbAnswerResult } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { VerbDrillScreen } from './VerbDrillScreen'
 
@@ -15,8 +15,15 @@ const card: DrillCard = {
 
 const result: VerbAnswerResult = { verb: 'go', mastery: 0.8, streak: 2, passed: false }
 
-function screen() {
-  return <VerbDrillScreen query={{ mode: 'batch', group: 4 }} title="All three forms differ" onBack={() => {}} />
+function screen(onStartDrill: (query: DrillQuery, title: string) => void = () => {}) {
+  return (
+    <VerbDrillScreen
+      query={{ mode: 'batch', group: 4 }}
+      title="All three forms differ"
+      onBack={() => {}}
+      onStartDrill={onStartDrill}
+    />
+  )
 }
 
 describe('VerbDrillScreen', () => {
@@ -46,6 +53,10 @@ describe('VerbDrillScreen', () => {
     expect(container.querySelector('.drill-answer')!.className).not.toContain('is-blurred')
     expect(container.textContent).toContain('йти')
     expect(container.textContent).toContain('They went home early.')
+    // The catalog brackets the verb form; the example emphasises it rather than dropping
+    // the brackets and leaving the sentence flat.
+    expect(container.querySelector('.drill-example strong')!.textContent).toBe('went')
+    expect(container.querySelector('.drill-example')!.textContent).not.toContain('[')
     expect(container.querySelector('.drill-next')).not.toBeNull()
     expect(apiMock.answerVerbCard).toHaveBeenCalledWith(expect.objectContaining({ known: true }))
   })
@@ -84,6 +95,42 @@ describe('VerbDrillScreen', () => {
     expect(container.textContent).toContain('2 of 27')
   })
 
+  it('uncovers the answer when the blurred answer itself is clicked', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    await click(container.querySelector('.drill-answer')!)
+
+    expect(container.querySelector('.drill-answer')!.className).not.toContain('is-blurred')
+    // A peek judges nothing — the verdict buttons stay, and nothing is posted.
+    expect(apiMock.answerVerbCard).not.toHaveBeenCalled()
+    expect(container.querySelector('.btn-known')).not.toBeNull()
+    expect(container.querySelector('.drill-next')).toBeNull()
+  })
+
+  it('still takes the verdict after the answer was peeked at', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    await click(container.querySelector('.drill-answer')!)
+    await click(container.querySelector('.btn-unknown')!)
+    await flush()
+
+    expect(apiMock.answerVerbCard).toHaveBeenCalledWith(expect.objectContaining({ known: false }))
+    expect(container.querySelector('.drill-next')).not.toBeNull()
+  })
+
+  it('keeps the blurred answer away from screen readers until it is shown', async () => {
+    const { container } = await render(screen())
+    await flush()
+
+    expect(container.querySelector('.drill-triplet')!.getAttribute('aria-hidden')).toBe('true')
+
+    await click(container.querySelector('.drill-answer')!)
+
+    expect(container.querySelector('.drill-triplet')!.getAttribute('aria-hidden')).toBeNull()
+  })
+
   it('reports a finished stage instead of a card', async () => {
     apiMock.nextVerbCard.mockResolvedValue(null)
 
@@ -92,5 +139,20 @@ describe('VerbDrillScreen', () => {
 
     expect(container.textContent).toContain('Every verb of this stage has passed')
     expect(container.querySelector('.drill-prompt')).toBeNull()
+  })
+
+  it('offers free training on the stage it just finished', async () => {
+    apiMock.nextVerbCard.mockResolvedValue(null)
+    const onStartDrill = vi.fn()
+
+    const { container } = await render(screen(onStartDrill))
+    await flush()
+
+    await click(container.querySelector('.drill-free')!)
+
+    expect(onStartDrill).toHaveBeenCalledWith(
+      { mode: 'free', group: 4, scope: 'stage' },
+      'All three forms differ',
+    )
   })
 })

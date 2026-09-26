@@ -79,13 +79,6 @@ public class VerbKnowledgeService
         }
 
         var clamped = Math.Clamp(responseMs, 0, VerbScoring.MaxResponseMs);
-        var quality = VerbScoring.Quality(known, clamped);
-
-        row.Mastery = VerbScoring.NextMastery(row.Mastery, row.Answers, quality);
-        row.Streak = VerbScoring.NextStreak(row.Streak, known);
-        row.Answers++;
-        row.Knows += known ? 1 : 0;
-        row.LastAnsweredAt = nowUtc;
 
         _dbContext.VerbAnswers.Add(new VerbAnswer
         {
@@ -98,6 +91,31 @@ public class VerbKnowledgeService
             Group = group,
             CreatedAt = nowUtc,
         });
+
+        // The standing is a cache of the log, not a counter: replay every answer for this
+        // verb rather than incrementing whatever the row happened to hold. Incrementing left
+        // the counters permanently behind the log when another device answered in between; a
+        // replay lands on what was actually answered however the writes interleaved. The
+        // answer added just above is still unsaved, so it joins the fold here, last — its
+        // timestamp is this call's, so it is the newest by construction.
+        var logged = await _dbContext.VerbAnswers
+            .Where(a => a.UserId == userId && a.Verb == verb)
+            .OrderBy(a => a.CreatedAt)
+            .ThenBy(a => a.Id)
+            .Select(a => new { a.Known, a.ResponseMs })
+            .ToListAsync();
+
+        var replayed = logged
+            .Select(a => (a.Known, a.ResponseMs))
+            .Append((known, clamped));
+
+        var tally = VerbScoring.Replay(replayed);
+
+        row.Mastery = tally.Mastery;
+        row.Streak = tally.Streak;
+        row.Answers = tally.Answers;
+        row.Knows = tally.Knows;
+        row.LastAnsweredAt = nowUtc;
 
         await _dbContext.SaveChangesAsync();
 

@@ -80,6 +80,48 @@ public class VerbScoringTests
         Assert.Equal(0, VerbScoring.NextStreak(9, known: false));
     }
 
+    /// <summary>
+    /// The answer log is the source of truth, so a standing has to be reconstructible from
+    /// it — replaying has to land exactly where answering one at a time does.
+    /// </summary>
+    [Fact]
+    public void Replaying_an_empty_log_is_a_standing_at_zero()
+    {
+        Assert.Equal(new VerbTally(0, 0, 0, 0), VerbScoring.Replay([]));
+    }
+
+    [Fact]
+    public void Replaying_counts_answers_knows_and_the_trailing_streak()
+    {
+        var tally = VerbScoring.Replay([(true, 500), (false, 500), (true, 500), (true, 500)]);
+
+        Assert.Equal(4, tally.Answers);
+        Assert.Equal(3, tally.Knows);
+        Assert.Equal(2, tally.Streak); // the miss reset it; two knows since
+    }
+
+    [Fact]
+    public void Replaying_lands_where_answering_one_at_a_time_lands()
+    {
+        (bool Known, int ResponseMs)[] log = [(true, 400), (false, 800), (true, 3750), (true, 200), (true, 9000)];
+
+        var mastery = 0.0;
+        var streak = 0;
+
+        for (var i = 0; i < log.Length; i++)
+        {
+            mastery = VerbScoring.NextMastery(mastery, i, VerbScoring.Quality(log[i].Known, log[i].ResponseMs));
+            streak = VerbScoring.NextStreak(streak, log[i].Known);
+        }
+
+        var tally = VerbScoring.Replay(log);
+
+        Assert.Equal(mastery, tally.Mastery, precision: 10);
+        Assert.Equal(streak, tally.Streak);
+        Assert.Equal(log.Length, tally.Answers);
+        Assert.Equal(4, tally.Knows);
+    }
+
     [Fact]
     public void A_verb_passes_on_the_fourth_know_in_a_row()
     {

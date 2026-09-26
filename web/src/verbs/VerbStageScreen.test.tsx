@@ -79,6 +79,20 @@ describe('VerbStageScreen', () => {
     )
   })
 
+  it('stops offering ordinary training once the whole stage has passed', async () => {
+    apiMock.getVerbsProgress.mockResolvedValue({
+      ...progress,
+      stages: progress.stages.map((s) => (s.group === 1 ? { ...s, passed: s.total } : s)),
+    })
+
+    const { container } = await render(<VerbStageScreen group={1} onStartDrill={() => {}} onBack={() => {}} />)
+    await flush()
+
+    // The window has nothing unpassed left to serve, so the button would only dead-end.
+    expect(container.querySelector<HTMLButtonElement>('.stage-train')!.disabled).toBe(true)
+    expect(container.querySelector<HTMLButtonElement>('.stage-free')!.disabled).toBe(false)
+  })
+
   it('has nothing cumulative to offer on the first stage', async () => {
     const { container } = await render(<VerbStageScreen group={1} onStartDrill={() => {}} onBack={() => {}} />)
     await flush()

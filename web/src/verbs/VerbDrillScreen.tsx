@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { DrillQuery } from '../api/client'
 import { formatInt } from '../lib/format'
 import { useDrill } from './useDrill'
@@ -8,13 +8,16 @@ interface Props {
   query: DrillQuery
   title: string
   onBack: () => void
+  /// A finished stage has nothing left to drill in order, so the only way on is a free run.
+  onStartDrill: (query: DrillQuery, title: string) => void
 }
 
 /// One card at a time: a form to recognise, the three forms blurred underneath, and the
 /// learner's own verdict. The verdict unblurs the answer; the level comes out of how fast
 /// it came.
-export function VerbDrillScreen({ query, title, onBack }: Props) {
-  const { card, revealed, done, busy, error, answer, next } = useDrill(query)
+export function VerbDrillScreen({ query, title, onBack, onStartDrill }: Props) {
+  const { card, revealed, peeked, done, busy, error, answer, peek, next } = useDrill(query)
+  const shown = revealed !== null || peeked
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -55,9 +58,20 @@ export function VerbDrillScreen({ query, title, onBack }: Props) {
       {done && (
         <div className="card drill-done">
           <p>Every verb of this stage has passed. Free training keeps them fresh.</p>
-          <button type="button" className="btn btn-primary" onClick={onBack}>
-            Back to the stage
-          </button>
+          <div className="drill-done-actions">
+            {query.group !== undefined && (
+              <button
+                type="button"
+                className="btn btn-primary drill-free"
+                onClick={() => onStartDrill({ mode: 'free', group: query.group, scope: 'stage' }, title)}
+              >
+                Train freely
+              </button>
+            )}
+            <button type="button" className="btn btn-secondary" onClick={onBack}>
+              Back to the stage
+            </button>
+          </div>
         </div>
       )}
 
@@ -65,14 +79,37 @@ export function VerbDrillScreen({ query, title, onBack }: Props) {
         <div className="card drill-card">
           <p className="drill-prompt">{promptOf(card.verb, card.promptForm)}</p>
 
-          <div className={`drill-answer${revealed ? '' : ' is-blurred'}`}>
-            <p className="drill-triplet">{`${card.verb.v1} – ${card.verb.v2} – ${card.verb.v3}`}</p>
-            <p className="drill-translation">{card.verb.translation}</p>
+          {/* Blurred, the answer is a button: tapping it uncovers the forms without
+              judging the card, and its own text stays out of the screen-reader tree until
+              then — the label is what a reader announces instead. */}
+          <div
+            className={`drill-answer${shown ? '' : ' is-blurred'}`}
+            {...(shown
+              ? {}
+              : {
+                  role: 'button',
+                  tabIndex: 0,
+                  'aria-label': 'Show the answer',
+                  onClick: peek,
+                  onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      peek()
+                    }
+                  },
+                })}
+          >
+            <p className="drill-triplet" aria-hidden={shown ? undefined : true}>
+              {`${card.verb.v1} – ${card.verb.v2} – ${card.verb.v3}`}
+            </p>
+            <p className="drill-translation" aria-hidden={shown ? undefined : true}>
+              {card.verb.translation}
+            </p>
           </div>
 
           {revealed ? (
             <div className="drill-after">
-              <p className="drill-example">{card.example.text.replace(/\[([^\]]+)\]/, '$1')}</p>
+              <Example text={card.example.text} />
               {card.verb.note && <p className="footnote">{card.verb.note}</p>}
               <button type="button" className="btn btn-primary btn-lg drill-next" onClick={next} disabled={busy}>
                 Next <kbd>Space</kbd>
@@ -96,6 +133,26 @@ export function VerbDrillScreen({ query, title, onBack }: Props) {
         </div>
       )}
     </>
+  )
+}
+
+/// The catalog wraps the verb form in square brackets — "They [went] home early." — so the
+/// sentence can show which word is the point. The brackets themselves never reach the page.
+function Example({ text }: { readonly text: string }) {
+  const parts = /^([^[]*)\[([^\]]+)\](.*)$/s.exec(text)
+
+  if (!parts) {
+    return <p className="drill-example">{text}</p>
+  }
+
+  const [, before, form, after] = parts
+
+  return (
+    <p className="drill-example">
+      {before}
+      <strong>{form}</strong>
+      {after}
+    </p>
   )
 }
 

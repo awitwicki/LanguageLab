@@ -174,6 +174,43 @@ public class VerbKnowledgeServiceTests
         Assert.Equal(3, view.LearnedPercent); // 2 of 68
     }
 
+    /// <summary>
+    /// Found on review: two devices answering the same verb at once used to leave the
+    /// counters permanently behind the log, because each one incremented the row from the
+    /// value it had read. The row is derived from the log now, so a writer working off a
+    /// stale copy still lands on what the log actually holds.
+    /// </summary>
+    [Fact]
+    public async Task A_stale_writer_still_lands_on_what_the_log_holds()
+    {
+        var database = Guid.NewGuid().ToString();
+
+        static ApplicationDbContext Context(string name) =>
+            new(new DbContextOptionsBuilder<ApplicationDbContext>().UseInMemoryDatabase(name).Options);
+
+        await using var seed = Context(database);
+        await new VerbKnowledgeService(seed).ApplyAsync(1, "cut", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+
+        // One device reads the standing and holds it — EF hands this context its tracked
+        // copy from here on, which is exactly how the second tab goes stale.
+        await using var stale = Context(database);
+        await new VerbKnowledgeService(stale).GetAsync(1);
+
+        // Meanwhile the other device answers twice.
+        await using var other = Context(database);
+        await new VerbKnowledgeService(other).ApplyAsync(1, "cut", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+        await new VerbKnowledgeService(other).ApplyAsync(1, "cut", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+
+        var result = await new VerbKnowledgeService(stale)
+            .ApplyAsync(1, "cut", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+
+        await using var fresh = Context(database);
+        Assert.Equal(4, await fresh.VerbAnswers.CountAsync());
+        // Four answers in the log, so four in the standing — not the two the stale copy saw.
+        Assert.Equal(4, result!.Streak);
+        Assert.Equal(4, (await fresh.VerbKnowledges.SingleAsync(k => k.Verb == "cut")).Answers);
+    }
+
     [Fact]
     public async Task Standings_come_back_in_the_order_of_the_verbs_asked_for()
     {

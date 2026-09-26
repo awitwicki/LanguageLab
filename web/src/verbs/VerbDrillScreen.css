@@ -33,6 +33,8 @@
 .drill-answer.is-blurred {
   filter: blur(8px);
   user-select: none;
+  /* Blurred, the whole block is the "show me" button. */
+  cursor: pointer;
 }
 
 .drill-triplet {
@@ -70,4 +72,11 @@
   justify-items: center;
   text-align: center;
   padding: 32px 20px;
+}
+
+.drill-done-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
 }
