@@ -166,14 +166,23 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   // reading-band's rootMargin below, so the two can never disagree about where the header ends.
   // env(safe-area-inset-top) makes it vary by device, and orientation change can alter that inset.
   useLayoutEffect(() => {
+    const header = headerRef.current
     const measure = () => {
-      const height = headerRef.current?.getBoundingClientRect().height
+      const height = header?.getBoundingClientRect().height
       if (height) setHeaderHeight(height)
     }
 
     measure()
     window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
+    // Full-screen Telegram reports the room its own buttons take a moment after the first paint
+    // (auth/telegram.ts), growing the header with no render of ours to measure it on.
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    if (header && observer) observer.observe(header)
+
+    return () => {
+      window.removeEventListener('resize', measure)
+      observer?.disconnect()
+    }
   })
 
   // What the server knows; each part may fail on its own without stopping the reading.

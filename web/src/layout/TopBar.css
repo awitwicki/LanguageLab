@@ -5,7 +5,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  /* --topbar-h already carries --safe-top, so the row itself keeps its height and the padding
+     only moves its contents out from under Telegram's own buttons (index.css). */
+  padding: var(--safe-top) 20px 0;
   background: var(--glass);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   backdrop-filter: saturate(180%) blur(20px);
@@ -65,7 +67,7 @@
     height: auto;
     flex-wrap: wrap;
     row-gap: 8px;
-    padding: 8px 16px;
+    padding: calc(8px + var(--safe-top)) 16px 8px;
   }
 
   .mode-tabs {

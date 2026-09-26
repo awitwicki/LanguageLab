@@ -54,6 +54,13 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
   `UserLoginService`. The SPA asks `/api/auth/me` first and posts only on a 401
   (`web/src/auth/useAuth.ts`; `web/src/auth/telegram.ts` is the only file touching
   `window.Telegram`). Telegram Web (browser iframe) is unsupported: `SameSite=Lax`.
+  Full-screen Mini App (opened from a home-screen icon): the page owns the whole screen, with
+  the phone's status bar and Telegram's own floating Close and menu buttons drawn over the top
+  of it. `watchTelegramFullscreen` marks `<html data-tg-fullscreen>`, and `index.css` turns
+  Telegram's `--tg-safe-area-inset-*` / `--tg-content-safe-area-inset-*` into `--safe-top` /
+  `--safe-bottom` — zero in every other mode — which the top bar, `.content`, the reader's
+  header and the two bottom sheets pad themselves by. Telegram reports those insets a moment
+  after the first paint, so the reader re-measures its header with a `ResizeObserver`.
 - Roles (`UserRole`: `User`, `Admin` — stored as an int). The `Importer` policy is gone, and so
   is the `Uploader` role (dropped by the `DropUploaderRole` migration, which moves any account
   still holding it back to `User`): importing a book takes no role at all, any signed-in user

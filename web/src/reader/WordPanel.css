@@ -6,7 +6,7 @@
   z-index: 3;
   max-width: 720px;
   margin: 0 auto;
-  padding: 14px 16px max(16px, env(safe-area-inset-bottom));
+  padding: 14px 16px calc(max(16px, env(safe-area-inset-bottom)) + var(--safe-bottom));
   background: var(--reader-surface);
   color: var(--reader-text);
   border-top: 1px solid var(--reader-hairline);

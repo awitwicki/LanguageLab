@@ -44,7 +44,9 @@
 
 .content {
   max-width: var(--content-max);
-  padding: 40px 48px 64px;
+  /* The tail keeps the last card clear of the gesture bar full-screen Telegram runs under
+     (index.css); zero everywhere else. */
+  padding: 40px 48px calc(64px + var(--safe-bottom));
 }
 
 @media (max-width: 800px) {
@@ -73,6 +75,6 @@
   }
 
   .content {
-    padding: 24px 20px 48px;
+    padding: 24px 20px calc(48px + var(--safe-bottom));
   }
 }

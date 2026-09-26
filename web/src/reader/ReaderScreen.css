@@ -14,7 +14,9 @@
   grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 8px;
-  padding: max(8px, env(safe-area-inset-top)) 8px 10px;
+  /* Full-screen Telegram floats its own Close and menu buttons over this row (index.css);
+     without the inset they land on the back button and the menu. */
+  padding: calc(max(8px, env(safe-area-inset-top)) + var(--safe-top)) 8px 10px;
   background: var(--reader-bg);
   border-bottom: 1px solid var(--reader-hairline);
   font-family: var(--font);

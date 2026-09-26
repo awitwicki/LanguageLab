@@ -49,7 +49,12 @@
   --r-md: 10px;
   --r-lg: 14px;
   --r-xl: 20px;
-  --topbar-h: 52px;
+  /* Zero everywhere but full-screen Telegram, where the page owns the whole screen and the
+     phone's status bar and Telegram's floating Close and menu buttons are drawn over the top
+     of it; --safe-bottom is the gesture bar. See :root[data-tg-fullscreen] below. */
+  --safe-top: 0px;
+  --safe-bottom: 0px;
+  --topbar-h: calc(52px + var(--safe-top));
   --sidebar-w: 260px;
   --content-max: 880px;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -59,6 +64,14 @@
   --dur-sheet: 220ms;
   /* One crossing of a placeholder's sheen — slow enough to read as waiting, not as nagging. */
   --dur-shimmer: 1300ms;
+}
+
+/* Set by web/src/auth/telegram.ts once Telegram says the Mini App is running full-screen.
+   Telegram's own script keeps the four insets it reports up to date on this same element; the
+   status bar and the buttons over it stack, so the room to leave is their sum. */
+:root[data-tg-fullscreen] {
+  --safe-top: calc(var(--tg-safe-area-inset-top, 0px) + var(--tg-content-safe-area-inset-top, 0px));
+  --safe-bottom: calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px));
 }
 
 @media (prefers-color-scheme: dark) {
