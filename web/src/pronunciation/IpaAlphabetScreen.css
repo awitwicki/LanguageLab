@@ -1,0 +1,184 @@
+.ipa-back {
+  margin-bottom: 12px;
+}
+
+.ipa-intro {
+  color: var(--text-2);
+  max-width: 560px;
+  margin-bottom: 20px;
+}
+
+.ipa-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+  margin-bottom: 8px;
+}
+
+.ipa-search {
+  flex: 1 1 260px;
+}
+
+.ipa-search input {
+  width: 100%;
+}
+
+.ipa-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: var(--fs-footnote);
+  line-height: var(--lh-footnote);
+}
+
+.ipa-count {
+  color: var(--text-3);
+  margin: 0 0 24px;
+}
+
+.ipa-empty {
+  color: var(--text-2);
+  margin-bottom: 24px;
+}
+
+.ipa-section {
+  margin-bottom: 32px;
+}
+
+.ipa-section-title {
+  font-size: var(--fs-title);
+  line-height: var(--lh-title);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.ipa-section-note {
+  color: var(--text-2);
+  font-size: var(--fs-footnote);
+  line-height: var(--lh-footnote);
+  margin: 0 0 16px;
+  max-width: 560px;
+}
+
+.ipa-group {
+  margin-bottom: 20px;
+}
+
+.ipa-group-title {
+  font-size: var(--fs-footnote);
+  line-height: var(--lh-footnote);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  margin: 0 0 8px;
+}
+
+.ipa-cards {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.ipa-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'symbol body'
+    'actions actions';
+  gap: 4px 16px;
+  align-items: start;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  padding: 16px;
+}
+
+/* The symbol is what the eye comes here for, so it is the one thing set large. */
+.ipa-symbol {
+  grid-area: symbol;
+  font-size: var(--fs-large);
+  line-height: var(--lh-large);
+  margin: 0;
+  min-width: 48px;
+  text-align: center;
+}
+
+.ipa-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.ipa-name {
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+
+.ipa-hint {
+  color: var(--text-2);
+  font-size: var(--fs-footnote);
+  line-height: var(--lh-footnote);
+  margin: 0 0 6px;
+}
+
+.ipa-example {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: var(--fs-footnote);
+  line-height: var(--lh-footnote);
+}
+
+.ipa-example-word {
+  font-weight: 600;
+}
+
+.ipa-example-ipa {
+  color: var(--text-2);
+}
+
+.ipa-example-language {
+  color: var(--text-3);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  padding: 1px 6px;
+}
+
+.ipa-actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ipa-no-audio {
+  color: var(--text-3);
+  margin: 0;
+}
+
+/* One column below the card's own minimum: the symbol stops holding a column of its own
+   so the name and the example keep their width on a phone. */
+@media (max-width: 420px) {
+  .ipa-card {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'symbol'
+      'body'
+      'actions';
+  }
+
+  .ipa-symbol {
+    text-align: left;
+  }
+}

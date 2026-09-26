@@ -164,6 +164,6 @@ public class PronunciationProgressService
     {
         var state = progress.TryGetValue(word.Word, out var p) ? p.State : PronunciationState.New;
         var streak = progress.TryGetValue(word.Word, out var p2) ? p2.Streak : 0;
-        return new WordView(word.Word, word.Ipa, $"/pronunciation-audio/{word.AudioUsFile}", $"/pronunciation-audio/{word.AudioUkFile}", state, streak);
+        return new WordView(word.Word, word.Ipa, PronunciationAudio.UrlPrefix + word.AudioUsFile, PronunciationAudio.UrlPrefix + word.AudioUkFile, state, streak);
     }
 }

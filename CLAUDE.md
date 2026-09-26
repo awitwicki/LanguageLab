@@ -14,7 +14,7 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 
 | Path | What it is |
 |---|---|
-| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb and pronunciation catalogs. No dependencies on infrastructure. |
+| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation and IPA catalogs. No dependencies on infrastructure. |
 | `LanguageLab.Infrastructure/` | EF Core `ApplicationDbContext`, PostgreSQL provider, migrations. |
 | `LanguageLab.Application/` | Services on top of the domain: word selection, training sessions, book import, sorting, Leitner progress, translation, the reader's services, the two trainers. |
 | `LanguageLab.Api/` | ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. `Auth/` holds the claims, session validation and OIDC handlers. |

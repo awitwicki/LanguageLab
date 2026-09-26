@@ -20,6 +20,7 @@ import { VerbStageScreen } from './verbs/VerbStageScreen'
 import { VerbDrillScreen } from './verbs/VerbDrillScreen'
 import { PronunciationFamiliesScreen } from './pronunciation/PronunciationFamiliesScreen'
 import { PronunciationFamilyScreen } from './pronunciation/PronunciationFamilyScreen'
+import { IpaAlphabetScreen } from './pronunciation/IpaAlphabetScreen'
 import { ReaderLibraryScreen } from './reader/ReaderLibraryScreen'
 import { ReaderScreen } from './reader/ReaderScreen'
 import { useBookStore } from './reader/useBookStore'
@@ -45,6 +46,7 @@ type Route =
   | { name: 'verbs-drill'; query: DrillQuery; title: string }
   | { name: 'pronunciation' }
   | { name: 'pronunciation-family'; key: string }
+  | { name: 'pronunciation-alphabet' }
   /** continueHash: a book the home screen sent here for its file, which is on another device. */
   | { name: 'reader'; continueHash?: string }
   /** Full screen, outside the app shell — the reader has its own header. */
@@ -321,7 +323,17 @@ export default function App() {
       )}
 
       {route.name === 'pronunciation' && (
-        <PronunciationFamiliesScreen onOpenFamily={(key) => setRoute({ name: 'pronunciation-family', key })} />
+        <PronunciationFamiliesScreen
+          onOpenFamily={(key) => setRoute({ name: 'pronunciation-family', key })}
+          onOpenAlphabet={() => setRoute({ name: 'pronunciation-alphabet' })}
+        />
+      )}
+
+      {route.name === 'pronunciation-alphabet' && (
+        <IpaAlphabetScreen
+          onBack={() => setRoute({ name: 'pronunciation' })}
+          onOpenFamily={(key) => setRoute({ name: 'pronunciation-family', key })}
+        />
       )}
 
       {route.name === 'pronunciation-family' && (

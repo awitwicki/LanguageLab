@@ -14,9 +14,9 @@ this file is the map, not the rulebook.
 Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`,
 `TrainingEvent`) and interfaces. No dependencies on infrastructure.
 
-It also holds the two catalogs that live entirely in code rather than in the database —
-`IrregularVerbs/IrregularVerbCatalog` and `Pronunciation/PronunciationCatalog`
-(see [trainers.md](trainers.md)) — and the value types that guard imported text
+It also holds the three catalogs that live entirely in code rather than in the database —
+`IrregularVerbs/IrregularVerbCatalog`, `Pronunciation/PronunciationCatalog` and the IPA chart
+`Pronunciation/IpaCatalog` (see [trainers.md](trainers.md)) — and the value types that guard imported text
 (`ImportWordText`, `WordText`, `TitleText`) and the role predicate
 `Entities/UserRoles.CanPublishDirectly`.
 

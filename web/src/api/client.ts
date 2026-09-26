@@ -481,6 +481,36 @@ export interface PronunciationNextWord {
   word: PronunciationWordDto | null
 }
 
+export interface IpaEntry {
+  symbol: string
+  name: string
+  hint: string
+  group: string
+  inEnglish: boolean
+  exampleWord: string | null
+  exampleLanguage: string | null
+  exampleIpa: string | null
+  /** The sound on its own; null when no recording of it was found. */
+  soundAudio: string | null
+  /** The example word said in full; null when no recording was found. */
+  wordAudio: string | null
+  /** The trainer family that drills this sound, when one does. */
+  familyKey: string | null
+  /** Other spellings the same sound is written with — what search also matches on. */
+  aliases: string[]
+}
+
+export interface IpaSection {
+  key: string
+  title: string
+  note: string
+  entries: IpaEntry[]
+}
+
+export interface IpaAlphabet {
+  sections: IpaSection[]
+}
+
 export interface PronunciationAttemptResult {
   outcome: PronunciationOutcome
   score: number
@@ -849,6 +879,8 @@ export const api = {
 
   getPronunciationProgress: () =>
     request<PronunciationProgress>('/api/pronunciation/progress') as Promise<PronunciationProgress>,
+
+  getIpaAlphabet: () => request<IpaAlphabet>('/api/pronunciation/alphabet') as Promise<IpaAlphabet>,
 
   getPronunciationFamily: (key: string) =>
     request<PronunciationFamily>(`/api/pronunciation/families/${encodeURIComponent(key)}`) as Promise<PronunciationFamily>,

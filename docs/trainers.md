@@ -68,5 +68,32 @@ pronunciation quality rather than phoneme-level scoring — and every attempt is
 `POST /words/{word}/attempts`, and `DELETE /words/{word}/progress`, which is the word card's Reset
 progress: it drops the standing and keeps the attempt log.
 
-The whole mode is gated off in browsers without `SpeechRecognition` (Firefox, Safari). There is no
-degraded fallback.
+Practice is gated off in browsers without `SpeechRecognition` (Firefox, Safari) — there is no
+degraded drill. The alphabet below is the one part of the mode that still shows there.
+
+### The alphabet
+
+The reference half of the mode: the whole IPA to look a symbol up in, rather than to drill.
+`IpaCatalog` (`LanguageLab.Domain/Pronunciation`) holds 124 symbols in six sections — pulmonic and
+non-pulmonic consonants, the other symbols, vowels, the English diphthongs, and the marks that
+change how the letter beside them is read. Each one carries its phonetic name, a plain-language
+hint, an example word with its language and transcription, and up to two recordings: the sound on
+its own and the example word said in full.
+
+`generate_ipa_catalog.py` writes `IpaCatalog.Generated.cs`. The symbol table in that script is
+hand-curated and is the source of truth; only the audio comes from the network — a sound's own clip
+from Commons (by phonetic name, falling back to the file its Wikipedia article carries, which is
+what handles Commons spelling the glottal plosive "Glottal stop"), and an example word's clip from
+Wiktionary, reusing a clip the trainer already committed when the word is one of its own. Only a
+file that downloaded is named in the catalog, so a symbol whose recording cannot be found is silent
+rather than broken; 108 of the 124 have a sound of their own, and the rest lean on their example
+word. A handful of symbols Commons names unrecognisably carry a `sound_file` override in the table.
+
+`IpaCatalog.FamilyKeyFor` reads the trainer's families live rather than baking the link into the
+generated file, so the "Practice it" link and a family's target sounds cannot drift apart. Only a
+sound English uses can link: the trainer's `r` means the English approximant ɹ, not the trill that
+owns the letter r. `Aliases` carry the other spellings a learner may arrive with — `iː` for `i`, the
+r-coloured `ɚ` for the schwa — and search matches them too.
+
+`GET /api/pronunciation/alphabet` serves the chart, built once at startup: it reads no user state,
+so there is nothing per-request to compute.

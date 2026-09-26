@@ -10,6 +10,21 @@ public sealed record FamilyDetailDto(string Key, string Title, IReadOnlyList<str
 public sealed record NextWordDto(WordDto? Word);
 public sealed record AttemptRequest(Accent Accent, string Transcript);
 public sealed record AttemptResultDto(PronunciationOutcome Outcome, int Score, PronunciationState State, int Streak, bool FamilyDone);
+public sealed record IpaEntryDto(
+    string Symbol,
+    string Name,
+    string Hint,
+    string Group,
+    bool InEnglish,
+    string? ExampleWord,
+    string? ExampleLanguage,
+    string? ExampleIpa,
+    string? SoundAudio,
+    string? WordAudio,
+    string? FamilyKey,
+    IReadOnlyList<string> Aliases);
+public sealed record IpaSectionDto(string Key, string Title, string Note, IReadOnlyList<IpaEntryDto> Entries);
+public sealed record IpaAlphabetDto(IReadOnlyList<IpaSectionDto> Sections);
 
 /// <summary>
 /// Thin layer over PronunciationProgressService: the current user from the cookie, DTO
@@ -27,6 +42,10 @@ public static class PronunciationEndpoints
             var view = await service.GetOverviewAsync(userId);
             return Results.Ok(new ProgressDto(view.Families.Select(ToDto).ToList()));
         });
+
+        // The alphabet is a reference chart, not practice: it reads no user state, and
+        // unlike the rest of the mode it needs no speech recognition to be of use.
+        group.MapGet("/alphabet", () => Results.Ok(Alphabet));
 
         group.MapGet("/families/{key}", async (string key, PronunciationProgressService service, ICurrentUserContext currentUser) =>
         {
@@ -55,6 +74,31 @@ public static class PronunciationEndpoints
             return result is null ? Results.NotFound() : Results.Ok(ToDto(result));
         });
     }
+
+    /// <summary>
+    /// Built once: the chart is the same for every user and every request, so there is
+    /// nothing to recompute per call.
+    /// </summary>
+    internal static readonly IpaAlphabetDto Alphabet = new(
+        IpaCatalog.Sections.Select(ToDto).ToList());
+
+    private static IpaSectionDto ToDto(IpaSection section) =>
+        new(section.Key, section.Title, section.Note, section.Entries.Select(ToDto).ToList());
+
+    private static IpaEntryDto ToDto(IpaEntry entry) =>
+        new(
+            entry.Symbol,
+            entry.Name,
+            entry.Hint,
+            entry.Group,
+            entry.InEnglish,
+            entry.ExampleWord,
+            entry.ExampleLanguage,
+            entry.ExampleIpa,
+            PronunciationAudio.Url(entry.SoundAudioFile),
+            PronunciationAudio.Url(entry.WordAudioFile),
+            IpaCatalog.FamilyKeyFor(entry.Symbol),
+            entry.Aliases);
 
     private static FamilyOverviewDto ToDto(FamilyOverview f) =>
         new(f.Key, f.Title, f.TargetSounds, f.Total, f.Mastered, f.Status);
