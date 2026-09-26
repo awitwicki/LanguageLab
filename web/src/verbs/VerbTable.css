@@ -33,11 +33,18 @@
   color: var(--text-2);
 }
 
+/* A cell that is `display: flex` leaves the table's row box, and its bottom border is
+   then drawn at its own height rather than the row's — the hairline steps at this one
+   column. The cell stays a cell; the bar and the level line up inside it. */
 .verb-mastery {
+  width: 140px;
+  vertical-align: middle;
+}
+
+.mastery {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 140px;
 }
 
 .mastery-bar {
@@ -80,4 +87,45 @@
   font-size: var(--fs-caption);
   min-width: 34px;
   text-align: right;
+}
+
+/* Five columns and a bar do not fit a phone: the table would push the whole page
+   sideways. Below the shell's own breakpoint each verb becomes a block instead —
+   the three forms on one line, the translation under them, the level alongside.
+   The header goes with them; the order of the forms is the same in every row. */
+@media (max-width: 800px) {
+  .verb-table,
+  .verb-table tbody {
+    display: block;
+  }
+
+  .verb-table thead {
+    display: none;
+  }
+
+  .verb-table tr {
+    display: grid;
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 2px;
+    padding: 10px 2px;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .verb-table td {
+    padding: 0;
+    border-bottom: 0;
+  }
+
+  .verb-translation {
+    grid-column: 1 / 4;
+    font-size: var(--fs-footnote);
+  }
+
+  .verb-mastery {
+    grid-column: 4;
+    grid-row: 1 / 3;
+    width: 104px;
+  }
 }

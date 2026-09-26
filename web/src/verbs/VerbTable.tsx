@@ -32,15 +32,17 @@ export function VerbTable({ verbs }: { verbs: VerbRow[] }) {
             <td>{verb.v3}</td>
             <td className="verb-translation">{verb.translation}</td>
             <td className="verb-mastery">
-              <span className="mastery-bar">
-                <span
-                  className="mastery-fill"
-                  data-band={masteryBand(verb.mastery, verb.answers)}
-                  style={{ width: `${verb.answers === 0 ? 0 : masteryPercent(verb.mastery)}%` }}
-                />
-              </span>
-              <span className="num mastery-level">
-                {verb.answers === 0 ? '—' : `${masteryPercent(verb.mastery)}%`}
+              <span className="mastery">
+                <span className="mastery-bar">
+                  <span
+                    className="mastery-fill"
+                    data-band={masteryBand(verb.mastery, verb.answers)}
+                    style={{ width: `${verb.answers === 0 ? 0 : masteryPercent(verb.mastery)}%` }}
+                  />
+                </span>
+                <span className="num mastery-level">
+                  {verb.answers === 0 ? '—' : `${masteryPercent(verb.mastery)}%`}
+                </span>
               </span>
             </td>
           </tr>
