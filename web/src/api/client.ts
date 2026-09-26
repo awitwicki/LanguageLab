@@ -234,6 +234,21 @@ export interface SortingQueue {
 
 export type SortStatus = 'known' | 'unknown' | 'excluded'
 
+/** A row of the shelf admin panel. status is null for a word that has never been sorted. */
+export interface ShelfWord {
+  wordPairId: number
+  word: string
+  translation: string
+  status: SortStatus | null
+}
+
+export interface ShelfWordPage {
+  items: ShelfWord[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 export interface UndoResult {
   wordPairId: number
   word: string
@@ -985,6 +1000,16 @@ export const api = {
   approveDictionary: (id: number) => request<null>(`/api/admin/dictionaries/${id}/approve`, { method: 'POST' }),
 
   rejectDictionary: (id: number) => request<null>(`/api/admin/dictionaries/${id}/reject`, { method: 'POST' }),
+
+  /** The shelf admin panel: the signed-in admin's own words. status omitted lists all of them. */
+  listShelfWords: (params: { status?: SortStatus; search?: string; page?: number }) => {
+    const query = new URLSearchParams()
+    if (params.status) query.set('status', params.status)
+    if (params.search) query.set('search', params.search)
+    if (params.page) query.set('page', String(params.page))
+
+    return request<ShelfWordPage>(`/api/admin/shelf-words?${query}`) as Promise<ShelfWordPage>
+  },
 
   /** Ordered by book name, then chapter order; only books the user can still see. */
   getStarredChapters: () => request<StarredChapter[]>('/api/chapters/starred') as Promise<StarredChapter[]>,

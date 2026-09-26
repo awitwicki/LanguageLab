@@ -27,6 +27,12 @@ public sealed record RecentWord(long WordPairId, string Word);
 
 public sealed record RecentWords(IReadOnlyList<RecentWord> Known, IReadOnlyList<RecentWord> Unknown);
 
+/// <summary>One row of the shelf admin panel. Status is null for a word that has never been sorted.</summary>
+public sealed record ShelfWordView(long WordPairId, string Word, string Translation, SortStatus? Status);
+
+/// <summary>One page of the shelf admin panel's list. Total counts the whole filtered list, not the page.</summary>
+public sealed record ShelfWordPage(IReadOnlyList<ShelfWordView> Items, int Total, int Page, int PageSize);
+
 /// <summary>
 /// Where the user was standing when they marked a word: a whole book, or one of its chapters.
 /// Passed by the client because the shelves cannot tell afterwards — one word sits in several
@@ -42,6 +48,9 @@ public class WordSortingService
 {
     public const int DefaultTake = 50;
     public const int MaxTake = 200;
+
+    public const int DefaultShelfPageSize = 25;
+    public const int MaxShelfPageSize = 100;
 
     private readonly ApplicationDbContext _dbContext;
 
@@ -356,6 +365,90 @@ public class WordSortingService
         }
 
         return scoped;
+    }
+
+    /// <summary>
+    /// The shelf admin panel's list: every word visible to the user — the shared vocabulary
+    /// plus their own personal words, never another user's — each with its current shelf, null
+    /// for a word that has never been sorted. <paramref name="status"/> narrows to one shelf;
+    /// <paramref name="search"/> is a case-insensitive substring over the word text.
+    /// </summary>
+    public async Task<ShelfWordPage> ListShelfWordsAsync(
+        long userId, SortStatus? status, string? search, int page = 1, int pageSize = DefaultShelfPageSize)
+    {
+        page = Math.Max(page, 1);
+        pageSize = pageSize < 1 ? DefaultShelfPageSize : Math.Min(pageSize, MaxShelfPageSize);
+
+        var query = _dbContext.Words.AsNoTracking()
+            .Where(w => w.OwnerId == null || w.OwnerId == userId);
+
+        var term = search?.Trim().ToLowerInvariant();
+        if (!string.IsNullOrEmpty(term))
+        {
+            query = query.Where(w => w.Word.ToLower().Contains(term));
+        }
+
+        if (status != null)
+        {
+            query = status.Value switch
+            {
+                SortStatus.Known => query.Where(w =>
+                    _dbContext.KnownWords.Any(k => k.UserId == userId && k.WordPairId == w.Id)),
+                SortStatus.Unknown => query.Where(w =>
+                    _dbContext.UnknownWords.Any(u => u.UserId == userId && u.WordPairId == w.Id)),
+                SortStatus.Excluded => query.Where(w =>
+                    _dbContext.ExcludedWords.Any(e => e.UserId == userId && e.WordPairId == w.Id)),
+                _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown shelf.")
+            };
+        }
+
+        var total = await query.CountAsync();
+
+        var words = await query
+            .OrderBy(w => w.Word)
+            .ThenBy(w => w.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
+
+        // A status filter already tells every row's shelf; only the unfiltered "All" list
+        // needs the extra round trips to find out which of the three each word is on.
+        if (status != null)
+        {
+            var filtered = words.Select(w => new ShelfWordView(w.Id, w.Word, w.Translation, status)).ToList();
+            return new ShelfWordPage(filtered, total, page, pageSize);
+        }
+
+        var ids = words.Select(w => w.Id).ToList();
+
+        var known = await _dbContext.KnownWords
+            .Where(k => k.UserId == userId && ids.Contains(k.WordPairId))
+            .Select(k => k.WordPairId)
+            .ToListAsync();
+        var unknown = await _dbContext.UnknownWords
+            .Where(u => u.UserId == userId && ids.Contains(u.WordPairId))
+            .Select(u => u.WordPairId)
+            .ToListAsync();
+        var excluded = await _dbContext.ExcludedWords
+            .Where(e => e.UserId == userId && ids.Contains(e.WordPairId))
+            .Select(e => e.WordPairId)
+            .ToListAsync();
+
+        var knownSet = known.ToHashSet();
+        var unknownSet = unknown.ToHashSet();
+        var excludedSet = excluded.ToHashSet();
+
+        SortStatus? ShelfOf(long wordPairId) =>
+            knownSet.Contains(wordPairId) ? SortStatus.Known :
+            unknownSet.Contains(wordPairId) ? SortStatus.Unknown :
+            excludedSet.Contains(wordPairId) ? SortStatus.Excluded :
+            null;
+
+        var items = words
+            .Select(w => new ShelfWordView(w.Id, w.Word, w.Translation, ShelfOf(w.Id)))
+            .ToList();
+
+        return new ShelfWordPage(items, total, page, pageSize);
     }
 
     private IQueryable<DictionaryWord> Unsorted(IQueryable<DictionaryWord> scoped, long userId) =>

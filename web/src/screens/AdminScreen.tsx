@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, type AdminUser, type AdminUserPage, type PendingDictionaryPage, type UserRole } from '../api/client'
+import {
+  api,
+  type AdminUser,
+  type AdminUserPage,
+  type PendingDictionaryPage,
+  type ShelfWord,
+  type ShelfWordPage,
+  type SortStatus,
+  type UserRole,
+} from '../api/client'
 import { ROLES, roleLabel } from '../auth/roles'
 import { formatInt, plural } from '../lib/format'
 import './AdminScreen.css'
@@ -23,7 +32,7 @@ function pageCount(data: AdminUserPage) {
 }
 
 export function AdminScreen({ meId }: Props) {
-  const [tab, setTab] = useState<'users' | 'dictionaries'>('users')
+  const [tab, setTab] = useState<'users' | 'dictionaries' | 'shelf'>('users')
   // `query` is what is typed, `search` is what was last sent: the two differ during the
   // debounce so a keystroke does not fire a request.
   const [query, setQuery] = useState('')
@@ -126,9 +135,16 @@ export function AdminScreen({ meId }: Props) {
         >
           Dictionaries
         </button>
+        <button
+          type="button"
+          className={`btn ${tab === 'shelf' ? 'btn-secondary' : 'btn-quiet'}`}
+          onClick={() => setTab('shelf')}
+        >
+          Shelf
+        </button>
       </div>
 
-      {tab === 'users' ? (
+      {tab === 'users' && (
         <>
           <div className="admin-toolbar">
             <label className="field admin-search">
@@ -261,9 +277,9 @@ export function AdminScreen({ meId }: Props) {
             </nav>
           )}
         </>
-      ) : (
-        <DictionaryQueue />
       )}
+      {tab === 'dictionaries' && <DictionaryQueue />}
+      {tab === 'shelf' && <ShelfAdmin />}
     </section>
   )
 }
@@ -338,5 +354,161 @@ function DictionaryQueue() {
         </li>
       ))}
     </ul>
+  )
+}
+
+/**
+ * Every word the signed-in admin's shelves could ever cover — the shared vocabulary plus their
+ * own personal words — filterable by shelf, with a picker on each row to re-shelve it right
+ * there. There is no user picker: this is always the caller's own shelves, the same as
+ * `POST /api/sorting/mark` already scopes to.
+ */
+function ShelfAdmin() {
+  const [status, setStatus] = useState<SortStatus | ''>('')
+  const [query, setQuery] = useState('')
+  const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
+  const [data, setData] = useState<ShelfWordPage | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setSearch(query.trim())
+      setPage(1)
+    }, searchDelayMs)
+
+    return () => clearTimeout(handle)
+  }, [query])
+
+  const reload = useCallback(
+    () =>
+      api
+        .listShelfWords({ status: status || undefined, search, page })
+        .then((result) => {
+          setData(result)
+          setError(null)
+        })
+        .catch((e) => setError(e instanceof Error ? e.message : String(e))),
+    [status, search, page],
+  )
+
+  useEffect(() => {
+    void reload()
+  }, [reload])
+
+  const move = (word: ShelfWord, next: SortStatus) => {
+    setError(null)
+
+    api
+      .mark(word.wordPairId, next)
+      .then(reload)
+      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+  }
+
+  const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1
+
+  return (
+    <>
+      <div className="admin-toolbar">
+        <label className="field admin-search">
+          <input
+            type="search"
+            placeholder="Search by word"
+            aria-label="Search words"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </label>
+
+        <label className="field shelf-filter-field">
+          <select
+            className="shelf-filter"
+            aria-label="Filter by shelf"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value as SortStatus | '')
+              setPage(1)
+            }}
+          >
+            <option value="">All</option>
+            <option value="known">Know</option>
+            <option value="unknown">Don&apos;t know</option>
+            <option value="excluded">Excluded</option>
+          </select>
+        </label>
+
+        {data && (
+          <span className="footnote admin-count">
+            {data.total === 0
+              ? 'No words match'
+              : `${formatInt(data.total)} ${plural(data.total, 'word', 'words')}`}
+          </span>
+        )}
+      </div>
+
+      {error && <p className="error">{error}</p>}
+      {!data && !error && <p className="footnote">Loading…</p>}
+
+      {data && data.items.length > 0 && (
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <th scope="col">Word</th>
+              <th scope="col">Translation</th>
+              <th scope="col">Shelf</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.items.map((item) => (
+              <tr key={item.wordPairId}>
+                <th scope="row">{item.word}</th>
+                <td>{item.translation}</td>
+                <td className="shelf">
+                  <label className="field shelf-field">
+                    <select
+                      className="shelf-select"
+                      aria-label={`Shelf for ${item.word}`}
+                      value={item.status ?? 'new'}
+                      onChange={(e) => move(item, e.target.value as SortStatus)}
+                    >
+                      <option value="new" disabled>
+                        New
+                      </option>
+                      <option value="known">Know</option>
+                      <option value="unknown">Don&apos;t know</option>
+                      <option value="excluded">Excluded</option>
+                    </select>
+                  </label>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {data && pages > 1 && (
+        <nav className="admin-pager" aria-label="Pages">
+          <button
+            type="button"
+            className="btn btn-quiet prev"
+            disabled={data.page <= 1}
+            onClick={() => setPage(data.page - 1)}
+          >
+            Previous
+          </button>
+          <span className="footnote num">
+            Page {formatInt(data.page)} of {formatInt(pages)}
+          </span>
+          <button
+            type="button"
+            className="btn btn-quiet next"
+            disabled={data.page >= pages}
+            onClick={() => setPage(data.page + 1)}
+          >
+            Next
+          </button>
+        </nav>
+      )}
+    </>
   )
 }

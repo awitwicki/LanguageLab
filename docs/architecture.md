@@ -96,6 +96,9 @@ A Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictio
   `pending`); `POST /api/admin/dictionaries/{id}/approve|reject`.
 - `DELETE /api/admin/users/{id}/dictionaries` — bulk-delete a user's dictionaries, for use
   alongside a ban.
+- `GET /api/admin/shelf-words` — the shelf admin panel: the calling admin's own words (`status`,
+  `search`, `page`, `pageSize` query parameters; `status` absent lists every shelf). Re-shelving a
+  row reuses `POST /api/sorting/mark` — there is no separate write endpoint.
 
 ### Training
 
