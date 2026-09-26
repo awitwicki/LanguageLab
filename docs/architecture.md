@@ -33,6 +33,8 @@ The services on top of the domain:
   [vocabulary-and-training.md](vocabulary-and-training.md).
 - **Books and chapters** — `ChapterStatsService` (the per-chapter rows of a book, also for a
   subset of it) and `StarredChapterService` (a user's starred chapters).
+- **The home screen's recent work** — `RecentActivityService`: the last finished session per scope,
+  and the scopes still being sorted. Both drop what the caller can no longer open.
 - **The personal dictionary** — `PersonalDictionaryService`, the user's own word list.
 - **Translation** — `Translation/`: `ITranslator` → `MyMemoryTranslator`, with
   `TranslationService` trying the shared vocabulary first and the provider after;
@@ -115,6 +117,15 @@ in the background, prefetching the next question behind it (`TrainingScreen.tsx`
 `/api/chapters` — `GET /starred` (the home screen's starred chapters, ordered by book name then
 chapter order) and `PUT|DELETE /{id}/star` (204; 404 for a chapter of an invisible book, or when
 there is nothing to unstar).
+
+### Home
+
+`GET /api/home/recent` — the two lists the home screen offers to pick up again, newest first: the
+last finished session per scope and mode (its "Repeat" reopens that scope — a batch on its start
+screen, a review by asking for what is due now), and the scopes still being sorted. A scope is a
+book or one of its chapters; `Training.ChapterId` records the first, a `SortingVisit` row upserted
+by `POST /api/sorting/mark`'s optional `{ dictionaryId, chapterId }` the second — the shelves alone
+cannot say where the user was, since one word sits in several books.
 
 ### Auth and admin
 

@@ -31,7 +31,9 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Move a word back from "know" to "don't know" outside the exercise-start screen: the cross-out in the batch preview (`web/src/training/useBatchPreview.ts`) — "bring back" only works within the current visit; after that the word can only be reached via `POST /api/sorting/mark`
 - [ ] `ChapterStatsService.GetChapterViewsAsync`: one COUNT query per returned chapter (plus 3 whole-book queries per call) — also backs `GET /api/chapters/starred` on the home screen now, not just `GET /api/dictionaries/{id}`; merge into one GROUP BY if this ever becomes slow
 - [ ] Shelf admin panel: list of all words in the DB, list of "know", list of "don't know", list of excluded — with the ability to un-mark (move back between shelves) right there
-- [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
+- [x] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
+- [ ] Home screen's recent lists show no time: a row says "38% sorted", never "you left this yesterday". `RecentActivity` already carries `finishedAt`/`lastSortedAt` and the order is newest-first; it needs a relative-time formatter beside `formatDue` (`web/src/lib/format.ts`) to print them
+- [ ] `RecentActivityService.GetSortingAsync` counts each listed scope separately — two COUNTs per row, up to `MaxRows` rows plus the fully-sorted ones it skips; merge into one GROUP BY with `ChapterStatsService.GetChapterViewsAsync` if the home screen ever feels slow
 - [ ] Pronunciation trainer: minimal-pair discrimination exercises (hear two words, pick which was said)
 - [ ] Pronunciation trainer: a cross-family mixed review session
 - [ ] Pronunciation trainer: spaced-repetition scheduling for resurfacing mastered words

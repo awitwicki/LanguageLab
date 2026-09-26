@@ -24,6 +24,7 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<DictionaryWord> DictionaryWords { get; set; }
     public DbSet<ExcludedWord> ExcludedWords { get; set; }
     public DbSet<StarredChapter> StarredChapters { get; set; }
+    public DbSet<SortingVisit> SortingVisits { get; set; }
     public DbSet<ReaderBook> ReaderBooks { get; set; }
 
     /// <summary>
@@ -177,6 +178,51 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
         builder.Entity<StarredChapter>()
             .HasIndex(s => new { s.UserId, s.ChapterId })
             .IsUnique();
+
+        // One visit per scope, upserted on every mark. NULLS NOT DISTINCT is what makes the
+        // whole-book scope a single row: without it each mark outside a chapter would insert
+        // another null-chapter visit instead of moving the one that is there (Postgres 15+,
+        // the same trick WordPair's index uses).
+        builder.Entity<SortingVisit>()
+            .HasIndex(v => new { v.UserId, v.DictionaryId, v.ChapterId })
+            .IsUnique()
+            .AreNullsDistinct(false);
+
+        // The home screen's list: this user's scopes, newest first.
+        builder.Entity<SortingVisit>()
+            .HasIndex(v => new { v.UserId, v.LastSortedAt });
+
+        // A visit is a bookmark into a book, worth nothing once the book, the chapter or the
+        // account is gone — unlike a Training, which stays as history.
+        builder.Entity<SortingVisit>()
+            .HasOne(v => v.User)
+            .WithMany()
+            .HasForeignKey(v => v.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<SortingVisit>()
+            .HasOne(v => v.Dictionary)
+            .WithMany()
+            .HasForeignKey(v => v.DictionaryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<SortingVisit>()
+            .HasOne(v => v.Chapter)
+            .WithMany()
+            .HasForeignKey(v => v.ChapterId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // A deleted chapter must not take a finished session's record with it: the scope
+        // falls back to null and the session reads as the whole book's.
+        builder.Entity<Training>()
+            .HasOne(t => t.Chapter)
+            .WithMany()
+            .HasForeignKey(t => t.ChapterId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // The home screen's "recent exercises": this user's finished sessions, newest first.
+        builder.Entity<Training>()
+            .HasIndex(t => new { t.UserId, t.FinishedAt });
 
         // The reader's library: one row per user per file, gone with the user.
         builder.Entity<ReaderBook>()

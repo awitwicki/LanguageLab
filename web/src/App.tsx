@@ -4,6 +4,7 @@ import { useAuth } from './auth/useAuth'
 import { AppShell } from './layout/AppShell'
 import { modeOf, type AppMode } from './layout/mode'
 import { Sidebar } from './layout/Sidebar'
+import { ALL_DICTIONARIES } from './lib/labels'
 import { HomeScreen } from './screens/HomeScreen'
 import { ImportScreen } from './screens/ImportScreen'
 import { DictionaryScreen } from './screens/DictionaryScreen'
@@ -51,7 +52,6 @@ type Route =
 
 const REVIEW_TITLE = 'Review'
 const ALL_WORDS = 'All words'
-const ALL_DICTIONARIES = 'All dictionaries'
 
 const MODE_LANDING: Record<AppMode, Route> = {
   words: { name: 'home' },

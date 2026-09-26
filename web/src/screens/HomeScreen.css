@@ -67,6 +67,27 @@
   margin: 0;
 }
 
+/* Two ways back into unfinished work — the same card as the stats, a list per kind. */
+.recent-activity {
+  justify-self: stretch;
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  margin-bottom: 28px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+}
+
+.recent-group {
+  display: grid;
+  gap: 8px;
+}
+
+.recent-group h3 {
+  color: var(--text-2);
+}
+
 /* Starred chapters: the same card as the stats, one list per book. */
 .starred-chapters {
   justify-self: stretch;

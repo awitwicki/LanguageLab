@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ChapterView, StarredChapter, TrainingStarted, TrainingStats } from '../api/client'
+import type { ChapterView, RecentActivity, StarredChapter, TrainingStarted, TrainingStats } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { HomeScreen } from './HomeScreen'
 
@@ -57,12 +57,16 @@ const starredChapters: StarredChapter[] = [
 
 type Reply = { status: number; body?: unknown }
 
-/// Stubs fetch per path: stats and the starred list always, the review start and unstar when given.
+const nothingRecent: RecentActivity = { exercises: [], sorting: [] }
+
+/// Stubs fetch per path: stats, the starred list and the recent lists always, the review
+/// start and unstar when given.
 function respond(
   stats: Reply,
   review?: Reply,
   starred: Reply = { status: 200, body: [] },
   unstar: Reply = { status: 204 },
+  recent: Reply = { status: 200, body: nothingRecent },
 ) {
   vi.stubGlobal(
     'fetch',
@@ -70,6 +74,7 @@ function respond(
       const reply =
         path === '/api/training/review' && init?.method === 'POST' ? review
         : path === '/api/chapters/starred' ? starred
+        : path === '/api/home/recent' ? recent
         : path.startsWith('/api/chapters/') && init?.method === 'DELETE' ? unstar
         : stats
       expect(reply, `unexpected request ${init?.method ?? 'GET'} ${path}`).toBeDefined()
@@ -186,7 +191,7 @@ describe('HomeScreen', () => {
     const { container } = await render(home())
     await flush()
 
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledTimes(3)
     expect(fetch).toHaveBeenCalledWith('/api/chapters/starred', expect.anything())
     expect(container.querySelector('.stat-tile')).toBeNull()
     expect(container.querySelector('.boxes')).toBeNull()
@@ -199,8 +204,9 @@ describe('HomeScreen', () => {
     const { container } = await render(home())
     await flush()
 
-    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(fetch).toHaveBeenCalledTimes(3)
     expect(fetch).toHaveBeenCalledWith('/api/chapters/starred', expect.anything())
+    expect(fetch).toHaveBeenCalledWith('/api/home/recent', expect.anything())
     expect(container.querySelector('.stat-tile')).toBeNull()
     expect(container.querySelector('.error')).toBeNull()
     expect(container.querySelector('h1')?.textContent).toBe('Pick a dictionary')
@@ -323,5 +329,150 @@ describe('HomeScreen — starred chapters', () => {
 
     expect(rows(container)).toHaveLength(3)
     expect(container.querySelector('.starred-notice.error')?.textContent).toBe('Error: DELETE /api/chapters/21/star → 500')
+  })
+})
+
+const recentActivity: RecentActivity = {
+  exercises: [
+    {
+      trainingId: 31,
+      mode: 'newBatch',
+      finishedAt: '2026-09-26T10:00:00Z',
+      dictionaryId: 7,
+      dictionaryName: 'Wool',
+      chapter: { id: 11, order: 0, title: 'Holston' },
+      correct: 7,
+      total: 8,
+    },
+    {
+      trainingId: 32,
+      mode: 'review',
+      finishedAt: '2026-09-26T09:00:00Z',
+      dictionaryId: null,
+      dictionaryName: null,
+      chapter: null,
+      correct: 4,
+      total: 4,
+    },
+  ],
+  sorting: [
+    {
+      dictionaryId: 7,
+      dictionaryName: 'Wool',
+      chapter: { id: 13, order: 2, title: '' },
+      lastSortedAt: '2026-09-26T08:00:00Z',
+      total: 80,
+      sorted: 30,
+    },
+    {
+      dictionaryId: 9,
+      dictionaryName: 'Dune',
+      chapter: null,
+      lastSortedAt: '2026-09-25T08:00:00Z',
+      total: 1000,
+      sorted: 250,
+    },
+  ],
+}
+
+/// Only the recent lists matter here, so stats stay untouched and nothing is starred.
+function withRecent(activity: RecentActivity, review?: Reply) {
+  respond({ status: 200, body: untouched }, review, { status: 200, body: [] }, { status: 204 }, {
+    status: 200,
+    body: activity,
+  })
+}
+
+const scopeRows = (container: HTMLElement) => [...container.querySelectorAll('.recent-activity .scope-row')]
+
+const scopeText = (container: HTMLElement) =>
+  scopeRows(container).map((r) => [r.querySelector('.scope-title')?.textContent, r.querySelector('.scope-sub')?.textContent])
+
+describe('HomeScreen · pick up where you left off', () => {
+  it('names each scope and what is left of it', async () => {
+    withRecent(recentActivity)
+
+    const { container } = await render(home())
+    await flush()
+
+    expect(scopeText(container)).toEqual([
+      ['Wool · Holston', 'Learn · 7 of 8 correct'],
+      ['All dictionaries', 'Review · 4 of 4 correct'],
+      ['Wool · Chapter 3', '38% sorted · 50 words left'],
+      ['Dune', '25% sorted · 750 words left'],
+    ])
+  })
+
+  it('stays off the screen when there is nothing to pick up', async () => {
+    withRecent({ exercises: [], sorting: [] })
+
+    const { container } = await render(home())
+    await flush()
+
+    expect(container.querySelector('.recent-activity')).toBeNull()
+  })
+
+  /// A batch reopens its start screen rather than replaying the old questions.
+  it('repeats a batch by reopening its scope', async () => {
+    withRecent(recentActivity)
+    const onTrain = vi.fn()
+
+    const { container } = await render(home({ onTrain }))
+    await flush()
+    await click(scopeRows(container)[0].querySelector('.scope-action')!)
+
+    expect(onTrain).toHaveBeenCalledWith(7, [11], 'Holston')
+  })
+
+  /// What is due has moved on since, so a review has to be asked for again.
+  it('repeats an all-books review by starting a new one', async () => {
+    withRecent(recentActivity, { status: 201, body: reviewStarted })
+    const onReview = vi.fn()
+
+    const { container } = await render(home({ onReview }))
+    await flush()
+    await click(scopeRows(container)[1].querySelector('.scope-action')!)
+    await flush()
+
+    expect(fetch).toHaveBeenCalledWith('/api/training/review', expect.objectContaining({ method: 'POST' }))
+    expect(onReview).toHaveBeenCalledWith(reviewStarted)
+  })
+
+  it('says so when the repeated review has nothing due any more', async () => {
+    withRecent(recentActivity, { status: 204 })
+    const onReview = vi.fn()
+
+    const { container } = await render(home({ onReview }))
+    await flush()
+    await click(scopeRows(container)[1].querySelector('.scope-action')!)
+    await flush()
+
+    expect(onReview).not.toHaveBeenCalled()
+    expect(container.querySelector('.recent-notice')?.textContent).toBe('Nothing to review today.')
+  })
+
+  it('sorts a chapter scope, and a whole-book scope with no chapters at all', async () => {
+    withRecent(recentActivity)
+    const onSort = vi.fn()
+
+    const { container } = await render(home({ onSort }))
+    await flush()
+
+    await click(scopeRows(container)[2].querySelector('.scope-action')!)
+    expect(onSort).toHaveBeenLastCalledWith(7, [13], 'Chapter 3')
+
+    await click(scopeRows(container)[3].querySelector('.scope-action')!)
+    expect(onSort).toHaveBeenLastCalledWith(9, null, 'Whole book')
+  })
+
+  /// A failed request must not turn the home screen into an error page.
+  it('leaves the block out when the request fails', async () => {
+    respond({ status: 200, body: untouched }, undefined, { status: 200, body: [] }, { status: 204 }, { status: 500 })
+
+    const { container } = await render(home())
+    await flush()
+
+    expect(container.querySelector('.recent-activity')).toBeNull()
+    expect(container.querySelector('.large-title')?.textContent).toBe('Pick a dictionary')
   })
 })

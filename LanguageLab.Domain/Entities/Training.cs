@@ -20,5 +20,15 @@ public class Training : BaseEntity
     [ForeignKey(nameof(Dictionary))]
     public long? DictionaryId { get; set; }
 
+    /// <summary>
+    /// The chapter the session was started in, or null for the whole book — the scope a
+    /// "Repeat" on the home screen reopens. A scope is only ever one chapter or the whole
+    /// book, so one column covers it; a session started over several chapters at once stores
+    /// null and reads back as the book's.
+    /// </summary>
+    public Chapter? Chapter { get; set; }
+    [ForeignKey(nameof(Chapter))]
+    public long? ChapterId { get; set; }
+
     public IList<TrainingQuestion> Questions { get; set; } = new List<TrainingQuestion>();
 }

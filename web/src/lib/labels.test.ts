@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ChapterView } from '../api/client'
-import { WHOLE_BOOK, chapterLabel } from './labels'
+import { ALL_DICTIONARIES, WHOLE_BOOK, chapterLabel, scopeLabel } from './labels'
 
 const chapter = (order: number, title: string): ChapterView => ({
   id: order + 100,
@@ -27,5 +27,24 @@ describe('chapterLabel', () => {
 
   it('names the whole-book scope', () => {
     expect(WHOLE_BOOK).toBe('Whole book')
+  })
+})
+
+describe('scopeLabel', () => {
+  it('narrows a book by its chapter', () => {
+    expect(scopeLabel('Wool', chapter(0, 'Holston'))).toBe('Wool · Holston')
+  })
+
+  it('is the book alone for a whole-book scope', () => {
+    expect(scopeLabel('Wool', null)).toBe('Wool')
+  })
+
+  it('numbers an untitled chapter here too', () => {
+    expect(scopeLabel('Wool', chapter(3, ''))).toBe('Wool · Chapter 4')
+  })
+
+  /// A review started from the home screen belongs to no book.
+  it('falls back to every dictionary when there is no book', () => {
+    expect(scopeLabel(null, null)).toBe(ALL_DICTIONARIES)
   })
 })

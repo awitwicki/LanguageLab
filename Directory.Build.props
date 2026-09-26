@@ -6,7 +6,7 @@
          Bump it by hand for a release; the CI build appends its counter as a fourth part
          (0.0.0.N) by replacing this element before building — see README → Versioning. -->
     <PropertyGroup>
-        <Version>1.31.0</Version>
+        <Version>1.32.0</Version>
     </PropertyGroup>
 
 </Project>
