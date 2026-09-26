@@ -110,6 +110,7 @@ function home(overrides: Partial<Parameters<typeof HomeScreen>[0]> = {}) {
       onChapterReview={() => {}}
       bookStore={null}
       onOpenBook={() => {}}
+      onOpenLibrary={() => {}}
       {...overrides}
     />
   )
@@ -490,6 +491,7 @@ describe('HomeScreen · pick up where you left off', () => {
 })
 
 const WOOL_HASH = 'a'.repeat(64)
+const DUST_HASH = 'd'.repeat(64)
 
 const woolOnServer: ReaderBookDto = {
   fileHash: WOOL_HASH,
@@ -502,6 +504,16 @@ const woolOnServer: ReaderBookDto = {
   progress: 0.45,
   updatedAt: '2026-09-26T10:00:00Z',
   dictionaryId: null,
+}
+
+/// Read more recently than Wool, and on another device — the server lists it first.
+const dustOnServer: ReaderBookDto = {
+  ...woolOnServer,
+  fileHash: DUST_HASH,
+  title: 'Dust',
+  chapterIndex: 1,
+  progress: 0.08,
+  updatedAt: '2026-09-26T18:00:00Z',
 }
 
 /// A store holding the book's file, as the device that opened it would.
@@ -526,6 +538,13 @@ function withReader(readerBooks: Reply) {
 const readingRow = (container: HTMLElement) =>
   [...container.querySelectorAll('.recent-group')].find((g) => g.querySelector('h3')?.textContent === 'Reading')
 
+/// Every "Reading" row, as the title and the action button a user would see on it.
+const readingRows = (container: HTMLElement) =>
+  [...(readingRow(container)?.querySelectorAll('.scope-row') ?? [])].map((row) => [
+    row.querySelector('.scope-title')?.textContent,
+    row.querySelector('.scope-action')?.textContent,
+  ])
+
 describe('HomeScreen · continue reading', () => {
   it('offers the last book with its place in it', async () => {
     withReader({ status: 200, body: [woolOnServer] })
@@ -536,6 +555,7 @@ describe('HomeScreen · continue reading', () => {
     const row = readingRow(container)
     expect(row?.querySelector('.scope-title')?.textContent).toBe('Wool')
     expect(row?.querySelector('.scope-sub')?.textContent).toBe('Chapter 7 of 30 · 45 %')
+    expect(row?.querySelector('.scope-action')?.textContent).toBe('Continue')
   })
 
   it('opens the book by its hash', async () => {
@@ -560,15 +580,46 @@ describe('HomeScreen · continue reading', () => {
     expect(container.querySelectorAll('.recent-group')).toHaveLength(1)
   })
 
-  /// The file never leaves the browser that opened it, so there is nothing to continue here.
-  it('says nothing about a book read only on another device', async () => {
+  /// The file never leaves the browser that opened it, so a book read on the phone cannot be
+  /// opened from here — the row says so and leads to the library, which asks for the file.
+  it('sends a book read only on another device to the library', async () => {
     withReader({ status: 200, body: [woolOnServer] })
+    const onOpenLibrary = vi.fn()
+    const onOpenBook = vi.fn()
 
-    const { container } = await render(home({ bookStore: new MemoryBookStore() }))
+    const { container } = await render(home({ bookStore: new MemoryBookStore(), onOpenLibrary, onOpenBook }))
     await flush()
 
-    expect(readingRow(container)).toBeUndefined()
-    expect(container.querySelector('.recent-activity')).toBeNull()
+    const row = readingRow(container)
+    expect(row?.querySelector('.scope-title')?.textContent).toBe('Wool')
+    expect(row?.querySelector('.scope-sub')?.textContent).toBe('Chapter 7 of 30 · 45 % · not on this device')
+
+    const action = row!.querySelector('.scope-action')!
+    expect(action.textContent).toBe('Open the file')
+
+    await click(action)
+
+    expect(onOpenLibrary).toHaveBeenCalledWith(WOOL_HASH)
+    expect(onOpenBook).not.toHaveBeenCalled()
+  })
+
+  /// The book read on the phone is where the reader left off, but the one tap straight into a
+  /// book is worth keeping too — so the newest one this device can open follows it.
+  it('keeps the openable book beside the one read on another device', async () => {
+    withReader({ status: 200, body: [dustOnServer, woolOnServer] })
+    const onOpenBook = vi.fn()
+
+    const { container } = await render(home({ bookStore: await storeWithWool(), onOpenBook }))
+    await flush()
+
+    expect(readingRows(container)).toEqual([
+      ['Dust', 'Open the file'],
+      ['Wool', 'Continue'],
+    ])
+
+    await click(readingRow(container)!.querySelectorAll('.scope-action')[1])
+
+    expect(onOpenBook).toHaveBeenCalledWith(WOOL_HASH)
   })
 
   /// The store opens asynchronously; until it does, the row cannot know what is here.

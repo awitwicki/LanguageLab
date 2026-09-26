@@ -11,6 +11,11 @@ interface Props {
   /** false: IndexedDB is unavailable, books stay only until the tab closes. */
   persistent: boolean
   onOpen: (hash: string) => void
+  /**
+   * A book the home screen sent here to be continued, by file hash: its file is on another
+   * device, so only the user can hand it over. null when the library was opened on its own.
+   */
+  continueHash: string | null
 }
 
 function RowMenu({ open, onToggle, onClose, actions }: {
@@ -40,7 +45,7 @@ function RowMenu({ open, onToggle, onClose, actions }: {
   )
 }
 
-export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
+export function ReaderLibraryScreen({ store, persistent, onOpen, continueHash }: Props) {
   const [local, setLocal] = useState<BookMeta[] | null>(null)
   const [server, setServer] = useState<ReaderBookDto[]>([])
   const [serverFailed, setServerFailed] = useState(false)
@@ -50,6 +55,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
   const [mismatch, setMismatch] = useState<{ file: File; expected: ReaderBookDto } | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
+  const asked = useRef(false)
 
   const reload = useCallback(() => {
     store
@@ -76,6 +82,25 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
     setMismatch(null)
     input.current?.click()
   }
+
+  // Arrived from the home screen's "Open the file" row, which cannot open a picker of its own:
+  // do it here, for that book, as soon as both lists agree the file is in the library but not
+  // on this device. Once only — `asked` outlives the reload that choosing a file sets off, and
+  // a second dialog for a request the user has already answered, or cancelled, would be a trap.
+  useEffect(() => {
+    if (asked.current || continueHash === null || local === null) {
+      return
+    }
+
+    const book = server.find((candidate) => candidate.fileHash === continueHash)
+
+    if (!book || local.some((meta) => meta.hash === continueHash)) {
+      return
+    }
+
+    asked.current = true
+    pick(book)
+  }, [continueHash, local, server])
 
   const open = async (file: File, expected: ReaderBookDto | null) => {
     setBusy(true)

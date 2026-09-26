@@ -15,7 +15,7 @@ import { ScopeRow } from '../components/ScopeRow'
 import { formatInt, formatProgress, percentOf, wordsLabel } from '../lib/format'
 import { WHOLE_BOOK, chapterLabel, readingProgressLabel, scopeLabel } from '../lib/labels'
 import type { BookStore } from '../reader/bookStore'
-import { useContinueReading } from '../reader/useContinueReading'
+import { useContinueReading, type ContinueReading } from '../reader/useContinueReading'
 import './HomeScreen.css'
 
 interface Props {
@@ -31,6 +31,11 @@ interface Props {
   /** The device's books, for the "Continue" row. null while the store is still opening. */
   bookStore: BookStore | null
   onOpenBook: (hash: string) => void
+  /**
+   * The reading library, asked to continue the book with that file hash — where the last-read
+   * book goes when its file is on another device and only the user can hand it over.
+   */
+  onOpenLibrary: (hash: string) => void
 }
 
 interface StarredBook {
@@ -54,6 +59,7 @@ export function HomeScreen({
   onChapterReview,
   bookStore,
   onOpenBook,
+  onOpenLibrary,
 }: Props) {
   const reading = useContinueReading(bookStore)
 
@@ -245,21 +251,26 @@ export function HomeScreen({
 
       {/* Above the starred list on purpose: a star is a shortcut the user can always find
           again, while these rows fade as soon as the work behind them is done. */}
-      {(reading !== null || (recent !== null && (recent.exercises.length > 0 || recent.sorting.length > 0))) && (
+      {(reading.length > 0 || (recent !== null && (recent.exercises.length > 0 || recent.sorting.length > 0))) && (
         <section className="recent-activity">
           <h2 className="title">Pick up where you left off</h2>
 
-          {/* First: one tap back into the book, the cheapest thing on the screen to resume. */}
-          {reading && (
+          {/* First: one tap back into the book, the cheapest thing on the screen to resume.
+              A book whose file is on another device can only go to the library, which asks
+              for it — so the newest book that does open here comes with it. */}
+          {reading.length > 0 && (
             <div className="recent-group">
               <h3 className="headline">Reading</h3>
               <ul className="scope-list">
-                <ScopeRow
-                  title={reading.title}
-                  sub={readingProgressLabel(reading)}
-                  action="Continue"
-                  onAction={() => onOpenBook(reading.fileHash)}
-                />
+                {reading.map((row) => (
+                  <ScopeRow
+                    key={row.book.fileHash}
+                    title={row.book.title}
+                    sub={readingSub(row)}
+                    action={row.onDevice ? 'Continue' : 'Open the file'}
+                    onAction={() => (row.onDevice ? onOpenBook(row.book.fileHash) : onOpenLibrary(row.book.fileHash))}
+                  />
+                ))}
               </ul>
             </div>
           )}
@@ -364,6 +375,14 @@ export function HomeScreen({
       )}
     </section>
   )
+}
+
+/// Where the reader stopped, and — when the file is elsewhere — why the row asks for it
+/// instead of opening the book.
+function readingSub(reading: ContinueReading): string {
+  const place = readingProgressLabel(reading.book)
+
+  return reading.onDevice ? place : `${place} · not on this device`
 }
 
 /** What a repeated exercise was: which trainer, and how it went. */

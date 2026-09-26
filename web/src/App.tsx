@@ -45,7 +45,8 @@ type Route =
   | { name: 'verbs-drill'; query: DrillQuery; title: string }
   | { name: 'pronunciation' }
   | { name: 'pronunciation-family'; key: string }
-  | { name: 'reader' }
+  /** continueHash: a book the home screen sent here for its file, which is on another device. */
+  | { name: 'reader'; continueHash?: string }
   /** Full screen, outside the app shell — the reader has its own header. */
   | { name: 'reader-book'; hash: string }
   | { name: 'admin' }
@@ -200,6 +201,7 @@ export default function App() {
           onChapterReview={reviewScope}
           bookStore={books?.store ?? null}
           onOpenBook={(hash) => setRoute({ name: 'reader-book', hash })}
+          onOpenLibrary={(hash) => setRoute({ name: 'reader', continueHash: hash })}
         />
       )}
 
@@ -335,6 +337,7 @@ export default function App() {
           store={books.store}
           persistent={books.persistent}
           onOpen={(hash) => setRoute({ name: 'reader-book', hash })}
+          continueHash={route.continueHash ?? null}
         />
       )}
     </AppShell>
