@@ -11,6 +11,11 @@ interface Options {
 }
 
 export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
+  // The chapter the server records as the visit behind this screen, so the home screen can
+  // offer a way back. Several chapters at once have no single scope to return to, so they
+  // count as the whole book — the same rule the server applies to a training session.
+  const scopeChapterId = chapterIds?.length === 1 ? chapterIds[0] : null
+
   const [buffer, setBuffer] = useState<QueueWord[]>([])
   const [known, setKnown] = useState<RecentWord[]>([])
   const [unknown, setUnknown] = useState<RecentWord[]>([])
@@ -78,7 +83,7 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
 
       enqueue(async () => {
         try {
-          await api.mark(word.wordPairId, status)
+          await api.mark(word.wordPairId, status, { dictionaryId, chapterId: scopeChapterId })
         } finally {
           // Clear "in flight" right here, before the refill: once the server answered,
           // the word is already counted in its queue.sorted, and counting it a second
@@ -105,7 +110,7 @@ export function useSortingQueue({ dictionaryId, chapterIds }: Options) {
         setError(`Could not save: ${e}. Reload the page.`)
       })
     },
-    [buffer, enqueue, refill],
+    [buffer, dictionaryId, enqueue, refill, scopeChapterId],
   )
 
   const undo = useCallback(() => {

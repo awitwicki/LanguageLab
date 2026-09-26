@@ -1,5 +1,5 @@
 import { act } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReaderBookDto } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { bytesOf, READER_BOOK_XML } from '../test/readerFixtures'
@@ -30,14 +30,21 @@ const dto = (fileHash: string, title: string, chapterIndex: number, progress: nu
   dictionaryId: null,
 })
 
-async function openLibrary(options: { persistent?: boolean } = {}) {
+async function openLibrary(options: { persistent?: boolean; continueHash?: string } = {}) {
   const store = new MemoryBookStore()
   await store.put(
     { hash: LOCAL, title: 'Wool', author: 'Hugh Howey', fileName: 'wool.fb2', addedAt: '2026-09-20T10:00:00.000Z' },
     bytesOf('x'),
   )
   const onOpen = vi.fn()
-  const view = await render(<ReaderLibraryScreen store={store} persistent={options.persistent ?? true} onOpen={onOpen} />)
+  const view = await render(
+    <ReaderLibraryScreen
+      store={store}
+      persistent={options.persistent ?? true}
+      onOpen={onOpen}
+      continueHash={options.continueHash ?? null}
+    />,
+  )
   await flush()
   return { ...view, store, onOpen }
 }
@@ -59,6 +66,8 @@ beforeEach(() => {
   apiMock.listReaderBooks.mockReset().mockResolvedValue([dto(LOCAL, 'Wool', 6, 0.23), dto(ELSEWHERE, 'Dune', 2, 0.05)])
   apiMock.removeReaderBook.mockReset().mockResolvedValue(null)
 })
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('ReaderLibraryScreen', () => {
   it('lists the books on this device with how far they are read', async () => {
@@ -167,6 +176,63 @@ describe('ReaderLibraryScreen', () => {
     const { container } = await openLibrary({ persistent: false })
 
     expect(container.querySelector('.library-notice')!.textContent).toContain("can't keep books on this device")
+  })
+
+  /// The home screen's "Open the file" row lands here for a book it cannot open itself: the
+  /// picker opens on arrival, already expecting that book's file.
+  it('asks straight away for the file of the book it was sent to continue', async () => {
+    const picker = vi.spyOn(HTMLInputElement.prototype, 'click')
+
+    const { container, onOpen } = await openLibrary({ continueHash: ELSEWHERE })
+
+    expect(picker).toHaveBeenCalledTimes(1)
+
+    // A wrong file is caught as a mismatch, which only happens when the picker was opened
+    // for that book rather than for a new one.
+    await choose(container, READER_BOOK_XML)
+
+    expect(container.querySelector('.library-mismatch')!.textContent).toContain('"Dune"')
+    expect(onOpen).not.toHaveBeenCalled()
+    expect(picker).toHaveBeenCalledTimes(1)
+  })
+
+  /// A browser is free to refuse a dialog the page opened by itself, once the tap that led
+  /// here has gone stale — and then nothing happens at all. The notice names the book that
+  /// was asked for, so the silence has an explanation and a way out.
+  it('names the book it is waiting for the file of', async () => {
+    const { container } = await openLibrary({ continueHash: ELSEWHERE })
+    const notice = container.querySelector('.library-continue')!
+
+    expect(notice.textContent).toContain('"Dune"')
+    expect(notice.textContent).toContain('Open the file to continue')
+  })
+
+  it('drops that notice once a file has been chosen', async () => {
+    const { container } = await openLibrary({ continueHash: ELSEWHERE })
+    expect(container.querySelector('.library-continue')).not.toBeNull()
+
+    await choose(container, READER_BOOK_XML)
+
+    expect(container.querySelector('.library-continue')).toBeNull()
+  })
+
+  /// Only a book read elsewhere needs its file handed over; one that is already here is
+  /// opened by the home screen itself.
+  it('asks for nothing when the book it was sent is already on this device', async () => {
+    const picker = vi.spyOn(HTMLInputElement.prototype, 'click')
+
+    const { container } = await openLibrary({ continueHash: LOCAL })
+
+    expect(picker).not.toHaveBeenCalled()
+    expect(container.querySelector('.library-continue')).toBeNull()
+  })
+
+  it('asks for nothing when it was sent no book to continue', async () => {
+    const picker = vi.spyOn(HTMLInputElement.prototype, 'click')
+
+    await openLibrary()
+
+    expect(picker).not.toHaveBeenCalled()
   })
 
   it('still lists local books when the server is unreachable', async () => {

@@ -1,9 +1,21 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { api, type ChapterView, type StarredChapter, type TrainingStarted, type TrainingStats } from '../api/client'
+import {
+  api,
+  type ChapterView,
+  type RecentActivity,
+  type RecentExercise,
+  type RecentSorting,
+  type StarredChapter,
+  type TrainingStarted,
+  type TrainingStats,
+} from '../api/client'
 import { BoxHistogram } from '../components/BoxHistogram'
 import { ChapterRow } from '../components/ChapterRow'
-import { formatInt } from '../lib/format'
-import { chapterLabel } from '../lib/labels'
+import { ScopeRow } from '../components/ScopeRow'
+import { formatInt, formatProgress, percentOf, wordsLabel } from '../lib/format'
+import { WHOLE_BOOK, chapterLabel, readingProgressLabel, scopeLabel } from '../lib/labels'
+import type { BookStore } from '../reader/bookStore'
+import { useContinueReading, type ContinueReading } from '../reader/useContinueReading'
 import './HomeScreen.css'
 
 interface Props {
@@ -11,10 +23,19 @@ interface Props {
   onImport: () => void
   /** The review across every book, from the "Due today" tile. */
   onReview: (started: TrainingStarted) => void
-  onSort: (dictionaryId: number, chapterIds: number[], scopeTitle: string) => void
-  onTrain: (dictionaryId: number, chapterIds: number[], scopeTitle: string) => void
+  /** chapterIds null — the whole book, as the recent-sorting list can ask for. */
+  onSort: (dictionaryId: number, chapterIds: number[] | null, scopeTitle: string) => void
+  onTrain: (dictionaryId: number, chapterIds: number[] | null, scopeTitle: string) => void
   /** A review of one starred chapter; scopeTitle is the chapter's label. */
   onChapterReview: (started: TrainingStarted, dictionaryId: number, scopeTitle: string) => void
+  /** The device's books, for the "Continue" row. null while the store is still opening. */
+  bookStore: BookStore | null
+  onOpenBook: (hash: string) => void
+  /**
+   * The reading library, asked to continue the book with that file hash — where the last-read
+   * book goes when its file is on another device and only the user can hand it over.
+   */
+  onOpenLibrary: (hash: string) => void
 }
 
 interface StarredBook {
@@ -26,11 +47,26 @@ interface StarredBook {
 /// The list of dictionaries lives in the sidebar, so the home screen is an empty state:
 /// either a hint to pick a dictionary, or an invitation to import the first book.
 /// Once the user has sorted anything, their shelf totals sit on top of it; once they have
-/// trained anything, their global Leitner standing joins them; once they have starred a
-/// chapter, the starred list sits between the two.
-export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrain, onChapterReview }: Props) {
+/// trained anything, their global Leitner standing joins them. Below those comes everything
+/// there is to pick up again — the book being read, the last exercises, the sorting left
+/// unfinished — and then the chapters they starred.
+export function HomeScreen({
+  hasDictionaries,
+  onImport,
+  onReview,
+  onSort,
+  onTrain,
+  onChapterReview,
+  bookStore,
+  onOpenBook,
+  onOpenLibrary,
+}: Props) {
+  const reading = useContinueReading(bookStore)
+
   const [stats, setStats] = useState<TrainingStats | null>(null)
   const [starred, setStarred] = useState<StarredChapter[] | null>(null)
+  const [recent, setRecent] = useState<RecentActivity | null>(null)
+  const [recentNotice, setRecentNotice] = useState<string | null>(null)
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
   const [starBusyId, setStarBusyId] = useState<number | null>(null)
@@ -52,6 +88,13 @@ export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrai
       .getStarredChapters()
       .then((list) => {
         if (!cancelled) setStarred(list)
+      })
+      .catch(() => {})
+
+    api
+      .recentActivity()
+      .then((activity) => {
+        if (!cancelled) setRecent(activity)
       })
       .catch(() => {})
 
@@ -98,6 +141,48 @@ export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrai
       onChapterReview(started, item.dictionaryId, chapterLabel(item.chapter))
     } catch (e) {
       setStarredNotice({ text: String(e), isError: true })
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+
+  // "Repeat" reopens the scope, it does not replay the old questions. A batch lands on its
+  // start screen, where the preview shows what the next words would be; a review has to ask
+  // the server, because what is due has moved on since.
+  const repeat = async (exercise: RecentExercise) => {
+    const chapterIds = exercise.chapter ? [exercise.chapter.id] : null
+    const scopeTitle = exercise.chapter ? chapterLabel(exercise.chapter) : WHOLE_BOOK
+
+    if (exercise.mode === 'newBatch') {
+      // A batch always had a book — only a review can span every dictionary.
+      if (exercise.dictionaryId !== null) {
+        onTrain(exercise.dictionaryId, chapterIds, scopeTitle)
+      }
+
+      return
+    }
+
+    setReviewBusy(true)
+    setRecentNotice(null)
+
+    try {
+      const started =
+        exercise.dictionaryId === null
+          ? await api.startReview()
+          : await api.startReview({ dictionaryId: exercise.dictionaryId, chapterIds })
+
+      if (!started) {
+        setRecentNotice('Nothing to review today.')
+        return
+      }
+
+      if (exercise.dictionaryId === null) {
+        onReview(started)
+      } else {
+        onChapterReview(started, exercise.dictionaryId, scopeTitle)
+      }
+    } catch (e) {
+      setRecentNotice(String(e))
     } finally {
       setReviewBusy(false)
     }
@@ -164,6 +249,77 @@ export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrai
         </section>
       )}
 
+      {/* Above the starred list on purpose: a star is a shortcut the user can always find
+          again, while these rows fade as soon as the work behind them is done. */}
+      {(reading.length > 0 || (recent !== null && (recent.exercises.length > 0 || recent.sorting.length > 0))) && (
+        <section className="recent-activity">
+          <h2 className="title">Pick up where you left off</h2>
+
+          {/* First: one tap back into the book, the cheapest thing on the screen to resume.
+              A book whose file is on another device can only go to the library, which asks
+              for it — so the newest book that does open here comes with it. */}
+          {reading.length > 0 && (
+            <div className="recent-group">
+              <h3 className="headline">Reading</h3>
+              <ul className="scope-list">
+                {reading.map((row) => (
+                  <ScopeRow
+                    key={row.book.fileHash}
+                    title={row.book.title}
+                    sub={readingSub(row)}
+                    action={row.onDevice ? 'Continue' : 'Open the file'}
+                    onAction={() => (row.onDevice ? onOpenBook(row.book.fileHash) : onOpenLibrary(row.book.fileHash))}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {recent && recent.exercises.length > 0 && (
+            <div className="recent-group">
+              <h3 className="headline">Exercises</h3>
+              <ul className="scope-list">
+                {recent.exercises.map((exercise) => (
+                  <ScopeRow
+                    key={exercise.trainingId}
+                    title={scopeLabel(exercise.dictionaryName, exercise.chapter)}
+                    sub={exerciseSub(exercise)}
+                    action="Repeat"
+                    busy={reviewBusy}
+                    onAction={() => void repeat(exercise)}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {recent && recent.sorting.length > 0 && (
+            <div className="recent-group">
+              <h3 className="headline">Sorting</h3>
+              <ul className="scope-list">
+                {recent.sorting.map((item) => (
+                  <ScopeRow
+                    key={`${item.dictionaryId}:${item.chapter?.id ?? 'book'}`}
+                    title={scopeLabel(item.dictionaryName, item.chapter)}
+                    sub={sortingSub(item)}
+                    action="Sort"
+                    onAction={() =>
+                      onSort(
+                        item.dictionaryId,
+                        item.chapter ? [item.chapter.id] : null,
+                        item.chapter ? chapterLabel(item.chapter) : WHOLE_BOOK,
+                      )
+                    }
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {recentNotice && <p className="footnote recent-notice">{recentNotice}</p>}
+        </section>
+      )}
+
       {books.length > 0 && (
         <section className="starred-chapters">
           <h2 className="title">Starred chapters</h2>
@@ -219,6 +375,29 @@ export function HomeScreen({ hasDictionaries, onImport, onReview, onSort, onTrai
       )}
     </section>
   )
+}
+
+/// Where the reader stopped, and — when the file is elsewhere — why the row asks for it
+/// instead of opening the book.
+function readingSub(reading: ContinueReading): string {
+  const place = readingProgressLabel(reading.book)
+
+  return reading.onDevice ? place : `${place} · not on this device`
+}
+
+/** What a repeated exercise was: which trainer, and how it went. */
+function exerciseSub(exercise: RecentExercise): string {
+  const mode = exercise.mode === 'review' ? 'Review' : 'Learn'
+
+  // A session whose every question went out through the "Know" button has nothing to score.
+  return exercise.total > 0 ? `${mode} · ${formatProgress(exercise.correct, exercise.total)} correct` : mode
+}
+
+/** How far the scope got, and what is still waiting there. */
+function sortingSub(item: RecentSorting): string {
+  const left = item.total - item.sorted
+
+  return `${percentOf(item.sorted, item.total)}% sorted · ${wordsLabel(left)} left`
 }
 
 /** The API already orders by book name then chapter order; this only folds consecutive rows of one book together. */

@@ -253,6 +253,53 @@ export interface RecentWords {
 
 export type TrainingMode = 'newBatch' | 'review'
 
+/** Where the user was working: a whole book, or one of its chapters. */
+export interface SortingScope {
+  dictionaryId: number
+  chapterId: number | null
+}
+
+/**
+ * The chapter half of a recent scope — enough for a label and a way back, not the standing
+ * a `ChapterView` carries. `chapterLabel` reads both.
+ */
+export interface ScopeChapter {
+  id: number
+  order: number
+  title: string
+}
+
+/** A finished session the home screen offers to repeat. A null dictionary was a review across every book. */
+export interface RecentExercise {
+  trainingId: number
+  mode: TrainingMode
+  /** ISO 8601. */
+  finishedAt: string
+  dictionaryId: number | null
+  dictionaryName: string | null
+  /** null — the whole book, or no book at all. */
+  chapter: ScopeChapter | null
+  correct: number
+  total: number
+}
+
+/** A scope the user was sorting and has not finished. */
+export interface RecentSorting {
+  dictionaryId: number
+  dictionaryName: string
+  /** null — the whole book. */
+  chapter: ScopeChapter | null
+  /** ISO 8601. */
+  lastSortedAt: string
+  total: number
+  sorted: number
+}
+
+export interface RecentActivity {
+  exercises: RecentExercise[]
+  sorting: RecentSorting[]
+}
+
 export type QuestionDirection = 'enToUa' | 'uaToEn'
 
 export interface BatchWord {
@@ -432,6 +479,36 @@ export interface PronunciationFamily {
 
 export interface PronunciationNextWord {
   word: PronunciationWordDto | null
+}
+
+export interface IpaEntry {
+  symbol: string
+  name: string
+  hint: string
+  group: string
+  inEnglish: boolean
+  exampleWord: string | null
+  exampleLanguage: string | null
+  exampleIpa: string | null
+  /** The sound on its own; null when no recording of it was found. */
+  soundAudio: string | null
+  /** The example word said in full; null when no recording was found. */
+  wordAudio: string | null
+  /** The trainer family that drills this sound, when one does. */
+  familyKey: string | null
+  /** Other spellings the same sound is written with — what search also matches on. */
+  aliases: string[]
+}
+
+export interface IpaSection {
+  key: string
+  title: string
+  note: string
+  entries: IpaEntry[]
+}
+
+export interface IpaAlphabet {
+  sections: IpaSection[]
 }
 
 export interface PronunciationAttemptResult {
@@ -704,10 +781,17 @@ export const api = {
     return request<SortingQueue>(`/api/sorting/queue?${params}`) as Promise<SortingQueue>
   },
 
-  mark: (wordPairId: number, status: SortStatus) =>
+  // scope — where the user was sorting, so the home screen can offer a way back into it.
+  // The mark itself does not need it; a missing scope just leaves no trace behind.
+  mark: (wordPairId: number, status: SortStatus, scope: SortingScope | null = null) =>
     request<null>('/api/sorting/mark', {
       method: 'POST',
-      body: JSON.stringify({ wordPairId, status }),
+      body: JSON.stringify({
+        wordPairId,
+        status,
+        dictionaryId: scope?.dictionaryId ?? null,
+        chapterId: scope?.chapterId ?? null,
+      }),
     }),
 
   undo: () => request<UndoResult>('/api/sorting/undo', { method: 'POST' }),
@@ -795,6 +879,8 @@ export const api = {
 
   getPronunciationProgress: () =>
     request<PronunciationProgress>('/api/pronunciation/progress') as Promise<PronunciationProgress>,
+
+  getIpaAlphabet: () => request<IpaAlphabet>('/api/pronunciation/alphabet') as Promise<IpaAlphabet>,
 
   getPronunciationFamily: (key: string) =>
     request<PronunciationFamily>(`/api/pronunciation/families/${encodeURIComponent(key)}`) as Promise<PronunciationFamily>,
@@ -902,6 +988,9 @@ export const api = {
 
   /** Ordered by book name, then chapter order; only books the user can still see. */
   getStarredChapters: () => request<StarredChapter[]>('/api/chapters/starred') as Promise<StarredChapter[]>,
+
+  /** The home screen's two "pick it up again" lists: last exercises, and sorting left unfinished. */
+  recentActivity: () => request<RecentActivity>('/api/home/recent') as Promise<RecentActivity>,
 
   // PUT: starring twice is the same star. 404 = the chapter (or its book) is not visible.
   starChapter: (chapterId: number) => request<null>(`/api/chapters/${chapterId}/star`, { method: 'PUT' }),

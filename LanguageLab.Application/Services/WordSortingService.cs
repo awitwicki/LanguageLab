@@ -18,11 +18,21 @@ public sealed record SortingQueue(IReadOnlyList<QueueWord> Words, int Total, int
 
 public sealed record ChapterProgress(long ChapterId, int Total, int Sorted);
 
+/// <summary>How far one sorting scope has got: a whole book's or a single chapter's.</summary>
+public sealed record ScopeProgress(int Total, int Sorted);
+
 public sealed record UndoResult(long WordPairId, string Word, string Translation, SortStatus PreviousStatus);
 
 public sealed record RecentWord(long WordPairId, string Word);
 
 public sealed record RecentWords(IReadOnlyList<RecentWord> Known, IReadOnlyList<RecentWord> Unknown);
+
+/// <summary>
+/// Where the user was standing when they marked a word: a whole book, or one of its chapters.
+/// Passed by the client because the shelves cannot tell afterwards — one word sits in several
+/// books. Recorded as a <see cref="SortingVisit"/> so the home screen can offer a way back.
+/// </summary>
+public sealed record SortingScope(long DictionaryId, long? ChapterId);
 
 /// <summary>
 /// The queue of words to sort and the operations on the three shelves.
@@ -63,6 +73,21 @@ public class WordSortingService
         return new SortingQueue(words, total, total - remaining, remaining);
     }
 
+    /// <summary>
+    /// How far one scope is sorted — the whole book when <paramref name="chapterId"/> is null.
+    /// The per-chapter cousin below walks every chapter of a book; this answers for the one
+    /// scope the home screen's list is about.
+    /// </summary>
+    public async Task<ScopeProgress> CountScopeAsync(long userId, long dictionaryId, long? chapterId)
+    {
+        var scoped = ScopedQuery(dictionaryId, chapterId == null ? null : [chapterId.Value]);
+
+        var total = await scoped.CountAsync();
+        var remaining = await Unsorted(scoped, userId).CountAsync();
+
+        return new ScopeProgress(total, total - remaining);
+    }
+
     public async Task<IReadOnlyList<ChapterProgress>> GetChapterProgressAsync(long userId, long dictionaryId)
     {
         var chapterIds = await _dbContext.Chapters
@@ -95,7 +120,12 @@ public class WordSortingService
     /// PersonalDictionaryService.RemoveAsync, instead of letting a caller probe which ids
     /// exist by telling ownership and "no such word" apart.
     /// </summary>
-    public async Task<bool> MarkAsync(long userId, long wordPairId, SortStatus status, DateTime nowUtc)
+    /// <param name="scope">
+    /// Where the user was sorting, when the client says. Recorded for the home screen's way
+    /// back into unfinished sorting; null leaves no visit behind.
+    /// </param>
+    public async Task<bool> MarkAsync(
+        long userId, long wordPairId, SortStatus status, DateTime nowUtc, SortingScope? scope = null)
     {
         var word = await _dbContext.Words
             .Where(w => w.Id == wordPairId)
@@ -122,10 +152,12 @@ public class WordSortingService
             _ => throw new ArgumentOutOfRangeException(nameof(status), status, "Unknown shelf.")
         };
 
-        // Repeating the same mark is a no-op: otherwise the word would jump to the
-        // top of the "last 10" column for no reason.
+        // Repeating the same mark is a no-op for the shelves: otherwise the word would jump
+        // to the top of the "last 10" column for no reason. The visit at the end still moves —
+        // the user is sitting in that scope either way.
         if (alreadyThere)
         {
+            await TouchVisitAsync(userId, scope, nowUtc);
             return true;
         }
 
@@ -169,7 +201,60 @@ public class WordSortingService
         }
 
         await _dbContext.SaveChangesAsync();
+        await TouchVisitAsync(userId, scope, nowUtc);
         return true;
+    }
+
+    /// <summary>
+    /// Moves the scope's visit to <paramref name="nowUtc"/>, inserting it the first time.
+    /// Saved separately from the mark, and on its own terms: a visit is a convenience for the
+    /// home screen, so neither a scope the client got wrong nor two tabs inserting the same
+    /// row at once may cost the user the mark they actually made.
+    /// </summary>
+    private async Task TouchVisitAsync(long userId, SortingScope? scope, DateTime nowUtc)
+    {
+        if (scope == null)
+        {
+            return;
+        }
+
+        // A chapter of another book would send the user somewhere they have never been.
+        if (scope.ChapterId is { } chapterId &&
+            !await _dbContext.Chapters.AnyAsync(c => c.Id == chapterId && c.DictionaryId == scope.DictionaryId))
+        {
+            return;
+        }
+
+        var visit = await _dbContext.SortingVisits.FirstOrDefaultAsync(v =>
+            v.UserId == userId && v.DictionaryId == scope.DictionaryId && v.ChapterId == scope.ChapterId);
+
+        if (visit != null)
+        {
+            visit.LastSortedAt = nowUtc;
+        }
+        else
+        {
+            visit = new SortingVisit
+            {
+                UserId = userId,
+                DictionaryId = scope.DictionaryId,
+                ChapterId = scope.ChapterId,
+                LastSortedAt = nowUtc
+            };
+
+            _dbContext.SortingVisits.Add(visit);
+        }
+
+        try
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // The unique index rejected a second tab's insert, or the scope named a book that
+            // is gone. Detach so the stale entity is not retried by the next save in this scope.
+            _dbContext.Entry(visit).State = EntityState.Detached;
+        }
     }
 
     /// <summary>

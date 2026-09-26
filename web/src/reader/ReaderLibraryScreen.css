@@ -107,6 +107,18 @@
   color: var(--danger);
 }
 
+/* A card, not an error: the file dialog may simply be waiting, or may never have opened. */
+.library-continue {
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+  color: var(--text);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+}
+
 .library-mismatch {
   display: flex;
   flex-wrap: wrap;

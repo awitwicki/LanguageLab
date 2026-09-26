@@ -313,6 +313,42 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.ToTable("ReaderBooks");
                 });
 
+            modelBuilder.Entity("LanguageLab.Domain.Entities.SortingVisit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("ChapterId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("DictionaryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("LastSortedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("UserId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChapterId");
+
+                    b.HasIndex("DictionaryId");
+
+                    b.HasIndex("UserId", "LastSortedAt");
+
+                    b.HasIndex("UserId", "DictionaryId", "ChapterId")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "DictionaryId", "ChapterId"), false);
+
+                    b.ToTable("SortingVisits");
+                });
+
             modelBuilder.Entity("LanguageLab.Domain.Entities.StarredChapter", b =>
                 {
                     b.Property<long>("Id")
@@ -391,6 +427,9 @@ namespace LanguageLab.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
 
+                    b.Property<long?>("ChapterId")
+                        .HasColumnType("bigint");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -408,9 +447,11 @@ namespace LanguageLab.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ChapterId");
+
                     b.HasIndex("DictionaryId");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("UserId", "FinishedAt");
 
                     b.ToTable("Trainings");
                 });
@@ -799,6 +840,32 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("LanguageLab.Domain.Entities.SortingVisit", b =>
+                {
+                    b.HasOne("LanguageLab.Domain.Entities.Chapter", "Chapter")
+                        .WithMany()
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("LanguageLab.Domain.Entities.Dictionary", "Dictionary")
+                        .WithMany()
+                        .HasForeignKey("DictionaryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LanguageLab.Domain.Entities.TelegramUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Chapter");
+
+                    b.Navigation("Dictionary");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("LanguageLab.Domain.Entities.StarredChapter", b =>
                 {
                     b.HasOne("LanguageLab.Domain.Entities.Chapter", "Chapter")
@@ -820,6 +887,11 @@ namespace LanguageLab.Infrastructure.Migrations
 
             modelBuilder.Entity("LanguageLab.Domain.Entities.Training", b =>
                 {
+                    b.HasOne("LanguageLab.Domain.Entities.Chapter", "Chapter")
+                        .WithMany()
+                        .HasForeignKey("ChapterId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("LanguageLab.Domain.Entities.Dictionary", "Dictionary")
                         .WithMany()
                         .HasForeignKey("DictionaryId");
@@ -829,6 +901,8 @@ namespace LanguageLab.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Chapter");
 
                     b.Navigation("Dictionary");
 

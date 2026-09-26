@@ -52,3 +52,24 @@
   color: var(--text-2);
   max-width: 480px;
 }
+
+.alphabet-card {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  padding: 20px;
+  margin-bottom: 24px;
+  max-width: 560px;
+}
+
+.alphabet-card-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.alphabet-card-text {
+  color: var(--text-2);
+  font-size: var(--fs-footnote);
+  line-height: var(--lh-footnote);
+  margin-bottom: 12px;
+}

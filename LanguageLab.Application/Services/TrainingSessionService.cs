@@ -106,7 +106,8 @@ public class TrainingSessionService
         var pool = await _selection.GetDistractorPoolAsync(userId, dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
-            userId, dictionaryId, TrainingMode.NewBatch, words, NewBatchRepeats, pool, DirectionPolicy.EnToUa, nowUtc);
+            userId, dictionaryId, ScopeChapterOf(chapterIds), TrainingMode.NewBatch, words, NewBatchRepeats, pool,
+            DirectionPolicy.EnToUa, nowUtc);
     }
 
     /// <summary>
@@ -128,7 +129,8 @@ public class TrainingSessionService
         var pool = await _selection.GetDistractorPoolAsync(userId, dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
-            userId, dictionaryId, TrainingMode.Review, words, ReviewRepeats, pool, DirectionPolicy.Random, nowUtc);
+            userId, dictionaryId, ScopeChapterOf(chapterIds), TrainingMode.Review, words, ReviewRepeats, pool,
+            DirectionPolicy.Random, nowUtc);
     }
 
     public async Task<Training?> StartRetryAsync(long userId, long previousTrainingId, DateTime nowUtc)
@@ -156,8 +158,16 @@ public class TrainingSessionService
             userId, previous.DictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
-            userId, previous.DictionaryId, TrainingMode.NewBatch, words, NewBatchRepeats, pool, DirectionPolicy.EnToUa, nowUtc);
+            userId, previous.DictionaryId, previous.ChapterId, TrainingMode.NewBatch, words, NewBatchRepeats, pool,
+            DirectionPolicy.EnToUa, nowUtc);
     }
+
+    /// <summary>
+    /// The one chapter a session was scoped to, for <see cref="Training.ChapterId"/>. Several
+    /// chapters at once have no single scope to reopen, so they read as the whole book.
+    /// </summary>
+    private static long? ScopeChapterOf(IReadOnlyList<long>? chapterIds) =>
+        chapterIds is { Count: 1 } ? chapterIds[0] : null;
 
     public Task<TrainingQuestion?> GetNextQuestionAsync(long trainingId) =>
         _dbContext.TrainingQuestions
@@ -449,6 +459,7 @@ public class TrainingSessionService
     private async Task<Training> CreateTrainingAsync(
         long userId,
         long? dictionaryId,
+        long? chapterId,
         TrainingMode mode,
         IReadOnlyList<WordPair> words,
         int repeats,
@@ -463,7 +474,8 @@ public class TrainingSessionService
             CreatedAt = nowUtc,
             Mode = mode,
             UserId = userId,
-            DictionaryId = dictionaryId
+            DictionaryId = dictionaryId,
+            ChapterId = chapterId
         };
 
         _dbContext.Trainings.Add(training);

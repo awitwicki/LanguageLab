@@ -354,4 +354,129 @@ public class WordSortingServiceTests
 
         Assert.Equal(["holston"], recent.Known.Select(w => w.Word));
     }
+
+    [Fact]
+    public async Task Mark_without_a_scope_records_no_visit()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+
+        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now);
+
+        Assert.Empty(db.SortingVisits);
+    }
+
+    [Fact]
+    public async Task Mark_with_a_chapter_scope_records_the_visit()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+
+        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now, new SortingScope(DictionaryId, ChapterId: 1));
+
+        var visit = Assert.Single(db.SortingVisits);
+        Assert.Equal(UserId, visit.UserId);
+        Assert.Equal(DictionaryId, visit.DictionaryId);
+        Assert.Equal(1, visit.ChapterId);
+        Assert.Equal(Now, visit.LastSortedAt);
+    }
+
+    /// <summary>
+    /// The point of upserting rather than appending: sorting a chapter for an hour leaves one
+    /// row that says "last touched a minute ago", not one row per word marked.
+    /// </summary>
+    [Fact]
+    public async Task Marking_again_in_one_scope_moves_the_same_visit()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+        var scope = new SortingScope(DictionaryId, ChapterId: 1);
+
+        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now, scope);
+        await service.MarkAsync(UserId, wordPairId: 2, SortStatus.Unknown, Now.AddMinutes(5), scope);
+
+        var visit = Assert.Single(db.SortingVisits);
+        Assert.Equal(Now.AddMinutes(5), visit.LastSortedAt);
+    }
+
+    /// <summary>The whole book is its own scope, and one row of it — not a null-chapter row per mark.</summary>
+    [Fact]
+    public async Task The_whole_book_scope_is_one_visit()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+        var book = new SortingScope(DictionaryId, ChapterId: null);
+
+        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now, book);
+        await service.MarkAsync(UserId, wordPairId: 2, SortStatus.Known, Now.AddMinutes(1), book);
+
+        var visit = Assert.Single(db.SortingVisits);
+        Assert.Null(visit.ChapterId);
+        Assert.Equal(Now.AddMinutes(1), visit.LastSortedAt);
+    }
+
+    [Fact]
+    public async Task Chapter_and_whole_book_visits_are_separate_rows()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+
+        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now, new SortingScope(DictionaryId, ChapterId: 1));
+        await service.MarkAsync(UserId, wordPairId: 2, SortStatus.Known, Now.AddMinutes(1), new SortingScope(DictionaryId, ChapterId: null));
+        await service.MarkAsync(UserId, wordPairId: 4, SortStatus.Known, Now.AddMinutes(2), new SortingScope(DictionaryId, ChapterId: 2));
+
+        Assert.Equal([null, 1L, 2L], db.SortingVisits.Select(v => v.ChapterId).OrderBy(id => id).ToList());
+    }
+
+    /// <summary>
+    /// A repeated mark returns early — the word is already on that shelf — but the user is
+    /// still sitting in the scope, so the visit must move anyway.
+    /// </summary>
+    [Fact]
+    public async Task A_repeated_mark_still_moves_the_visit()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+        var scope = new SortingScope(DictionaryId, ChapterId: 1);
+
+        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now, scope);
+        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now.AddMinutes(3), scope);
+
+        var visit = Assert.Single(db.SortingVisits);
+        Assert.Equal(Now.AddMinutes(3), visit.LastSortedAt);
+    }
+
+    /// <summary>A refused mark is not a visit: nothing was sorted.</summary>
+    [Fact]
+    public async Task A_refused_mark_records_no_visit()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+
+        var marked = await service.MarkAsync(
+            UserId, wordPairId: 999, SortStatus.Known, Now, new SortingScope(DictionaryId, ChapterId: 1));
+
+        Assert.False(marked);
+        Assert.Empty(db.SortingVisits);
+    }
+
+    /// <summary>
+    /// A scope naming a chapter of another book is a client bug, and the visit would send the
+    /// user somewhere they never were — the mark stands, the visit is dropped.
+    /// </summary>
+    [Fact]
+    public async Task A_chapter_outside_the_named_book_records_no_visit()
+    {
+        await using var db = await ArrangeAsync();
+        db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 99, Name = "Other", WordsCount = 0 });
+        await db.SaveChangesAsync();
+
+        var service = new WordSortingService(db);
+
+        var marked = await service.MarkAsync(
+            UserId, wordPairId: 1, SortStatus.Known, Now, new SortingScope(DictionaryId: 99, ChapterId: 1));
+
+        Assert.True(marked);
+        Assert.Empty(db.SortingVisits);
+    }
 }

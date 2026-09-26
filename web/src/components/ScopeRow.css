@@ -1,0 +1,71 @@
+.scope-list {
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+/* The scope on the left, its one action on the right — no nested buttons. */
+.scope-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  padding-right: 8px;
+}
+
+.scope-row + .scope-row {
+  border-top: 1px solid var(--hairline);
+}
+
+.scope-main {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  text-align: left;
+  color: var(--text);
+  transition: background-color var(--dur) var(--ease);
+}
+
+.scope-main:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+/* The list clips its overflow — draw the focus ring inwards. */
+.scope-main:focus-visible,
+.scope-action:focus-visible {
+  outline-offset: -2px;
+}
+
+.scope-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.scope-title {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-sub {
+  color: var(--text-2);
+}
+
+@media (max-width: 800px) {
+  /* The action drops under the scope rather than squeezing the title on a phone. */
+  .scope-row {
+    grid-template-columns: minmax(0, 1fr);
+    padding-right: 0;
+  }
+
+  .scope-main {
+    padding-bottom: 2px;
+  }
+
+  .scope-action {
+    justify-self: flex-end;
+    margin: 0 8px 6px;
+  }
+}

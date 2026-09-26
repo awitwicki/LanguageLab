@@ -842,4 +842,95 @@ public class TrainingSessionServiceTests
             .ToListAsync();
         Assert.Equal(expected, actual.OrderBy(id => id));
     }
+
+    /// <summary>
+    /// The scope a "Repeat" on the home screen reopens. Only a single chapter is recorded:
+    /// that is the only chapter scope the SPA ever starts a session in.
+    /// </summary>
+    [Fact]
+    public async Task NewBatch_WithOneChapter_RecordsItAsTheSessionsScope()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.Add(new Chapter { Id = 7, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 2 });
+        db.ChapterWords.AddRange(
+            new ChapterWord { ChapterId = 7, WordPairId = 1, Count = 1 },
+            new ChapterWord { ChapterId = 7, WordPairId = 2, Count = 1 });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, [7]);
+
+        Assert.NotNull(training);
+        Assert.Equal(7, training.ChapterId);
+    }
+
+    [Fact]
+    public async Task NewBatch_ForTheWholeBook_RecordsNoChapter()
+    {
+        await using var db = await ArrangeAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now);
+
+        Assert.NotNull(training);
+        Assert.Null(training.ChapterId);
+    }
+
+    /// <summary>
+    /// Several chapters at once have no single scope to reopen, so the session reads as the
+    /// book's. Nothing in the SPA starts one today; the server must still answer for it.
+    /// </summary>
+    [Fact]
+    public async Task NewBatch_WithSeveralChapters_RecordsNoChapter()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.AddRange(
+            new Chapter { Id = 7, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 1 },
+            new Chapter { Id = 8, DictionaryId = DictionaryId, Order = 1, Title = "Two", WordsCount = 1 });
+        db.ChapterWords.AddRange(
+            new ChapterWord { ChapterId = 7, WordPairId = 1, Count = 1 },
+            new ChapterWord { ChapterId = 8, WordPairId = 2, Count = 1 });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, [7, 8]);
+
+        Assert.NotNull(training);
+        Assert.Null(training.ChapterId);
+    }
+
+    [Fact]
+    public async Task Review_WithChapterScope_RecordsTheChapter()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.Add(new Chapter { Id = 7, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 1 });
+        db.ChapterWords.Add(new ChapterWord { ChapterId = 7, WordPairId = 1, Count = 1 });
+        db.WordProgresses.Add(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now });
+        await db.SaveChangesAsync();
+
+        var training = await Service(db).StartReviewAsync(UserId, Now, DictionaryId, [7]);
+
+        Assert.NotNull(training);
+        Assert.Equal(7, training.ChapterId);
+    }
+
+    /// <summary>A retry is the same scope drilled again, so it must not lose the chapter.</summary>
+    [Fact]
+    public async Task Retry_KeepsTheChapterScope()
+    {
+        await using var db = await ArrangeAsync();
+        db.Chapters.Add(new Chapter { Id = 7, DictionaryId = DictionaryId, Order = 0, Title = "One", WordsCount = 2 });
+        db.ChapterWords.AddRange(
+            new ChapterWord { ChapterId = 7, WordPairId = 1, Count = 1 },
+            new ChapterWord { ChapterId = 7, WordPairId = 2, Count = 1 });
+        await db.SaveChangesAsync();
+
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now, [7]);
+        Assert.NotNull(training);
+
+        await AnswerEverythingAsync(service, training.Id, wordIdsToFail: 1);
+        var retry = await service.StartRetryAsync(UserId, training.Id, Now);
+
+        Assert.NotNull(retry);
+        Assert.Equal(7, retry.ChapterId);
+    }
 }

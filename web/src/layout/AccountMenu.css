@@ -58,7 +58,7 @@
   border-radius: 0 0 var(--r-md) var(--r-md);
 }
 
-.delete-warning,
+.account-delete-warning,
 .account-panel .error {
   max-width: 24ch;
   padding: 4px 10px 6px;

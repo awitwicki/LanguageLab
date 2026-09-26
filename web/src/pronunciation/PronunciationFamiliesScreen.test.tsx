@@ -18,11 +18,44 @@ describe('PronunciationFamiliesScreen', () => {
   it('shows the unsupported-browser message when SpeechRecognition is missing', async () => {
     supportMock.isSpeechRecognitionSupported.mockReturnValue(false)
 
-    const { container } = await render(<PronunciationFamiliesScreen onOpenFamily={() => {}} />)
+    const { container } = await render(<PronunciationFamiliesScreen onOpenFamily={() => {}} onOpenAlphabet={() => {}} />)
     await flush()
 
     expect(container.textContent).toMatch(/Chrome or Edge/)
     expect(apiMock.getPronunciationProgress).not.toHaveBeenCalled()
+    // The alphabet asks nothing of the browser, so it is the one thing still on offer.
+    expect(container.querySelector('.alphabet-card')).not.toBeNull()
+  })
+
+  it('opens the alphabet from a browser that cannot practise', async () => {
+    supportMock.isSpeechRecognitionSupported.mockReturnValue(false)
+    const onOpenAlphabet = vi.fn()
+
+    const { container } = await render(
+      <PronunciationFamiliesScreen onOpenFamily={() => {}} onOpenAlphabet={onOpenAlphabet} />,
+    )
+    await flush()
+
+    await click(container.querySelector('.alphabet-card .btn')!)
+
+    expect(onOpenAlphabet).toHaveBeenCalled()
+  })
+
+  it('offers the alphabet beside the families when practice does work', async () => {
+    apiMock.getPronunciationProgress.mockResolvedValue({
+      families: [{ key: 'b', title: 'Family B', targetSounds: ['y'], total: 5, mastered: 1, status: 'available' }],
+    } satisfies PronunciationProgress)
+    const onOpenAlphabet = vi.fn()
+
+    const { container } = await render(
+      <PronunciationFamiliesScreen onOpenFamily={() => {}} onOpenAlphabet={onOpenAlphabet} />,
+    )
+    await flush()
+
+    await click(container.querySelector('.alphabet-card .btn')!)
+
+    expect(onOpenAlphabet).toHaveBeenCalled()
+    expect(container.querySelectorAll('.family-tile')).toHaveLength(1)
   })
 
   it('renders done and untouched families alike, every tile open', async () => {
@@ -34,7 +67,7 @@ describe('PronunciationFamiliesScreen', () => {
       ],
     } satisfies PronunciationProgress)
 
-    const { container } = await render(<PronunciationFamiliesScreen onOpenFamily={() => {}} />)
+    const { container } = await render(<PronunciationFamiliesScreen onOpenFamily={() => {}} onOpenAlphabet={() => {}} />)
     await flush()
 
     expect(container.textContent).toContain('Family A')
@@ -51,7 +84,7 @@ describe('PronunciationFamiliesScreen', () => {
     } satisfies PronunciationProgress)
     const onOpenFamily = vi.fn()
 
-    const { container } = await render(<PronunciationFamiliesScreen onOpenFamily={onOpenFamily} />)
+    const { container } = await render(<PronunciationFamiliesScreen onOpenFamily={onOpenFamily} onOpenAlphabet={() => {}} />)
     await flush()
 
     const openButton = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Open')

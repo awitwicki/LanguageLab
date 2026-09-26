@@ -113,7 +113,7 @@ function AccountPanel({ user, onAdmin, onSignOut, onDeleteAccount }: Props) {
       </button>
 
       {confirming && (
-        <p className="delete-warning caption">This removes your progress and cannot be undone.</p>
+        <p className="account-delete-warning caption">This removes your progress and cannot be undone.</p>
       )}
       {error && <p className="error caption">{error}</p>}
     </div>

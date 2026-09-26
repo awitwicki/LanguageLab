@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { api, type ReaderBookDto } from '../api/client'
-import { formatInt } from '../lib/format'
+import { readingProgressLabel } from '../lib/labels'
 import { useDismiss } from '../lib/useDismiss'
 import type { BookMeta, BookStore } from './bookStore'
 import { openBookFile } from './openBook'
@@ -11,10 +11,11 @@ interface Props {
   /** false: IndexedDB is unavailable, books stay only until the tab closes. */
   persistent: boolean
   onOpen: (hash: string) => void
-}
-
-function progressLabel(book: ReaderBookDto): string {
-  return `Chapter ${formatInt(book.chapterIndex + 1)} of ${formatInt(book.chaptersCount)} · ${formatInt(Math.round(book.progress * 100))} %`
+  /**
+   * A book the home screen sent here to be continued, by file hash: its file is on another
+   * device, so only the user can hand it over. null when the library was opened on its own.
+   */
+  continueHash: string | null
 }
 
 function RowMenu({ open, onToggle, onClose, actions }: {
@@ -44,16 +45,18 @@ function RowMenu({ open, onToggle, onClose, actions }: {
   )
 }
 
-export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
+export function ReaderLibraryScreen({ store, persistent, onOpen, continueHash }: Props) {
   const [local, setLocal] = useState<BookMeta[] | null>(null)
   const [server, setServer] = useState<ReaderBookDto[]>([])
   const [serverFailed, setServerFailed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [continuing, setContinuing] = useState<ReaderBookDto | null>(null)
+  const [handedOver, setHandedOver] = useState(false)
   const [mismatch, setMismatch] = useState<{ file: File; expected: ReaderBookDto } | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
+  const asked = useRef(false)
 
   const reload = useCallback(() => {
     store
@@ -81,6 +84,27 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
     input.current?.click()
   }
 
+  // The book the home screen sent here for its file: in the library, but not on this device,
+  // and not handed over yet. null until both lists have arrived, and for a book this device
+  // already holds — the home screen opens that one itself.
+  const wanted =
+    continueHash === null || local === null || handedOver || local.some((meta) => meta.hash === continueHash)
+      ? null
+      : (server.find((candidate) => candidate.fileHash === continueHash) ?? null)
+
+  // The "Open the file" row cannot open a picker of its own, so do it here, for that book, as
+  // soon as `wanted` names it. Once only — `asked` outlives the reload that choosing a file
+  // sets off, and a second dialog for a request the user has already answered, or cancelled,
+  // would be a trap.
+  useEffect(() => {
+    if (asked.current || !wanted) {
+      return
+    }
+
+    asked.current = true
+    pick(wanted)
+  }, [wanted])
+
   const open = async (file: File, expected: ReaderBookDto | null) => {
     setBusy(true)
     setError(null)
@@ -98,7 +122,13 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
     const file = event.target.files?.[0]
     event.target.value = ''
 
-    if (file) void open(file, continuing)
+    if (!file) {
+      return
+    }
+
+    // The request has been answered — whatever comes of the file, the notice has said its bit.
+    setHandedOver(true)
+    void open(file, continuing)
   }
 
   const removeFromDevice = async (hash: string) => {
@@ -142,6 +172,19 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
         </p>
       )}
 
+      {/*
+        The dialog `wanted` opens may never appear: a browser is free to refuse one the page
+        opened by itself, once the tap that led here has gone stale. So the book is named here
+        too — unread behind the dialog when it did open, and the only sign of what was asked
+        for when it did not.
+      */}
+      {wanted && (
+        <p className="library-continue" role="status">
+          Choose the file of "{wanted.title}" to go on reading it. If no file dialog opened, use "Open the file to
+          continue" in its row below.
+        </p>
+      )}
+
       {error && (
         <p className="library-error" role="alert">
           {error}
@@ -181,7 +224,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
                   <button type="button" className="library-row-open" onClick={() => onOpen(book.hash)}>
                     <span className="library-row-title">{book.title}</span>
                     {book.author && <span className="library-row-meta">{book.author}</span>}
-                    <span className="library-row-meta num">{record ? progressLabel(record) : 'Not started'}</span>
+                    <span className="library-row-meta num">{record ? readingProgressLabel(record) : 'Not started'}</span>
                   </button>
                   <RowMenu
                     open={menuFor === book.hash}
@@ -207,7 +250,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen }: Props) {
               <li key={book.fileHash} className="library-row">
                 <div className="library-row-main">
                   <span className="library-row-title">{book.title}</span>
-                  <span className="library-row-meta num">{progressLabel(book)}</span>
+                  <span className="library-row-meta num">{readingProgressLabel(book)}</span>
                 </div>
                 <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => pick(book)}>
                   Open the file to continue

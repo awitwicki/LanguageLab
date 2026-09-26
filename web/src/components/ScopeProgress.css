@@ -6,14 +6,14 @@
 
 /* Label | track. The sorted row lays out its own value column; the Leitner scale brings
    an identical one of its own (LeitnerScale.css), so the two tracks line up exactly. */
-.scope-row {
+.progress-row {
   display: grid;
   grid-template-columns: 60px minmax(0, 1fr);
   align-items: center;
   column-gap: 12px;
 }
 
-.scope-row-sorted {
+.progress-row-sorted {
   grid-template-columns: 60px minmax(0, 1fr) minmax(44px, auto);
 }
 

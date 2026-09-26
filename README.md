@@ -6,45 +6,47 @@ Web app for learning new words from books
 2. learn new words
 3. GOTO 1
 
+## Documentation
+
+- [docs/architecture.md](docs/architecture.md) — the project map: what each project and service
+  owns, the endpoint inventory, the Postgres and config setup.
+- [docs/auth.md](docs/auth.md) — Telegram sign-in over OIDC, the `ll_session` cookie, dev-login,
+  the Mini App, roles.
+- [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md) — import and publication
+  review, the personal dictionary, translation providers and budgets, Leitner training.
+- [docs/reader.md](docs/reader.md) — Reading mode: what stays in the browser, what the server
+  keeps, the word panel, fb2 and epub parsing.
+- [docs/trainers.md](docs/trainers.md) — the irregular-verbs and pronunciation trainers.
+- [web/README.md](web/README.md) — the SPA up close.
+- [CLAUDE.md](CLAUDE.md) — the conventions and invariants the code is held to.
+
 ## TODO
 
 Backlog of short topics. When something gets deferred (a stub, an inactive button, "we'll do it later") —
 add one line here **in the same set of changes**. Done items are marked `[x]`.
 
-- [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService.LookupAsync` (`LanguageLab.Application/Translation`) now caches a provider's answer into the shared vocabulary on every lookup, but nothing calls it from `BookImportService` or `WordSortingService.MarkAsync` yet (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation still don't enter exercises)
 - [ ] Resume an unfinished training session after a page reload (the session exists in the DB, no UI entry point yet)
-- [x] Color contrast WCAG AA: check `.btn-known`/`.btn-unknown` in light theme and `.btn-primary` on `--accent` in dark theme
-- [ ] Spacing tokens in the design system: `web/src/index.css` tokenizes color/typography/radii, but not spacing
 - [ ] Move a word back from "know" to "don't know" outside the exercise-start screen: the cross-out in the batch preview (`web/src/training/useBatchPreview.ts`) — "bring back" only works within the current visit; after that the word can only be reached via `POST /api/sorting/mark`
 - [ ] `ChapterStatsService.GetChapterViewsAsync`: one COUNT query per returned chapter (plus 3 whole-book queries per call) — also backs `GET /api/chapters/starred` on the home screen now, not just `GET /api/dictionaries/{id}`; merge into one GROUP BY if this ever becomes slow
 - [ ] Shelf admin panel: list of all words in the DB, list of "know", list of "don't know", list of excluded — with the ability to un-mark (move back between shelves) right there
-- [ ] Home screen: recent exercises with a "Repeat" button, recent dictionaries/chapters that were sorted — so the user can go back and finish sorting them (`web/src/screens/HomeScreen.tsx`)
-- [x] Pronunciation trainer: a manual "reset progress" action for a word (`PronunciationProgressService`)
-- [ ] Pronunciation trainer: minimal-pair discrimination exercises (hear two words, pick which was said)
-- [ ] Pronunciation trainer: a cross-family mixed review session
-- [ ] Pronunciation trainer: spaced-repetition scheduling for resurfacing mastered words
-- [ ] Pronunciation trainer: record-and-replay the learner's own attempt for self-comparison
-- [ ] Top-100/200/500/1000 English word dictionaries, public
+- [ ] Home screen's recent lists show no time: a row says "38% sorted", never "you left this yesterday". `RecentActivity` already carries `finishedAt`/`lastSortedAt` and the order is newest-first; it needs a relative-time formatter beside `formatDue` (`web/src/lib/format.ts`) to print them
+- [ ] `RecentActivityService.GetSortingAsync` counts each listed scope separately — two COUNTs per row, up to `MaxRows` rows plus the fully-sorted ones it skips; merge into one GROUP BY with `ChapterStatsService.GetChapterViewsAsync` if the home screen ever feels slow
 - [ ] Edit a personal word's translation after it was added (`web/src/screens/PersonalDictionaryScreen.tsx`, `PersonalDictionaryService`)
+- [ ] `ImportScreen.test.tsx`'s two worker-parse previews ("parses the chosen book into a chapter preview", "parses a chosen epub into a chapter preview") fail about one full-suite run in three, and pass every time on their own — a timing race between the module worker and the assertion, not a product bug (`web/src/screens/ImportScreen.test.tsx`, `web/src/worker/parseBook.worker.ts`)
 - [ ] Book import inside the Telegram Mini App: the lemmatizing worker never starts there (the screen sat at "Starting the word extractor…" with no progress and no error event), while the same build works in a browser. `ImportScreen` now shows a "use a browser" notice instead of the file picker when `telegramInitData()` is set; find out why the module worker does not run in Telegram's webview and bring the import back there (`web/src/screens/ImportScreen.tsx`, `web/src/worker/parseBook.worker.ts`)
-- [x] Reader: open `.fb2.zip` directly (`web/src/books/format.ts`, `readBookSource`)
 - [ ] Reader word panel: undo a word that already has Leitner progress — the marked button is disabled for it (`canReset` from `ReaderWordService.GetAsync`, refused by `ResetAsync`), because dropping the shelf would have to decide what happens to the `WordProgress` row; the word can still be moved to another shelf, just not back to "new"
-- [ ] Irregular verbs: two tabs answering the same verb for the first time in the same instant can still collide on `VerbKnowledges`' unique `(UserId, Verb)` index and surface as a 500 — the answer is logged either way and a retry lands correctly (the standing is replayed from `VerbAnswer`, so nothing stays wrong), it is only the one request that fails. A catch-and-retry belongs in `VerbKnowledgeService.ApplyAsync`, but the in-memory test provider does not enforce unique indexes, so it needs a Postgres-backed test to be worth writing
 - [ ] Admin review of machine translations — `WordPair.TranslationOrigin = Machine` rows written by `TranslationService`
 - [ ] Reader: sentence positions and cached translation keys depend on `Intl.Segmenter`'s exact output, which can differ across browser engines/ICU versions — resume is best-effort at the sentence level; chapter/paragraph indices are stable and `clampPosition` (`web/src/reader/readerBook.ts`) prevents a crash either way
-- [x] Reader: a fb2 with no `<section>` structure, or an epub whose whole text is one XHTML document, renders as a single chapter with the whole book's sentences in the DOM at once — a chapter past `MAX_CHAPTER_SENTENCES` is now cut into parts (`splitLongChapters`, `web/src/reader/readerBook.ts`), and a chapter is read through a window of chunks rather than whole (`web/src/reader/chapterWindow.ts`)
 - [ ] Reader: only the chunks near the screen are in the DOM (`web/src/reader/chapterWindow.ts`), so the browser's find-in-page, and a screen reader reading straight through without scrolling, see one window of the chapter instead of all of it — there is no "mount the whole chapter" escape hatch yet
 - [ ] epub: split one XHTML document into chapters by the TOC's `#id` fragments — chapters follow the spine, so a single-document epub is one chapter, now cut into parts by length alone (`splitLongChapters`) rather than where the book says its chapters are (`web/src/books/epub.ts`, `tocTitles` already resolves fragments away)
 - [ ] epub: images, tables and footnote panes are not shown — a footnote's text is dropped with its `epub:type` element, and `<table>` contributes only what its cells hold as paragraphs (`web/src/books/epub.ts`)
-- [x] Reader: `ReaderMenu` (`web/src/reader/ReaderMenu.tsx`) and the library's row action menu (`web/src/reader/ReaderLibraryScreen.tsx`, `RowMenu`) have no Escape-key or outside-click handler to close them
-- [ ] Automatic quality scoring of an import (share of words present in an English lexicon, language detection) so a good dictionary publishes without waiting on an admin — `BookImportService`; needs a server-side lexicon
 - [ ] User-facing reports on a published dictionary ("this is spam") feeding the same admin queue — `DictionaryPublicationService`
 - [ ] A one-off audit of shared `WordPair` rows that predate the import word rule — nothing cleans up what is already in the table
 - [ ] Moderation queue: flag when approving a dictionary would make it the lowest-id match for a `FileHash` an existing `ReaderBook` already points elsewhere — nothing surfaces that collision to the admin today (`DictionaryPublicationService`, `ReaderBookService`)
-- [ ] International Phonetic Alphabet: a screen with the whole alphabet — every symbol, how it is read, an example word and its recording — so a sound can be looked up rather than only drilled. Belongs beside the pronunciation trainer (`web/src/pronunciation/`), whose sound families and committed recordings already cover part of it (`LanguageLab.Domain/Pronunciation/PronunciationCatalog`, `web/public/pronunciation-audio/`); it needs no `SpeechRecognition`, so unlike the trainer it can show in every browser
 - [ ] Grammar mode (MVP, about five minutes a day): a fifth top-level mode (`AppMode`, `web/src/layout/mode.ts`) with one or two of the simplest topics, each with an interactive drill. A domain of its own like the irregular verbs — topics and exercises in code, no `WordPair` and no dictionary
 - [ ] Phrasal verbs and idioms: a sixth top-level mode (`AppMode`, `web/src/layout/mode.ts`) for multi-word vocabulary — phrasal verbs (`give up`, `knuckle down`, `copy in`, `get along with`) and idioms (`a piece of cake`, `word of mouth`, `be up in the air`, `nip it in the bud`) as two groups of one catalog, since a learner's list of them is always mixed. A domain of its own like the irregular verbs — the phrases and their exercises in code, no dictionary; a book import cannot reach them either way (`ImportWordText` takes a single lowercase word), though `WordText` already allows spaces, so the personal dictionary can hold a phrase today
 - [ ] Multilingual: the learner picks a main language when the account is created (Telegram's `language_code` from the launch parameters is the default to offer), stored on `TelegramUser`, and every translator works English → that language instead of English → Ukrainian. The fixed pair sits in `MyMemoryTranslator` and `MyMemorySentenceTranslator` (`langpair=en|uk`), `DeepLTranslator`'s `target_lang`, and the `ITranslator`/`ISentenceTranslator` contracts. The harder half is storage: a shared `WordPair` row is unique on `(Word, OwnerId)` and holds one `Translation`, with no room for a second language — the shared vocabulary needs a language of its own (a row per language, or a translations table beside it), and the same goes for what the per-language cache of `TranslationService.LookupAsync` may reuse. `IrregularVerbCatalog`'s translations are Ukrainian in code too
+- [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService.LookupAsync` (`LanguageLab.Application/Translation`) now caches a provider's answer into the shared vocabulary on every lookup, but nothing calls it from `BookImportService` or `WordSortingService.MarkAsync` yet (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation still don't enter exercises)
 
 ## Development
 
