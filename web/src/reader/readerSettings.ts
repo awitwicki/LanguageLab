@@ -6,11 +6,16 @@ export interface ReaderSettings {
   dim: number
   /** An index into TEXT_SIZES. */
   textSize: number
+  /**
+   * Every sentence of the chapter in the DOM instead of a window around the reading place, so
+   * find-in-page and a screen reader reach the whole of it. Costs the whole chapter's markup.
+   */
+  wholeChapter: boolean
 }
 
 export const TEXT_SIZES = [16, 18, 20, 23, 26]
 export const MAX_DIM = 0.7
-export const DEFAULT_SETTINGS: ReaderSettings = { theme: 'system', dim: 0, textSize: 2 }
+export const DEFAULT_SETTINGS: ReaderSettings = { theme: 'system', dim: 0, textSize: 2, wholeChapter: false }
 
 const KEY = 'reader.settings'
 const THEMES: ReaderTheme[] = ['light', 'dark', 'system']
@@ -44,6 +49,8 @@ function sanitize(value: Partial<ReaderSettings>): ReaderSettings {
   const textSize = Number.isInteger(value.textSize)
     ? Math.min(Math.max(value.textSize as number, 0), TEXT_SIZES.length - 1)
     : DEFAULT_SETTINGS.textSize
+  // Absent in settings stored before the whole chapter could be asked for: off, as it was then.
+  const wholeChapter = typeof value.wholeChapter === 'boolean' ? value.wholeChapter : DEFAULT_SETTINGS.wholeChapter
 
-  return { theme, dim, textSize }
+  return { theme, dim, textSize, wholeChapter }
 }

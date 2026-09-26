@@ -62,7 +62,12 @@ button moves it there, and tapping the marked one undoes it. The endpoints are l
   `ReaderScreen` keeps the chunks around the place being read in the DOM and leaves the rest as
   `.reader-gap` divs of estimated height, each one an IntersectionObserver target that mounts its
   own chunk before it reaches the screen, holding the sentence being read still when a chunk above
-  it mounts. Where there is no IntersectionObserver, the whole chapter renders as it did before.
+  it mounts. Two things put the whole chapter in the DOM instead: the menu's **Whole chapter**
+  setting (`readerSettings.wholeChapter`), the escape hatch for find-in-page and screen readers,
+  which reach only what is in the page; and a browser with no IntersectionObserver, which has
+  nothing to grow a window with. Turning the setting either way rebuilds the window around the
+  sentence being read, not around the last jump, so the reader's own surroundings are never
+  unmounted under them.
 - **`useReaderPosition.ts`, `useSentenceTranslations.ts`** — position sync with the server.
 - **`useAutoImport.ts`** — opening a book with no dictionary builds one in the background.
 

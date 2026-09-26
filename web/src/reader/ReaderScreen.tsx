@@ -99,8 +99,14 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   const [headerHeight, setHeaderHeight] = useState(DEFAULT_HEADER_HEIGHT)
   /** Where the reader jumps to and opens around: the book's opening place, then every jump. */
   const [target, setTarget] = useState<{ id: number; position: ReaderPosition } | null>(null)
-  /** The chunks of the chapter that are in the DOM, and the target they were opened around. */
-  const [chunkWindow, setChunkWindow] = useState<{ id: number; mounted: ReadonlySet<number> } | null>(null)
+  /**
+   * The chunks of the chapter that are in the DOM, the target they were opened around, and whether
+   * they are the whole chapter — the setting is part of the identity so that turning it either way
+   * rebuilds the window instead of leaving the one from before.
+   */
+  const [chunkWindow, setChunkWindow] = useState<{ id: number; whole: boolean; mounted: ReadonlySet<number> } | null>(
+    null,
+  )
   const scrolledTo = useRef(-1)
   const anchorShift = useRef<{ key: string; top: number } | null>(null)
   const positionRef = useRef<ReaderPosition | null>(null)
@@ -247,26 +253,34 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   // A chapter is not put in the DOM whole: the chunks around the place being read are, and the
   // rest stand as gaps until one comes near the screen (the observer below). A long chapter — a
   // book with no structure of its own is one — would otherwise cost a phone every sentence of it
-  // at once. Without IntersectionObserver there is nothing to grow the window, so it is the
-  // whole chapter, as it was before.
+  // at once. Two things ask for the whole of it anyway: the reader's own setting, for find-in-page
+  // and screen readers, which reach only what is in the page; and a browser without
+  // IntersectionObserver, where there is nothing to grow a window with.
+  const whole = settings.wholeChapter || typeof IntersectionObserver === 'undefined'
+
+  // The window a chapter opens with, and the one it returns to when the whole chapter is turned off
+  // again: the chunks around the place being read. That is the jump target in the commit a jump
+  // lands in — the two are set together — and the sentence at the top of the screen ever after, so
+  // turning the setting off cannot unmount what the reader is looking at.
+  const anchor = position ?? target?.position ?? null
   const startChunks = useMemo<ReadonlySet<number>>(
     () =>
-      chapter && target
-        ? new Set(
-            typeof IntersectionObserver === 'undefined'
-              ? allChunks(chunks.length)
-              : chunksAround(chunkOfPosition(chapter, target.position), chunks.length),
-          )
+      chapter && anchor
+        ? new Set(whole ? allChunks(chunks.length) : chunksAround(chunkOfPosition(chapter, anchor), chunks.length))
         : NO_CHUNKS,
-    [chapter, chunks.length, target],
+    [chapter, chunks.length, anchor, whole],
   )
 
-  const mountedChunks = chunkWindow && target && chunkWindow.id === target.id ? chunkWindow.mounted : startChunks
+  const mountedChunks =
+    chunkWindow && target && chunkWindow.id === target.id && chunkWindow.whole === whole
+      ? chunkWindow.mounted
+      : startChunks
 
   // A jump has to be mounted around in the same commit that shows it, so the window follows the
-  // target here in the render rather than in an effect.
-  if (chapter && target && chunkWindow?.id !== target.id) {
-    setChunkWindow({ id: target.id, mounted: startChunks })
+  // target here in the render rather than in an effect; a change of the setting rebuilds it the
+  // same way.
+  if (chapter && target && (chunkWindow?.id !== target.id || chunkWindow.whole !== whole)) {
+    setChunkWindow({ id: target.id, whole, mounted: startChunks })
   }
 
   useEffect(() => {
@@ -413,6 +427,18 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   }
 
   const changeSettings = (next: ReaderSettings) => {
+    // Mounting the rest of the chapter — or letting it go again — changes how much page stands above
+    // the reader. Measure the sentence being read while it is still where it was, and the layout
+    // effect above puts it back, as it does when a gap mounts.
+    if (next.wholeChapter !== settings.wholeChapter) {
+      const reading = positionRef.current
+      const element = reading ? bodyRef.current?.querySelector(`[data-pos="${positionKey(reading)}"]`) : null
+
+      if (reading && element) {
+        anchorShift.current = { key: positionKey(reading), top: element.getBoundingClientRect().top }
+      }
+    }
+
     setSettings(next)
     saveSettings(next)
   }

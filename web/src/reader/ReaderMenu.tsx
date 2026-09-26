@@ -123,6 +123,32 @@ export function ReaderMenu({
                 A+
               </button>
             </div>
+
+            <div className="reader-display-setting">
+              <div className="reader-display-row" role="group" aria-label="Whole chapter">
+                <span>Whole chapter</span>
+                <button
+                  type="button"
+                  className="reader-choice"
+                  aria-pressed={!settings.wholeChapter}
+                  onClick={() => onSettings({ ...settings, wholeChapter: false })}
+                >
+                  Off
+                </button>
+                <button
+                  type="button"
+                  className="reader-choice"
+                  aria-pressed={settings.wholeChapter}
+                  onClick={() => onSettings({ ...settings, wholeChapter: true })}
+                >
+                  On
+                </button>
+              </div>
+              <p className="reader-display-hint">
+                Puts every sentence in the page, so find-in-page and screen readers reach the whole chapter. Slower to
+                open.
+              </p>
+            </div>
           </div>
         )}
       </section>

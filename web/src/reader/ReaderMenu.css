@@ -90,6 +90,18 @@
   gap: 8px;
 }
 
+/* A row and the line explaining it, closer together than the gap between settings. */
+.reader-display-setting {
+  display: grid;
+  gap: 6px;
+}
+
+.reader-display-hint {
+  margin: 0;
+  color: var(--reader-muted);
+  font: var(--fs-footnote) / var(--lh-footnote) var(--reader-font);
+}
+
 .reader-dim input {
   flex: 1;
 }
