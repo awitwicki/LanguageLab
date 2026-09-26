@@ -196,14 +196,35 @@ describe('ReaderLibraryScreen', () => {
     expect(picker).toHaveBeenCalledTimes(1)
   })
 
+  /// A browser is free to refuse a dialog the page opened by itself, once the tap that led
+  /// here has gone stale — and then nothing happens at all. The notice names the book that
+  /// was asked for, so the silence has an explanation and a way out.
+  it('names the book it is waiting for the file of', async () => {
+    const { container } = await openLibrary({ continueHash: ELSEWHERE })
+    const notice = container.querySelector('.library-continue')!
+
+    expect(notice.textContent).toContain('"Dune"')
+    expect(notice.textContent).toContain('Open the file to continue')
+  })
+
+  it('drops that notice once a file has been chosen', async () => {
+    const { container } = await openLibrary({ continueHash: ELSEWHERE })
+    expect(container.querySelector('.library-continue')).not.toBeNull()
+
+    await choose(container, READER_BOOK_XML)
+
+    expect(container.querySelector('.library-continue')).toBeNull()
+  })
+
   /// Only a book read elsewhere needs its file handed over; one that is already here is
   /// opened by the home screen itself.
   it('asks for nothing when the book it was sent is already on this device', async () => {
     const picker = vi.spyOn(HTMLInputElement.prototype, 'click')
 
-    await openLibrary({ continueHash: LOCAL })
+    const { container } = await openLibrary({ continueHash: LOCAL })
 
     expect(picker).not.toHaveBeenCalled()
+    expect(container.querySelector('.library-continue')).toBeNull()
   })
 
   it('asks for nothing when it was sent no book to continue', async () => {

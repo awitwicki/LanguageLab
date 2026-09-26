@@ -52,6 +52,7 @@ export function ReaderLibraryScreen({ store, persistent, onOpen, continueHash }:
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [continuing, setContinuing] = useState<ReaderBookDto | null>(null)
+  const [handedOver, setHandedOver] = useState(false)
   const [mismatch, setMismatch] = useState<{ file: File; expected: ReaderBookDto } | null>(null)
   const [menuFor, setMenuFor] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
@@ -83,24 +84,26 @@ export function ReaderLibraryScreen({ store, persistent, onOpen, continueHash }:
     input.current?.click()
   }
 
-  // Arrived from the home screen's "Open the file" row, which cannot open a picker of its own:
-  // do it here, for that book, as soon as both lists agree the file is in the library but not
-  // on this device. Once only — `asked` outlives the reload that choosing a file sets off, and
-  // a second dialog for a request the user has already answered, or cancelled, would be a trap.
+  // The book the home screen sent here for its file: in the library, but not on this device,
+  // and not handed over yet. null until both lists have arrived, and for a book this device
+  // already holds — the home screen opens that one itself.
+  const wanted =
+    continueHash === null || local === null || handedOver || local.some((meta) => meta.hash === continueHash)
+      ? null
+      : (server.find((candidate) => candidate.fileHash === continueHash) ?? null)
+
+  // The "Open the file" row cannot open a picker of its own, so do it here, for that book, as
+  // soon as `wanted` names it. Once only — `asked` outlives the reload that choosing a file
+  // sets off, and a second dialog for a request the user has already answered, or cancelled,
+  // would be a trap.
   useEffect(() => {
-    if (asked.current || continueHash === null || local === null) {
-      return
-    }
-
-    const book = server.find((candidate) => candidate.fileHash === continueHash)
-
-    if (!book || local.some((meta) => meta.hash === continueHash)) {
+    if (asked.current || !wanted) {
       return
     }
 
     asked.current = true
-    pick(book)
-  }, [continueHash, local, server])
+    pick(wanted)
+  }, [wanted])
 
   const open = async (file: File, expected: ReaderBookDto | null) => {
     setBusy(true)
@@ -119,7 +122,13 @@ export function ReaderLibraryScreen({ store, persistent, onOpen, continueHash }:
     const file = event.target.files?.[0]
     event.target.value = ''
 
-    if (file) void open(file, continuing)
+    if (!file) {
+      return
+    }
+
+    // The request has been answered — whatever comes of the file, the notice has said its bit.
+    setHandedOver(true)
+    void open(file, continuing)
   }
 
   const removeFromDevice = async (hash: string) => {
@@ -160,6 +169,19 @@ export function ReaderLibraryScreen({ store, persistent, onOpen, continueHash }:
       {!persistent && (
         <p className="library-notice">
           This browser can't keep books on this device — a book stays open only until you close the tab.
+        </p>
+      )}
+
+      {/*
+        The dialog `wanted` opens may never appear: a browser is free to refuse one the page
+        opened by itself, once the tap that led here has gone stale. So the book is named here
+        too — unread behind the dialog when it did open, and the only sign of what was asked
+        for when it did not.
+      */}
+      {wanted && (
+        <p className="library-continue" role="status">
+          Choose the file of "{wanted.title}" to go on reading it. If no file dialog opened, use "Open the file to
+          continue" in its row below.
         </p>
       )}
 
