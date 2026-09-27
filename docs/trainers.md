@@ -9,40 +9,67 @@ The 68 verbs and their examples live in code
 (`LanguageLab.Domain/IrregularVerbs/IrregularVerbCatalog`), grouped into the four stages the
 learner sees — one per verb type, all open from the start, with no families and nothing locked.
 
-### The card and its signal
+### The session
 
-A card shows one of the three forms and blurs the answer. The learner answers "I know" or "I don't
-know", or taps the blurred answer itself — which only uncovers it and judges nothing, leaving the
-verdict still to give while the clock runs.
+The browser is handed a whole session rather than one card at a time: the words in play, their
+standing, their three example sentences and a per-verb order of the three forms. Both rounds then
+run in the client (`web/src/verbs/session.ts`), so no click waits on the network, and answers leave
+through a background outbox (`web/src/verbs/outbox.ts`).
+
+Ordinary training opens on a start screen — the words coming up, a stepper for how many of them
+(1–5, default 5) and one for how many introduction rounds (1–5, default 3), remembered per device in
+`localStorage`. It opens every time, because an introduction already done and a batch not yet
+learned is exactly when it is wanted again.
+
+The **introduction round** walks the chosen words round-robin, N·R cards, each pass taking the next
+form of the word's own order. It has one Next button, which moves on whether or not the answer is
+uncovered, and it is not recorded at all — there is no verdict in it to grade.
+
+The **drill round** then takes those same words to four "I know" in a row each. "I know" goes
+straight to the next card; "I don't know" uncovers the three forms and the example sentence and waits
+for Next, which is the moment the word is learned. Tapping the blur uncovers it and judges nothing,
+leaving the verdict still to give while the clock runs.
 
 That verdict plus how long the click took is the whole signal. `VerbScoring` gives quality 1.0 for a
 click within 1.5 s, down to 0.45 at 6 s, and 0 for a miss, folded into `Mastery` as a moving average
 with α = 0.4.
 
 `Streak` — consecutive "I know" answers, four of them to pass a verb — drives nothing but batch
-progression.
+progression. Inside a session the browser counts it locally, seeded from the server's row; the
+server's own count is whatever `VerbScoring.Replay` folds out of the answer log.
 
 ### Batches and free training
 
-Ordinary training is the first five not-passed verbs of the stage (`BatchWindow`), so a new batch
-opens only once the previous one is done.
+Ordinary training is the first five not-passed verbs of the stage (`BatchWindow.Of`), handed over
+least-known first (`BatchWindow.Ordered`) so a session shortened to three words keeps the three the
+learner knows least. A new window opens only once the previous one's words have passed, and the
+client flushes its outbox before asking for it — the window is computed from what the server has
+recorded.
 
-Free training draws at random with 65% of cards from the weak words (`FreePicker`), over one stage,
-a stage and every earlier one, or all 68.
+Free training draws at random with 65% of cards from the weak words (`FreePicker`), over one stage, a
+stage and every earlier one, or all 68. It is handed a 20-card queue (`FreePicker.Draw`) and the
+client fetches the next chunk with five cards left, so the queue never runs dry. A chunk is drawn on
+the standing at request time and does not see the answers given inside itself.
 
 ### Storage
 
-A verb's standing is one `VerbKnowledge` row, and every click is appended to `VerbAnswer`. The row
-is a cache of that log, replayed from it on every answer (`VerbScoring.Replay`) rather than
+A verb's standing is one `VerbKnowledge` row, and every judged card is appended to `VerbAnswer`. The
+row is a cache of that log, replayed from it on every answer (`VerbScoring.Replay`) rather than
 incremented, so two devices answering at once cannot leave the counters behind the log.
 
-There is no session and no stored queue, so nothing needs resuming.
+There is no session and no stored queue, so nothing needs resuming — and nothing survives a reload.
 
 ### API and presentation
 
-`/api/irregular-verbs` — `GET /progress`,
-`GET /next?mode=batch|free&group=&scope=stage|cumulative|all&exclude=`, `POST /answers`. The query
-string is parsed by hand (`ParseDrill`), because minimal API binds a query enum case-sensitively.
+`/api/irregular-verbs` — `GET /progress`, `GET /session?mode=batch|free&group=&scope=stage|cumulative|all`,
+`POST /answers`. The query string is parsed by hand (`ParseSession`), because minimal API binds a
+query enum case-sensitively. `GET /session` answers `204` when ordinary training has passed every
+verb of its stage.
+
+`POST /answers` takes an array of up to 100 answers and applies them in one transaction: the browser
+retries a failed request, and with no answer identity to deduplicate against, a half-applied chunk
+would count its first answers twice. One invalid entry — an unknown verb included — refuses the whole
+body.
 
 The table's colour comes from `Mastery` as a band (`mastery.ts`, `--mastery-*` tokens), with the
 bar's length carrying the exact level.

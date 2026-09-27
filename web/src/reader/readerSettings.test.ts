@@ -8,9 +8,9 @@ afterEach(() => {
 
 describe('reader settings', () => {
   it('round-trip through localStorage', () => {
-    saveSettings({ theme: 'dark', dim: 0.3, textSize: 4 })
+    saveSettings({ theme: 'dark', dim: 0.3, textSize: 4, wholeChapter: true })
 
-    expect(loadSettings()).toEqual({ theme: 'dark', dim: 0.3, textSize: 4 })
+    expect(loadSettings()).toEqual({ theme: 'dark', dim: 0.3, textSize: 4, wholeChapter: true })
   })
 
   it('fall back to the defaults when storage throws', () => {
@@ -22,9 +22,16 @@ describe('reader settings', () => {
   })
 
   it('repair values out of range or of the wrong kind', () => {
-    localStorage.setItem('reader.settings', JSON.stringify({ theme: 'sepia', dim: 5, textSize: -3 }))
+    localStorage.setItem('reader.settings', JSON.stringify({ theme: 'sepia', dim: 5, textSize: -3, wholeChapter: 'yes' }))
 
-    expect(loadSettings()).toEqual({ theme: 'system', dim: 0.7, textSize: 0 })
+    expect(loadSettings()).toEqual({ theme: 'system', dim: 0.7, textSize: 0, wholeChapter: false })
+  })
+
+  it('leave the whole chapter off for settings stored before it existed', () => {
+    localStorage.setItem('reader.settings', JSON.stringify({ theme: 'dark', dim: 0, textSize: 2 }))
+
+    expect(loadSettings().wholeChapter).toBe(false)
+    expect(DEFAULT_SETTINGS.wholeChapter).toBe(false)
   })
 
   it('resolve System to the device preference', () => {

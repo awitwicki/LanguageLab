@@ -40,7 +40,7 @@ The services on top of the domain:
   `TranslationService` trying the shared vocabulary first and the provider after;
   `ISentenceTranslator` → `FallbackSentenceTranslator`, which uses DeepL when a key is set and
   `MyMemorySentenceTranslator` otherwise.
-- **The irregular-verbs trainer** — `VerbKnowledgeService`, `VerbDrillService`.
+- **The irregular-verbs trainer** — `VerbKnowledgeService`, `VerbSessionService`.
 - **The reader** — `ReaderBookService`, `ReaderWordStatusService`, `ReaderWordService`. What each
   one owns is in [reader.md](reader.md).
 
@@ -87,8 +87,8 @@ A Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictio
 ### Dictionaries and sorting
 
 - `/api/dictionaries`, `/api/sorting`.
-- `GET /api/dictionaries/personal`, `POST|DELETE /api/dictionaries/personal/words[/{id}]` — the
-  personal dictionary.
+- `GET /api/dictionaries/personal`, `POST|PUT|DELETE /api/dictionaries/personal/words[/{id}]` — the
+  personal dictionary; the `PUT` corrects a word's translation and nothing else.
 - `GET /api/translate?word=` — a translation suggestion.
 - `POST|DELETE /api/dictionaries/{id}/publication` — the owner offers a dictionary for publication
   or withdraws the offer.
@@ -96,6 +96,9 @@ A Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictio
   `pending`); `POST /api/admin/dictionaries/{id}/approve|reject`.
 - `DELETE /api/admin/users/{id}/dictionaries` — bulk-delete a user's dictionaries, for use
   alongside a ban.
+- `GET /api/admin/shelf-words` — the shelf admin panel: the calling admin's own words (`status`,
+  `search`, `page`, `pageSize` query parameters; `status` absent lists every shelf). Re-shelving a
+  row reuses `POST /api/sorting/mark` — there is no separate write endpoint.
 
 ### Training
 

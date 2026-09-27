@@ -7,6 +7,7 @@ import type { WorkerResponse } from '../worker/parseBook.worker'
 import { MemoryBookStore } from './bookStore'
 import { CHUNK_SENTENCES } from './chapterWindow'
 import { ReaderScreen } from './ReaderScreen'
+import { DEFAULT_SETTINGS } from './readerSettings'
 import { resetAutoImportsForTests } from './useAutoImport'
 
 const apiMock = vi.hoisted(() => ({
@@ -476,6 +477,37 @@ describe('ReaderScreen', () => {
 
     expect(container.querySelectorAll('.reader-sentence')).toHaveLength(LONG_PARAGRAPHS)
     expect(container.querySelector('.reader-gap')).toBeNull()
+  })
+
+  it('renders the whole chapter when the setting asks for it, gaps and all', async () => {
+    localStorage.setItem('reader.settings', JSON.stringify({ ...DEFAULT_SETTINGS, wholeChapter: true }))
+    const { container } = await openLongReader()
+
+    // Every sentence is in the page — what find-in-page and a screen reader need — and no gap
+    // stands in for anything, so nothing is left to mount later.
+    expect(container.querySelectorAll('.reader-sentence')).toHaveLength(LONG_PARAGRAPHS)
+    expect(container.querySelector('.reader-gap')).toBeNull()
+    expect(sentenceTexts(container)).toContain(`Paragraph ${LONG_PARAGRAPHS - 1} climbed the stairs.`)
+  })
+
+  it('goes back to a window around the reading place when the whole chapter is turned off', async () => {
+    localStorage.setItem('reader.settings', JSON.stringify({ ...DEFAULT_SETTINGS, wholeChapter: true }))
+    const { container } = await openLongReader()
+
+    // Read on, far from where the chapter was opened, then turn the setting off.
+    const paragraphIndex = CHUNK_SENTENCES * 3
+    await act(async () => FakeObserver.show(`0.${paragraphIndex}.0`))
+
+    await click(container.querySelector('[aria-label="Contents and display"]')!)
+    await click([...container.querySelectorAll('button')].find((b) => b.textContent === 'Display')!)
+    const group = container.querySelector('[aria-label="Whole chapter"]')!
+    await click([...group.querySelectorAll('button')].find((b) => b.textContent === 'Off')!)
+
+    // The window closes around the sentence being read, not around the chapter's opening position:
+    // unmounting the reader's own surroundings would throw the page somewhere else.
+    expect(sentenceTexts(container)).toContain(`Paragraph ${paragraphIndex} climbed the stairs.`)
+    expect(container.querySelectorAll('.reader-sentence')).toHaveLength(CHUNK_SENTENCES * 3)
+    expect(sentenceTexts(container)).not.toContain('Paragraph 0 climbed the stairs.')
   })
 
   it('tries again next time when the reader was left mid-import', async () => {

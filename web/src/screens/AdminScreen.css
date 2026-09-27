@@ -57,6 +57,12 @@
   cursor: not-allowed;
 }
 
+.shelf-field select,
+.shelf-filter-field select {
+  height: 32px;
+  padding: 0 8px;
+}
+
 .action-buttons {
   display: flex;
   gap: 4px;

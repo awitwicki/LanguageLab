@@ -80,3 +80,12 @@
   justify-content: center;
   gap: 12px;
 }
+
+.drill-intro-step {
+  margin: 0;
+}
+
+.drill-stuck {
+  margin: 0 0 12px;
+  text-align: center;
+}

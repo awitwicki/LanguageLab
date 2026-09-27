@@ -80,6 +80,26 @@ public static class AdminEndpoints
             await publication.SetStatusAsync(id, PublicationStatus.Rejected) == PublicationActionResult.Ok
                 ? Results.NoContent()
                 : Results.NotFound());
+
+        // The shelf admin panel: the calling admin's own words, never another user's — there is
+        // no user picker here. `status` absent means the "All" list, not a default shelf, which
+        // is why this cannot reuse ParseStatus above.
+        group.MapGet("/shelf-words", async (
+                string? status, string? search, int? page, int? pageSize,
+                WordSortingService sorting, ICurrentUserContext currentUser) =>
+        {
+            if (!TryParseShelfStatus(status, out var parsed))
+            {
+                return Results.BadRequest();
+            }
+
+            return Results.Ok(await sorting.ListShelfWordsAsync(
+                currentUser.Require().Id,
+                parsed,
+                search,
+                page ?? 1,
+                pageSize ?? WordSortingService.DefaultShelfPageSize));
+        });
     }
 
     /// <summary>
@@ -99,6 +119,31 @@ public static class AdminEndpoints
         return Enum.TryParse<PublicationStatus>(status, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed)
             ? parsed
             : null;
+    }
+
+    /// <summary>
+    /// Parses the shelf admin panel's `status` query parameter case-insensitively. Unlike
+    /// <see cref="ParseStatus"/>, absent here means "no filter" — the "All" list — rather than a
+    /// default shelf, so <paramref name="status"/> being null is success with a null shelf, not
+    /// the failure case. Returns false when <paramref name="status"/> is present but not a real
+    /// shelf name.
+    /// </summary>
+    public static bool TryParseShelfStatus(string? status, out SortStatus? parsed)
+    {
+        if (string.IsNullOrEmpty(status))
+        {
+            parsed = null;
+            return true;
+        }
+
+        if (Enum.TryParse<SortStatus>(status, ignoreCase: true, out var value) && Enum.IsDefined(value))
+        {
+            parsed = value;
+            return true;
+        }
+
+        parsed = null;
+        return false;
     }
 
     /// <summary>

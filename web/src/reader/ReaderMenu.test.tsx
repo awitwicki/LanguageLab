@@ -4,11 +4,11 @@ import { click, render } from '../test/render'
 import { READER_BOOK_XML } from '../test/readerFixtures'
 import { parseReaderBook } from './readerBook'
 import { ReaderMenu } from './ReaderMenu'
-import { DEFAULT_SETTINGS } from './readerSettings'
+import { DEFAULT_SETTINGS, type ReaderSettings } from './readerSettings'
 
 const book = parseReaderBook(READER_BOOK_XML, 'x')
 
-async function open(dictionaryId: number | null = null) {
+async function open(dictionaryId: number | null = null, settings: ReaderSettings = DEFAULT_SETTINGS) {
   const props = {
     onJump: vi.fn(),
     onSettings: vi.fn(),
@@ -19,7 +19,7 @@ async function open(dictionaryId: number | null = null) {
     <ReaderMenu
       chapters={book.chapters}
       currentChapter={1}
-      settings={DEFAULT_SETTINGS}
+      settings={settings}
       dictionaryId={dictionaryId}
       {...props}
     />,
@@ -57,6 +57,25 @@ describe('ReaderMenu', () => {
 
     await click(container.querySelector('[aria-label="Larger text"]')!)
     expect(onSettings).toHaveBeenLastCalledWith({ ...DEFAULT_SETTINGS, textSize: 3 })
+  })
+
+  it('turns the whole chapter on and off, showing which it is', async () => {
+    const { container, onSettings } = await open()
+
+    await click(button(container, 'Display'))
+    const group = container.querySelector('[aria-label="Whole chapter"]')!
+    expect(button(group as HTMLElement, 'Off').getAttribute('aria-pressed')).toBe('true')
+
+    await click(button(group as HTMLElement, 'On'))
+    expect(onSettings).toHaveBeenLastCalledWith({ ...DEFAULT_SETTINGS, wholeChapter: true })
+
+    const on = await open(null, { ...DEFAULT_SETTINGS, wholeChapter: true })
+    await click(button(on.container, 'Display'))
+    const onGroup = on.container.querySelector('[aria-label="Whole chapter"]') as HTMLElement
+    expect(button(onGroup, 'On').getAttribute('aria-pressed')).toBe('true')
+
+    await click(button(onGroup, 'Off'))
+    expect(on.onSettings).toHaveBeenLastCalledWith({ ...DEFAULT_SETTINGS, wholeChapter: false })
   })
 
   it("links the book's dictionary only when there is one", async () => {

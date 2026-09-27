@@ -8,6 +8,7 @@ const apiMock = vi.hoisted(() => ({
   getPersonalDictionary: vi.fn(),
   translate: vi.fn(),
   addPersonalWord: vi.fn(),
+  updatePersonalWordTranslation: vi.fn(),
   removePersonalWord: vi.fn(),
   startReview: vi.fn(),
   importPersonalWords: vi.fn(),
@@ -62,10 +63,31 @@ function pressEnter(input: HTMLInputElement) {
   })
 }
 
+function pressEscape(input: HTMLInputElement) {
+  return act(async () => {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+  })
+}
+
 function submit(form: HTMLFormElement) {
   return act(async () => {
     form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
   })
+}
+
+/** The word list's inline translation editor — null while no row is open. */
+function editInput(container: HTMLElement) {
+  return container.querySelector<HTMLInputElement>('.personal-word input[name="edit-translation"]')
+}
+
+function rowButton(container: HTMLElement, label: string) {
+  return [...container.querySelectorAll<HTMLButtonElement>('.personal-word button')].find(
+    (b) => b.textContent === label || b.getAttribute('aria-label') === label,
+  )
+}
+
+function rowTranslations(container: HTMLElement) {
+  return [...container.querySelectorAll('.personal-word .translation')].map((t) => t.textContent)
 }
 
 function screen(overrides: Partial<Parameters<typeof PersonalDictionaryScreen>[0]> = {}) {
@@ -327,5 +349,89 @@ describe('PersonalDictionaryScreen', () => {
 
     expect(container.querySelector('.personal-word .state')?.textContent).toBe('Learned')
     expect(container.querySelector('.personal-learning')).not.toBeNull()
+  })
+
+  it('Edit opens the row with the current translation and saves the new one', async () => {
+    apiMock.getPersonalDictionary.mockResolvedValue(withWords)
+    apiMock.updatePersonalWordTranslation.mockResolvedValue({ ...run, translation: 'бігти, керувати' })
+    const onChanged = vi.fn()
+    const { container } = await render(screen({ onChanged }))
+    await flush()
+
+    await click(rowButton(container, 'Edit run')!)
+    expect(editInput(container)!.value).toBe('бігти')
+
+    await type(editInput(container)!, 'бігти, керувати')
+    await click(rowButton(container, 'Save')!)
+    await flush()
+
+    expect(apiMock.updatePersonalWordTranslation).toHaveBeenCalledWith(2, 'бігти, керувати')
+    expect(editInput(container)).toBeNull()
+    expect(rowTranslations(container)).toEqual(['бігти, керувати', 'яблуко'])
+    // Neither the word count nor the progress moved, so the sidebar has nothing to refetch
+    // and the list needs no second round trip.
+    expect(onChanged).not.toHaveBeenCalled()
+    expect(apiMock.getPersonalDictionary).toHaveBeenCalledTimes(1)
+  })
+
+  it('Cancel leaves the old translation alone', async () => {
+    apiMock.getPersonalDictionary.mockResolvedValue(withWords)
+    const { container } = await render(screen())
+    await flush()
+
+    await click(rowButton(container, 'Edit run')!)
+    await type(editInput(container)!, 'щось інше')
+    await click(rowButton(container, 'Cancel')!)
+
+    expect(editInput(container)).toBeNull()
+    expect(apiMock.updatePersonalWordTranslation).not.toHaveBeenCalled()
+    expect(rowTranslations(container)).toEqual(['бігти', 'яблуко'])
+  })
+
+  it('Escape closes the editor and Enter saves it', async () => {
+    apiMock.getPersonalDictionary.mockResolvedValue(withWords)
+    apiMock.updatePersonalWordTranslation.mockResolvedValue({ ...run, translation: 'мчати' })
+    const { container } = await render(screen())
+    await flush()
+
+    await click(rowButton(container, 'Edit run')!)
+    await pressEscape(editInput(container)!)
+    expect(editInput(container)).toBeNull()
+
+    await click(rowButton(container, 'Edit run')!)
+    await type(editInput(container)!, 'мчати')
+    await pressEnter(editInput(container)!)
+    await flush()
+
+    expect(apiMock.updatePersonalWordTranslation).toHaveBeenCalledWith(2, 'мчати')
+    expect(rowTranslations(container)).toEqual(['мчати', 'яблуко'])
+  })
+
+  it('Save stays disabled on an empty translation', async () => {
+    apiMock.getPersonalDictionary.mockResolvedValue(withWords)
+    const { container } = await render(screen())
+    await flush()
+
+    await click(rowButton(container, 'Edit run')!)
+    await type(editInput(container)!, '   ')
+
+    expect(rowButton(container, 'Save')!.disabled).toBe(true)
+  })
+
+  it('a refused edit keeps the editor open and shows the server message', async () => {
+    apiMock.getPersonalDictionary.mockResolvedValue(withWords)
+    apiMock.updatePersonalWordTranslation.mockRejectedValue(new Error('The translation cannot be empty.'))
+    const { container } = await render(screen())
+    await flush()
+
+    await click(rowButton(container, 'Edit run')!)
+    await type(editInput(container)!, 'бігти, керувати')
+    await click(rowButton(container, 'Save')!)
+    await flush()
+
+    expect(container.textContent).toContain('The translation cannot be empty.')
+    expect(editInput(container)!.value).toBe('бігти, керувати')
+    // The untouched row keeps what the server still holds.
+    expect(rowTranslations(container)).toEqual(['яблуко'])
   })
 })

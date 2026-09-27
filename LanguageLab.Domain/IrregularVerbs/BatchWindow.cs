@@ -14,29 +14,17 @@ public static class BatchWindow
         stage.Where(s => !VerbScoring.Passed(s.Streak)).Take(Size).ToList();
 
     /// <summary>
-    /// The window's weakest verb — lowest mastery, then fewest answers, then catalog order
-    /// — skipping the one just answered unless it is all that is left. Null once the whole
-    /// stage has passed.
+    /// The window in the order a session should take it: never answered first, then the
+    /// lowest streak, then catalog order. A session takes the first N of this, so shortening
+    /// it to three words keeps the three the learner knows least rather than the first three
+    /// the catalog happens to list.
     /// </summary>
-    public static VerbStanding? Next(IReadOnlyList<VerbStanding> stage, string? exclude)
-    {
-        var window = Of(stage);
-
-        if (window.Count == 0)
-        {
-            return null;
-        }
-
-        var pool = window.Count > 1
-            ? window.Where(s => !string.Equals(s.Verb, exclude, StringComparison.Ordinal)).ToList()
-            : window;
-
-        return pool
+    public static IReadOnlyList<VerbStanding> Ordered(IReadOnlyList<VerbStanding> stage) =>
+        Of(stage)
             .Select((standing, order) => (standing, order))
-            .OrderBy(x => x.standing.Mastery)
-            .ThenBy(x => x.standing.Answers)
+            .OrderBy(x => x.standing.Answers == 0 ? 0 : 1)
+            .ThenBy(x => x.standing.Streak)
             .ThenBy(x => x.order)
-            .First()
-            .standing;
-    }
+            .Select(x => x.standing)
+            .ToList();
 }

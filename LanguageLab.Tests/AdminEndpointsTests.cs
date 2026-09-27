@@ -1,4 +1,5 @@
 using LanguageLab.Api.Endpoints;
+using LanguageLab.Application.Services;
 using LanguageLab.Domain.Entities;
 
 namespace LanguageLab.Tests;
@@ -52,5 +53,49 @@ public class AdminEndpointsTests
         // ParseStatus must reject it rather than silently produce an out-of-range status that
         // ListAsync would then filter on and quietly return an empty page for.
         Assert.Null(AdminEndpoints.ParseStatus("9"));
+    }
+}
+
+/// <summary>
+/// <see cref="AdminEndpoints.TryParseShelfStatus"/> is the shelf admin panel's `?status=`
+/// parser. Unlike the moderation queue's status, absent here means "no filter" (the "All"
+/// list) rather than a default shelf — so it cannot reuse <see cref="AdminEndpoints.ParseStatus"/>.
+/// </summary>
+public class AdminEndpointsShelfStatusTests
+{
+    [Fact]
+    public void Null_means_no_filter()
+    {
+        Assert.True(AdminEndpoints.TryParseShelfStatus(null, out var parsed));
+        Assert.Null(parsed);
+    }
+
+    [Fact]
+    public void Empty_means_no_filter()
+    {
+        Assert.True(AdminEndpoints.TryParseShelfStatus("", out var parsed));
+        Assert.Null(parsed);
+    }
+
+    [Theory]
+    [InlineData("known")]
+    [InlineData("Known")]
+    [InlineData("KNOWN")]
+    public void Known_parses_regardless_of_case(string status)
+    {
+        Assert.True(AdminEndpoints.TryParseShelfStatus(status, out var parsed));
+        Assert.Equal(SortStatus.Known, parsed);
+    }
+
+    [Fact]
+    public void An_unknown_name_is_invalid()
+    {
+        Assert.False(AdminEndpoints.TryParseShelfStatus("nonsense", out _));
+    }
+
+    [Fact]
+    public void A_numeric_string_outside_the_enum_range_is_invalid()
+    {
+        Assert.False(AdminEndpoints.TryParseShelfStatus("9", out _));
     }
 }

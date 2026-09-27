@@ -1,6 +1,6 @@
 import { act } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { api, type AdminUser, type AdminUserPage, type PendingDictionaryPage } from '../api/client'
+import { api, type AdminUser, type AdminUserPage, type PendingDictionaryPage, type ShelfWordPage } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { AdminScreen } from './AdminScreen'
 
@@ -390,5 +390,89 @@ describe('AdminScreen — dictionaries tab', () => {
     await flush()
 
     expect(reject).toHaveBeenCalledWith(7)
+  })
+})
+
+describe('AdminScreen — shelf tab', () => {
+  const shelfPage: ShelfWordPage = {
+    items: [
+      { wordPairId: 1, word: 'silo', translation: 'бункер', status: 'known' },
+      { wordPairId: 2, word: 'abide', translation: 'миритися', status: null },
+    ],
+    total: 2,
+    page: 1,
+    pageSize: 25,
+  }
+
+  async function openShelfTab(container: HTMLElement) {
+    await click(buttons(container).find((b) => b.textContent === 'Shelf')!)
+    await flush()
+  }
+
+  it('lists the shelf words with their current shelf', async () => {
+    respond(() => ({ status: 200, body: page(users) }))
+    const list = vi.spyOn(api, 'listShelfWords').mockResolvedValue(shelfPage)
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+    await openShelfTab(container)
+
+    expect(list).toHaveBeenCalled()
+    const rows = container.querySelectorAll('tbody tr')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].querySelector('th')?.textContent).toBe('silo')
+    expect(rows[0].querySelector<HTMLSelectElement>('.shelf-select')?.value).toBe('known')
+    expect(rows[1].querySelector<HTMLSelectElement>('.shelf-select')?.value).toBe('new')
+  })
+
+  it('filters by shelf through the status select', async () => {
+    respond(() => ({ status: 200, body: page(users) }))
+    const list = vi.spyOn(api, 'listShelfWords').mockResolvedValue(shelfPage)
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+    await openShelfTab(container)
+
+    await choose(container.querySelector<HTMLSelectElement>('.shelf-filter')!, 'unknown')
+    await flush()
+
+    expect(list).toHaveBeenLastCalledWith({ status: 'unknown', search: '', page: 1 })
+  })
+
+  it('moves a word to a different shelf and reloads', async () => {
+    respond(() => ({ status: 200, body: page(users) }))
+    const list = vi.spyOn(api, 'listShelfWords').mockResolvedValue(shelfPage)
+    const mark = vi.spyOn(api, 'mark').mockResolvedValue(null)
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+    await openShelfTab(container)
+
+    const row = container.querySelectorAll('tbody tr')[1]
+    await choose(row.querySelector<HTMLSelectElement>('.shelf-select')!, 'unknown')
+    await flush()
+
+    expect(mark).toHaveBeenCalledWith(2, 'unknown')
+    expect(list).toHaveBeenCalledTimes(2)
+  })
+
+  it('sends the search term after a pause in typing', async () => {
+    respond(() => ({ status: 200, body: page(users) }))
+    const list = vi.spyOn(api, 'listShelfWords').mockResolvedValue(shelfPage)
+
+    const { container } = await render(<AdminScreen meId={1} />)
+    await flush()
+    await openShelfTab(container)
+    list.mockClear()
+
+    vi.useFakeTimers()
+    await act(async () => setValue(container.querySelector<HTMLInputElement>('input[type="search"]')!, 'silo'))
+    expect(list).not.toHaveBeenCalled()
+
+    await act(() => vi.advanceTimersByTimeAsync(300))
+    vi.useRealTimers()
+    await flush()
+
+    expect(list).toHaveBeenLastCalledWith({ status: undefined, search: 'silo', page: 1 })
   })
 })

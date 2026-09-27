@@ -479,4 +479,92 @@ public class WordSortingServiceTests
         Assert.True(marked);
         Assert.Empty(db.SortingVisits);
     }
+
+    [Fact]
+    public async Task Shelf_words_list_includes_every_visible_word_with_its_shelf()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+
+        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now);
+        await service.MarkAsync(UserId, wordPairId: 2, SortStatus.Unknown, Now);
+        await service.MarkAsync(UserId, wordPairId: 3, SortStatus.Excluded, Now);
+
+        var result = await service.ListShelfWordsAsync(UserId, status: null, search: null);
+
+        Assert.Equal(5, result.Total);
+        Assert.Equal(
+            [
+                ("abide", SortStatus.Unknown),
+                ("cleaning", SortStatus.Excluded),
+                ("holston", (SortStatus?)null),
+                ("jahns", (SortStatus?)null),
+                ("silo", SortStatus.Known),
+            ],
+            result.Items.Select(i => (i.Word, i.Status)));
+    }
+
+    [Fact]
+    public async Task Shelf_words_list_filters_by_status()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+
+        await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now);
+        await service.MarkAsync(UserId, wordPairId: 4, SortStatus.Known, Now);
+        await service.MarkAsync(UserId, wordPairId: 2, SortStatus.Unknown, Now);
+
+        var result = await service.ListShelfWordsAsync(UserId, SortStatus.Known, search: null);
+
+        Assert.Equal(2, result.Total);
+        Assert.Equal(["holston", "silo"], result.Items.Select(i => i.Word));
+        Assert.All(result.Items, i => Assert.Equal(SortStatus.Known, i.Status));
+    }
+
+    [Fact]
+    public async Task Shelf_words_list_search_matches_a_case_insensitive_substring()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+
+        var result = await service.ListShelfWordsAsync(UserId, status: null, search: "AN");
+
+        Assert.Equal(["cleaning"], result.Items.Select(i => i.Word));
+    }
+
+    /// <summary>
+    /// The list is what the admin's own shelves could ever cover: the shared vocabulary plus
+    /// their own personal words — never another user's personal dictionary.
+    /// </summary>
+    [Fact]
+    public async Task Shelf_words_list_includes_the_users_own_personal_words_but_not_someone_elses()
+    {
+        await using var db = await ArrangeAsync();
+        db.Users.Add(new TelegramUser { Id = 2, TelegramUserId = 2222222222 });
+        db.Words.Add(new WordPair { Id = 6, Word = "mine", Translation = "моє", OwnerId = UserId });
+        db.Words.Add(new WordPair { Id = 7, Word = "theirs", Translation = "їхнє", OwnerId = 2 });
+        await db.SaveChangesAsync();
+
+        var service = new WordSortingService(db);
+
+        var result = await service.ListShelfWordsAsync(UserId, status: null, search: null);
+
+        Assert.Equal(6, result.Total);
+        Assert.Contains("mine", result.Items.Select(i => i.Word));
+        Assert.DoesNotContain("theirs", result.Items.Select(i => i.Word));
+    }
+
+    [Fact]
+    public async Task Shelf_words_list_is_paginated()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSortingService(db);
+
+        var result = await service.ListShelfWordsAsync(UserId, status: null, search: null, page: 2, pageSize: 2);
+
+        Assert.Equal(5, result.Total);
+        Assert.Equal(2, result.Page);
+        Assert.Equal(2, result.PageSize);
+        Assert.Equal(["holston", "jahns"], result.Items.Select(i => i.Word));
+    }
 }

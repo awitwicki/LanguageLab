@@ -33,4 +33,32 @@ public static class FreePicker
 
         return chosen[random.Next(chosen.Count)];
     }
+
+    /// <summary>
+    /// A whole chunk of a free run, drawn in one go so the browser can play it without asking
+    /// again: <paramref name="count"/> picks, each one <see cref="Next"/> with the previous
+    /// pick held out, so no verb lands twice in a row. A scope of one verb has nothing to
+    /// alternate with and is drawn over and over; an empty scope draws nothing.
+    /// </summary>
+    public static IReadOnlyList<VerbStanding> Draw(
+        IReadOnlyList<VerbStanding> scope, int count, Random random)
+    {
+        var drawn = new List<VerbStanding>(count);
+        string? previous = null;
+
+        for (var i = 0; i < count; i++)
+        {
+            var pick = Next(scope, previous, random);
+
+            if (pick == null)
+            {
+                break;
+            }
+
+            drawn.Add(pick);
+            previous = pick.Verb;
+        }
+
+        return drawn;
+    }
 }

@@ -66,7 +66,10 @@ export function chunksAround(chunk: number, count: number, radius = CHUNK_RADIUS
   return Array.from({ length: Math.max(0, last - first + 1) }, (_, index) => first + index)
 }
 
-/** Every chunk — what a browser without IntersectionObserver gets, the whole chapter at once. */
+/**
+ * Every chunk — the whole chapter at once, which the reader's `wholeChapter` setting asks for, and
+ * what a browser without IntersectionObserver gets, having nothing to grow a window with.
+ */
 export function allChunks(count: number): number[] {
   return Array.from({ length: count }, (_, index) => index)
 }
