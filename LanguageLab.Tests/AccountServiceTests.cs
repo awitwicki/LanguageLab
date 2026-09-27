@@ -13,6 +13,13 @@ public class AccountServiceTests
 
     private static readonly DateTime Now = new(2026, 9, 11, 12, 0, 0, DateTimeKind.Utc);
 
+    private static ApplicationDbContext NewContext() =>
+        new(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .Options);
+
+    private static AccountService NewService(ApplicationDbContext db) => new(db);
+
     private static async Task<ApplicationDbContext> SeedAsync(bool secondAdmin = false)
     {
         var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
@@ -77,7 +84,7 @@ public class AccountServiceTests
     public async Task Deleting_the_account_takes_its_shelves_along()
     {
         await using var db = await SeedAsync();
-        db.Words.Add(new WordPair { Id = 1, Word = "abide", Translation = "дотримуватися" });
+        db.Words.Add(TestWords.Pair(1, "abide", "дотримуватися"));
         db.KnownWords.Add(new KnownWord { Id = 1, UserId = MemberId, WordPairId = 1, CreatedAt = Now });
         await db.SaveChangesAsync();
 
@@ -111,5 +118,31 @@ public class AccountServiceTests
 
         Assert.False(await db.Dictionaries.AnyAsync(d => d.Id == 1));
         Assert.True(await db.Dictionaries.AnyAsync(d => d.Id == 2));
+    }
+
+    [Theory]
+    [InlineData("tl", SetLanguageResult.Saved, "tl")]
+    [InlineData("pl", SetLanguageResult.Saved, "pl")]
+    [InlineData("ru", SetLanguageResult.UnknownLanguage, null)]
+    [InlineData("xx", SetLanguageResult.UnknownLanguage, null)]
+    [InlineData(null, SetLanguageResult.UnknownLanguage, null)]
+    public async Task Setting_the_language_accepts_only_catalog_codes(string? code, SetLanguageResult expected, string? stored)
+    {
+        await using var db = NewContext();
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 11 });
+        await db.SaveChangesAsync();
+
+        var result = await NewService(db).SetLanguageAsync(1, code);
+
+        Assert.Equal(expected, result);
+        Assert.Equal(stored, (await db.Users.SingleAsync()).Language);
+    }
+
+    [Fact]
+    public async Task Setting_the_language_of_a_missing_user_is_not_found()
+    {
+        await using var db = NewContext();
+
+        Assert.Equal(SetLanguageResult.NotFound, await NewService(db).SetLanguageAsync(99, "pl"));
     }
 }

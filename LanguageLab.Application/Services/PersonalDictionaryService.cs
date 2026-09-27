@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Application.Services;
 
-/// <summary>Box is null until the word's first exercise; 1..5 while learning; IsLearned once graduated.</summary>
+/// <summary>
+/// Box is null until the word's first exercise; 1..5 while learning; IsLearned once graduated.
+/// Translation is empty when the word has none in the learner's current language.
+/// </summary>
 public sealed record PersonalWord(long WordPairId, string Word, string Translation, int? Box, bool IsLearned);
 
 /// <summary>One line of a bulk import, before normalization.</summary>
@@ -86,7 +89,8 @@ public class PersonalDictionaryService
     /// Null when the user already has this word (the endpoint answers 409); ArgumentException
     /// with a user-facing message for an empty translation or an unusable word.
     /// </summary>
-    public async Task<PersonalWord?> AddAsync(long userId, string rawWord, string rawTranslation, DateTime nowUtc)
+    public async Task<PersonalWord?> AddAsync(
+        long userId, string language, string rawWord, string rawTranslation, DateTime nowUtc)
     {
         var word = WordText.Normalize(rawWord);
         var translation = rawTranslation.Trim();
@@ -107,7 +111,8 @@ public class PersonalDictionaryService
         }
 
         var dictionary = await GetOrCreateAsync(userId);
-        var pair = new WordPair { Word = word, Translation = translation, OwnerId = userId };
+        var pair = new WordPair { Word = word, OwnerId = userId };
+        pair.Translations.Add(new WordTranslation { Language = language, Text = translation, Origin = TranslationOrigin.Manual });
         var dictionaryWord = new DictionaryWord { Dictionary = dictionary, WordPair = pair, Frequency = 0 };
 
         // Straight onto the "don't know" shelf — that is what makes it learnable. A brand-new
@@ -131,6 +136,11 @@ public class PersonalDictionaryService
             // (Word, OwnerId) unique index actually stops the second one. Mirror
             // GetOrCreateAsync's race recovery: drop our half-built rows and answer the same
             // way the fast duplicate path above does — no other row could trip this index.
+            foreach (var t in pair.Translations)
+            {
+                _dbContext.Entry(t).State = EntityState.Detached;
+            }
+
             _dbContext.Entry(pair).State = EntityState.Detached;
             _dbContext.Entry(dictionaryWord).State = EntityState.Detached;
             _dbContext.Entry(unknownWord).State = EntityState.Detached;
@@ -140,7 +150,7 @@ public class PersonalDictionaryService
             return null;
         }
 
-        return new PersonalWord(pair.Id, pair.Word, pair.Translation, Box: null, IsLearned: false);
+        return new PersonalWord(pair.Id, pair.Word, translation, null, false);
     }
 
     /// <summary>
@@ -149,7 +159,7 @@ public class PersonalDictionaryService
     /// each AddAsync call commits before the next line's duplicate check runs.
     /// </summary>
     public async Task<IReadOnlyList<BulkWordOutcome>> AddManyAsync(
-        long userId, IReadOnlyList<BulkWordEntry> entries, DateTime nowUtc)
+        long userId, string language, IReadOnlyList<BulkWordEntry> entries, DateTime nowUtc)
     {
         if (entries.Count > MaxBulkEntries)
         {
@@ -165,7 +175,7 @@ public class PersonalDictionaryService
 
             try
             {
-                var added = await AddAsync(userId, entry.Word, entry.Translation, nowUtc);
+                var added = await AddAsync(userId, language, entry.Word, entry.Translation, nowUtc);
                 outcomes.Add(added == null
                     ? new BulkWordOutcome(word, translation, Added: false, Error: "Already in your dictionary.")
                     : new BulkWordOutcome(word, translation, Added: true, Error: null));
@@ -186,7 +196,7 @@ public class PersonalDictionaryService
     /// session in flight reads the new text on its next question (TrainingQuestion stores ids,
     /// never the words themselves).
     /// </summary>
-    public async Task<PersonalWord?> UpdateTranslationAsync(long userId, long wordPairId, string rawTranslation)
+    public async Task<PersonalWord?> UpdateTranslationAsync(long userId, string language, long wordPairId, string rawTranslation)
     {
         var translation = rawTranslation.Trim();
 
@@ -195,16 +205,33 @@ public class PersonalDictionaryService
             throw new ArgumentException("The translation cannot be empty.");
         }
 
-        var pair = await _dbContext.Words.FirstOrDefaultAsync(w => w.Id == wordPairId && w.OwnerId == userId);
+        var pair = await _dbContext.Words
+            .Include(w => w.Translations.Where(t => t.Language == language))
+            .FirstOrDefaultAsync(w => w.Id == wordPairId && w.OwnerId == userId);
 
         if (pair == null)
         {
             return null;
         }
 
-        pair.Translation = translation;
-        // Typed by a person, whatever a provider may have left here.
-        pair.TranslationOrigin = TranslationOrigin.Manual;
+        // Typed by a person, whatever a provider may have left here; other languages untouched.
+        // Filtered by hand, not just by the Include: an already-tracked WordPair (e.g. loaded
+        // by an earlier AddAsync in the same DbContext) keeps other languages' rows in this
+        // collection too — the Include's Where narrows what a fresh load adds, not what a
+        // change-tracked collection already holds.
+        if (pair.Translations.FirstOrDefault(t => t.Language == language) is { } existing)
+        {
+            existing.Text = translation;
+            existing.Origin = TranslationOrigin.Manual;
+        }
+        else
+        {
+            _dbContext.WordTranslations.Add(new WordTranslation
+            {
+                WordPairId = pair.Id, Language = language, Text = translation, Origin = TranslationOrigin.Manual,
+            });
+        }
+
         await _dbContext.SaveChangesAsync();
 
         var progress = await _dbContext.WordProgresses
@@ -212,7 +239,7 @@ public class PersonalDictionaryService
             .Select(p => new { p.Box, p.IsLearned })
             .FirstOrDefaultAsync();
 
-        return new PersonalWord(pair.Id, pair.Word, pair.Translation, progress?.Box, progress?.IsLearned ?? false);
+        return new PersonalWord(pair.Id, pair.Word, translation, progress?.Box, progress?.IsLearned ?? false);
     }
 
     /// <summary>
@@ -248,7 +275,7 @@ public class PersonalDictionaryService
         return true;
     }
 
-    public async Task<PersonalDictionaryView> GetAsync(long userId, DateTime nowUtc)
+    public async Task<PersonalDictionaryView> GetAsync(long userId, string language, DateTime nowUtc)
     {
         var dictionary = await GetOrCreateAsync(userId);
 
@@ -260,7 +287,7 @@ public class PersonalDictionaryService
             {
                 w.Id,
                 w.Word,
-                w.Translation,
+                Translation = w.Translations.Where(t => t.Language == language).Select(t => t.Text).FirstOrDefault() ?? "",
                 Progress = _dbContext.WordProgresses
                     .Where(p => p.UserId == userId && p.WordPairId == w.Id)
                     .Select(p => new { p.Box, p.IsLearned })
@@ -272,9 +299,9 @@ public class PersonalDictionaryService
             dictionary.Id,
             dictionary.Name,
             dictionary.WordsCount,
-            await _selection.CountLearnableAsync(userId, dictionary.Id),
-            await _selection.CountDueAsync(userId, nowUtc, dictionary.Id),
-            await _learningProgress.GetAsync(userId, dictionary.Id),
+            await _selection.CountLearnableAsync(userId, language, dictionary.Id),
+            await _selection.CountDueAsync(userId, language, nowUtc, dictionary.Id),
+            await _learningProgress.GetAsync(userId, language, dictionary.Id),
             words.Select(w => new PersonalWord(
                 w.Id, w.Word, w.Translation, w.Progress?.Box, w.Progress?.IsLearned ?? false)).ToList());
     }

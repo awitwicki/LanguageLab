@@ -21,7 +21,7 @@ public static class TranslationEndpoints
         // word is normalized here the same way the dictionary will store it, so a hit in the
         // shared vocabulary is exact.
         app.MapGet("/api/translate", async (
-            string? word, TranslationService translation, CancellationToken cancellationToken) =>
+            string? word, TranslationService translation, ICurrentLanguage language, CancellationToken cancellationToken) =>
         {
             var normalized = WordText.Normalize(word ?? string.Empty);
 
@@ -30,7 +30,7 @@ public static class TranslationEndpoints
                 return Results.BadRequest();
             }
 
-            return Results.Ok(await translation.LookupAsync(normalized, cancellationToken));
+            return Results.Ok(await translation.LookupAsync(normalized, language.Require(), cancellationToken));
         }).RequireAuthorization()
           .RequireRateLimiting(UserRateLimits.Translate);
 
@@ -49,6 +49,7 @@ public static class TranslationEndpoints
         ISentenceTranslator translator,
         SentenceQuota quota,
         ICurrentUser currentUser,
+        ICurrentLanguage language,
         CancellationToken cancellationToken)
     {
         if (!translator.IsConfigured)
@@ -63,12 +64,14 @@ public static class TranslationEndpoints
             return Results.BadRequest();
         }
 
+        var target = language.Require();
+
         if (!quota.TryConsume(await currentUser.GetIdAsync(), text.Length))
         {
             return Results.StatusCode(StatusCodes.Status429TooManyRequests);
         }
 
-        var result = await translator.TranslateAsync(text, cancellationToken);
+        var result = await translator.TranslateAsync(text, target, cancellationToken);
 
         return result.Status switch
         {

@@ -91,7 +91,7 @@ public static class ReaderEndpoints
 
         group.MapGet("/words/{lemma}", async (
             string lemma, long? dictionaryId, ReaderWordService words, ICurrentUserContext currentUser,
-            CancellationToken cancellationToken) =>
+            ICurrentLanguage language, CancellationToken cancellationToken) =>
         {
             var word = WordText.Normalize(lemma);
 
@@ -102,11 +102,12 @@ public static class ReaderEndpoints
 
             var (userId, role) = currentUser.Require();
 
-            return Results.Ok(await words.GetAsync(userId, role, word, dictionaryId, cancellationToken));
+            return Results.Ok(await words.GetAsync(userId, role, language.Require(), word, dictionaryId, cancellationToken));
         });
 
         group.MapPost("/words/{lemma}/learn", async (
-            string lemma, LearnWordRequest request, ReaderWordService words, ICurrentUserContext currentUser) =>
+            string lemma, LearnWordRequest request, ReaderWordService words, ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var word = WordText.Normalize(lemma);
 
@@ -119,7 +120,8 @@ public static class ReaderEndpoints
 
             try
             {
-                await words.LearnAsync(userId, role, word, request.DictionaryId, request.Translation, DateTime.UtcNow);
+                await words.LearnAsync(
+                    userId, role, language.Require().Code, word, request.DictionaryId, request.Translation, DateTime.UtcNow);
                 return Results.NoContent();
             }
             catch (ArgumentException e)

@@ -240,6 +240,22 @@ describe('PersonalDictionaryScreen', () => {
     expect([...container.querySelectorAll('.personal-word .word')].map((w) => w.textContent)).toEqual(['apple'])
   })
 
+  // A word added under another language has no translation in this one yet: say so, and let
+  // the usual Edit fill it in.
+  it('marks a word with no translation in the learner language', async () => {
+    const bare: PersonalWord = { ...apple, translation: '' }
+    apiMock.getPersonalDictionary.mockResolvedValueOnce({ ...withWords, words: [bare] })
+    const { container } = await render(screen())
+    await flush()
+
+    const cell = container.querySelector('.personal-word .translation')!
+    expect(cell.classList.contains('missing')).toBe(true)
+    expect(cell.textContent).toBe('No translation yet — edit to add one')
+
+    await click(container.querySelector('button[aria-label="Edit apple"]')!)
+    expect(editInput(container)!.value).toBe('')
+  })
+
   it('Learn new words is disabled with nothing to learn and otherwise opens the scope', async () => {
     const onTrain = vi.fn()
     const { container, rerender } = await render(screen({ onTrain }))

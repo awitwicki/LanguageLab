@@ -2,6 +2,7 @@ using System.IO;
 using System.Net;
 using System.Text;
 using LanguageLab.Application.Translation;
+using LanguageLab.Domain.Languages;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -52,7 +53,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => Json(Apple));
 
-        var result = await Translator(handler).TranslateAsync("apple", CancellationToken.None);
+        var result = await Translator(handler).TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None);
 
         Assert.Equal("яблуко", result);
         var query = handler.LastRequest!.RequestUri!.Query;
@@ -66,7 +67,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => Json(Apple));
 
-        await Translator(handler, "me@example.com").TranslateAsync("apple", CancellationToken.None);
+        await Translator(handler, "me@example.com").TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None);
 
         Assert.Contains("de=me%40example.com", handler.LastRequest!.RequestUri!.Query);
     }
@@ -79,7 +80,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => Json(body));
 
-        Assert.Null(await Translator(handler).TranslateAsync("apple", CancellationToken.None));
+        Assert.Null(await Translator(handler).TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Fact]
@@ -87,7 +88,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => Json("""{"responseData":{"translatedText":"MYMEMORY WARNING: SOMETHING"},"responseStatus":200}"""));
 
-        Assert.Null(await Translator(handler).TranslateAsync("apple", CancellationToken.None));
+        Assert.Null(await Translator(handler).TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None));
     }
 
     /// <summary>An untranslatable word comes back as itself; that is not a translation.</summary>
@@ -96,7 +97,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => Json("""{"responseData":{"translatedText":"Apple"},"responseStatus":200}"""));
 
-        Assert.Null(await Translator(handler).TranslateAsync("apple", CancellationToken.None));
+        Assert.Null(await Translator(handler).TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Theory]
@@ -108,7 +109,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => Json(body));
 
-        Assert.Null(await Translator(handler).TranslateAsync("apple", CancellationToken.None));
+        Assert.Null(await Translator(handler).TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Fact]
@@ -116,7 +117,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => Json("", HttpStatusCode.InternalServerError));
 
-        Assert.Null(await Translator(handler).TranslateAsync("apple", CancellationToken.None));
+        Assert.Null(await Translator(handler).TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Fact]
@@ -124,7 +125,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => throw new HttpRequestException("no route"));
 
-        Assert.Null(await Translator(handler).TranslateAsync("apple", CancellationToken.None));
+        Assert.Null(await Translator(handler).TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Fact]
@@ -132,7 +133,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => throw new TaskCanceledException("timed out"));
 
-        Assert.Null(await Translator(handler).TranslateAsync("apple", CancellationToken.None));
+        Assert.Null(await Translator(handler).TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None));
     }
 
     /// <summary>
@@ -145,7 +146,7 @@ public class MyMemoryTranslatorTests
     {
         var handler = new StubHandler(_ => throw new IOException("connection reset"));
 
-        Assert.Null(await Translator(handler).TranslateAsync("apple", CancellationToken.None));
+        Assert.Null(await Translator(handler).TranslateAsync("apple", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Fact]
@@ -159,13 +160,27 @@ public class MyMemoryTranslatorTests
         // 3 000 characters is the anonymous word budget (5 000 * 0.6); spend it, then ask once more.
         for (var i = 0; i < 600; i++)
         {
-            await translator.TranslateAsync("abcde", CancellationToken.None);
+            await translator.TranslateAsync("abcde", LearnerLanguages.Default, CancellationToken.None);
         }
 
         var spent = calls;
-        var result = await translator.TranslateAsync("abcde", CancellationToken.None);
+        var result = await translator.TranslateAsync("abcde", LearnerLanguages.Default, CancellationToken.None);
 
         Assert.Null(result);
         Assert.Equal(spent, calls);
+    }
+
+    [Theory]
+    [InlineData("pl", "langpair=en%7Cpl")]
+    [InlineData("zh", "langpair=en%7Czh-CN")]
+    [InlineData("nb", "langpair=en%7Cno")]
+    [InlineData("tl", "langpair=en%7Ctl")]
+    public async Task Asks_for_the_target_languages_MyMemory_code(string code, string expected)
+    {
+        var handler = new StubHandler(_ => Json(Apple));
+
+        await Translator(handler).TranslateAsync("apple", LearnerLanguages.Find(code)!, CancellationToken.None);
+
+        Assert.Contains(expected, handler.LastRequest!.RequestUri!.Query);
     }
 }

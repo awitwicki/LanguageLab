@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using LanguageLab.Application.Translation;
+using LanguageLab.Domain.Languages;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -43,7 +44,7 @@ public class FallbackSentenceTranslatorTests
     {
         var (translator, deepL, myMemory) = Build("secret:fx");
 
-        var result = await translator.TranslateAsync("Hello.", CancellationToken.None);
+        var result = await translator.TranslateAsync("Hello.", LearnerLanguages.Default, CancellationToken.None);
 
         Assert.Equal("від DeepL", result.Text);
         Assert.Equal((1, 0), (deepL.Calls, myMemory.Calls));
@@ -54,7 +55,7 @@ public class FallbackSentenceTranslatorTests
     {
         var (translator, deepL, myMemory) = Build(null);
 
-        var result = await translator.TranslateAsync("Hello.", CancellationToken.None);
+        var result = await translator.TranslateAsync("Hello.", LearnerLanguages.Default, CancellationToken.None);
 
         Assert.Equal("від MyMemory", result.Text);
         Assert.Equal((0, 1), (deepL.Calls, myMemory.Calls));

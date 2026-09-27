@@ -1,3 +1,4 @@
+using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Training;
 using LanguageLab.Infrastructure.Database;
@@ -5,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Application.Services;
 
-public sealed record AnswerOutcome(bool IsCorrect, WordPair Word);
+public sealed record AnswerOutcome(bool IsCorrect, TranslatedWord Word);
 
 public sealed record WordResult(
     string Word,
@@ -34,19 +35,23 @@ public sealed record TrainingStats(
     int Wrong);
 
 /// <summary>
-/// The next question for the UI: options in OptionIds order plus the session counters.
-/// Question == null means the queue is exhausted — the counters are final at that point.
+/// The next question for the UI: the asked word and the options in OptionIds order, both in
+/// the session's language, plus the session counters. Question == null means the queue is
+/// exhausted — the counters are final at that point.
 /// </summary>
 public sealed record QuestionView(
     TrainingQuestion? Question,
-    IReadOnlyList<WordPair> Options,
+    TranslatedWord? Target,
+    IReadOnlyList<TranslatedWord> Options,
     int Answered,
     int Total);
 
 /// <summary>
 /// The life cycle of one session: building the question queue, taking answers and the final
 /// Leitner grading. The queue is generated up front and lives in the DB, so the bot could be
-/// restarted mid-quiz and callback_data only had to carry two ids.
+/// restarted mid-quiz and callback_data only had to carry two ids. A session is built in the
+/// learner's language and stores it (Training.Language); everything after the start reads the
+/// words in that language, so switching language mid-session leaves an open session as it was.
 /// </summary>
 public class TrainingSessionService
 {
@@ -66,23 +71,9 @@ public class TrainingSessionService
         _selection = selection;
     }
 
-    public async Task<TelegramUser> GetOrCreateUserAsync(long telegramUserId)
-    {
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.TelegramUserId == telegramUserId);
-
-        if (user != null)
-        {
-            return user;
-        }
-
-        user = new TelegramUser { TelegramUserId = telegramUserId };
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync();
-        return user;
-    }
-
     public async Task<Training?> StartNewBatchAsync(
         long userId,
+        string language,
         long dictionaryId,
         DateTime nowUtc,
         IReadOnlyList<long>? chapterIds = null,
@@ -93,8 +84,8 @@ public class TrainingSessionService
 
         // Explicit ids — "you train what the preview showed"; without them, the same frequency top the preview uses.
         var words = wordPairIds is { Count: > 0 }
-            ? (await _selection.GetLearnableByIdsAsync(userId, dictionaryId, chapterIds, wordPairIds)).Take(batchSize).ToList()
-            : await _selection.GetNewBatchAsync(userId, dictionaryId, batchSize, chapterIds);
+            ? (await _selection.GetLearnableByIdsAsync(userId, language, dictionaryId, chapterIds, wordPairIds)).Take(batchSize).ToList()
+            : await _selection.GetNewBatchAsync(userId, language, dictionaryId, batchSize, chapterIds);
 
         if (words.Count == 0)
         {
@@ -103,11 +94,12 @@ public class TrainingSessionService
 
         // Distractors come from the whole book, not just the chapter: the options read more
         // naturally, and a small chapter does not leave the quiz without valid distractors.
-        var pool = await _selection.GetDistractorPoolAsync(userId, dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
+        var pool = await _selection.GetDistractorPoolAsync(
+            userId, language, dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
-            userId, dictionaryId, ScopeChapterOf(chapterIds), TrainingMode.NewBatch, words, NewBatchRepeats, pool,
-            DirectionPolicy.EnToUa, nowUtc);
+            userId, dictionaryId, ScopeChapterOf(chapterIds), TrainingMode.NewBatch, language, words, NewBatchRepeats, pool,
+            DirectionPolicy.EnToNative, nowUtc);
     }
 
     /// <summary>
@@ -116,23 +108,25 @@ public class TrainingSessionService
     /// it too, as they do for a new batch, instead of from every word there is.
     /// </summary>
     public async Task<Training?> StartReviewAsync(
-        long userId, DateTime nowUtc, long? dictionaryId = null, IReadOnlyList<long>? chapterIds = null)
+        long userId, string language, DateTime nowUtc, long? dictionaryId = null, IReadOnlyList<long>? chapterIds = null)
     {
         var words = await _selection.GetDueWordsAsync(
-            userId, nowUtc, WordSelectionService.ReviewSessionSize, dictionaryId, chapterIds);
+            userId, language, nowUtc, WordSelectionService.ReviewSessionSize, dictionaryId, chapterIds);
 
         if (words.Count == 0)
         {
             return null;
         }
 
-        var pool = await _selection.GetDistractorPoolAsync(userId, dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
+        var pool = await _selection.GetDistractorPoolAsync(
+            userId, language, dictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
-            userId, dictionaryId, ScopeChapterOf(chapterIds), TrainingMode.Review, words, ReviewRepeats, pool,
+            userId, dictionaryId, ScopeChapterOf(chapterIds), TrainingMode.Review, language, words, ReviewRepeats, pool,
             DirectionPolicy.Random, nowUtc);
     }
 
+    /// <summary>The failed words drilled again, in the language the previous session was built in.</summary>
     public async Task<Training?> StartRetryAsync(long userId, long previousTrainingId, DateTime nowUtc)
     {
         var previous = await _dbContext.Trainings.FirstOrDefaultAsync(t => t.Id == previousTrainingId);
@@ -153,13 +147,18 @@ public class TrainingSessionService
             return null;
         }
 
-        var words = await _dbContext.Words.Where(w => failedIds.Contains(w.Id)).ToListAsync();
+        var words = await _dbContext.Words
+            .Where(w => failedIds.Contains(w.Id))
+            .TranslatedInto(previous.Language)
+            .Translated(previous.Language)
+            .ToListAsync();
         var pool = await _selection.GetDistractorPoolAsync(
-            userId, previous.DictionaryId, WordSelectionService.DistractorPoolSize, _rng);
+            userId, previous.Language, previous.DictionaryId, WordSelectionService.DistractorPoolSize, _rng);
 
         return await CreateTrainingAsync(
-            userId, previous.DictionaryId, previous.ChapterId, TrainingMode.NewBatch, words, NewBatchRepeats, pool,
-            DirectionPolicy.EnToUa, nowUtc);
+            userId, previous.DictionaryId, previous.ChapterId, TrainingMode.NewBatch, previous.Language, words,
+            NewBatchRepeats, pool,
+            DirectionPolicy.EnToNative, nowUtc);
     }
 
     /// <summary>
@@ -179,9 +178,11 @@ public class TrainingSessionService
     public Task<Training?> FindAsync(long trainingId, long userId) =>
         _dbContext.Trainings.FirstOrDefaultAsync(t => t.Id == trainingId && t.UserId == userId);
 
-    /// <summary>The session's words for the card phase — each once, alphabetically.</summary>
-    public async Task<IReadOnlyList<WordPair>> GetBatchWordsAsync(long trainingId)
+    /// <summary>The session's words for the card phase — each once, alphabetically, in the session's language.</summary>
+    public async Task<IReadOnlyList<TranslatedWord>> GetBatchWordsAsync(long trainingId)
     {
+        var language = await LanguageOfAsync(trainingId);
+
         var wordIds = await _dbContext.TrainingQuestions
             .Where(q => q.TrainingId == trainingId)
             .Select(q => q.WordPairId)
@@ -191,8 +192,13 @@ public class TrainingSessionService
         return await _dbContext.Words
             .Where(w => wordIds.Contains(w.Id))
             .OrderBy(w => w.Word)
+            .Translated(language)
             .ToListAsync();
     }
+
+    /// <summary>The language the session was built in — not the learner's current one.</summary>
+    private Task<string> LanguageOfAsync(long trainingId) =>
+        _dbContext.Trainings.Where(t => t.Id == trainingId).Select(t => t.Language).FirstAsync();
 
     /// <summary>
     /// OptionIds is a plain array with no foreign key: a word may have vanished after the queue
@@ -207,25 +213,25 @@ public class TrainingSessionService
 
         if (question == null)
         {
-            return new QuestionView(null, [], answered, total);
+            return new QuestionView(null, null, [], answered, total);
         }
 
-        var found = await _dbContext.Words
-            .Where(w => question.OptionIds.Contains(w.Id))
-            .ToListAsync();
+        var language = await LanguageOfAsync(trainingId);
+        var ids = question.OptionIds.Append(question.WordPairId).Distinct().ToList();
+        var found = await _dbContext.Words.Where(w => ids.Contains(w.Id)).Translated(language).ToListAsync();
+        var target = found.First(w => w.Id == question.WordPairId);
 
         var options = question.OptionIds
             .Select(id => found.FirstOrDefault(w => w.Id == id))
-            .Where(w => w is not null)
-            .Select(w => w!)
+            .OfType<TranslatedWord>()
             .ToList();
 
-        if (options.All(w => w.Id != question.WordPairId))
+        if (options.All(w => w.Id != target.Id))
         {
-            options.Insert(0, question.WordPair);
+            options.Insert(0, target);
         }
 
-        return new QuestionView(question, options, answered, total);
+        return new QuestionView(question, target, options, answered, total);
     }
 
     public async Task<AnswerOutcome?> AnswerAsync(long questionId, long pickedWordPairId, DateTime nowUtc)
@@ -247,7 +253,10 @@ public class TrainingSessionService
 
         await _dbContext.SaveChangesAsync();
 
-        return new AnswerOutcome(question.IsCorrect.Value, question.WordPair);
+        var language = await LanguageOfAsync(question.TrainingId);
+        var word = await _dbContext.Words.Where(w => w.Id == question.WordPairId).Translated(language).FirstAsync();
+
+        return new AnswerOutcome(question.IsCorrect.Value, word);
     }
 
     public async Task<WordPair?> MarkKnownAsync(long questionId, DateTime nowUtc)
@@ -350,6 +359,12 @@ public class TrainingSessionService
             .Where(q => q.TrainingId == trainingId && q.IsCorrect != null)
             .ToListAsync();
 
+        var wordIds = answered.Select(q => q.WordPairId).Distinct().ToList();
+        var translations = await _dbContext.Words
+            .Where(w => wordIds.Contains(w.Id))
+            .Translated(training.Language)
+            .ToDictionaryAsync(w => w.Id, w => w.Translation);
+
         // A session can be brought to its summary twice: in Telegram the old keyboard stays
         // clickable, so a double click on the last answer leads the handler here again.
         // The second time only re-reads the stored state without grading anew.
@@ -371,7 +386,7 @@ public class TrainingSessionService
                 if (progress != null)
                 {
                     results.Add(new WordResult(
-                        word.Word, word.Translation, correct, total,
+                        word.Word, translations.GetValueOrDefault(group.Key, ""), correct, total,
                         progress.Box, progress.DueAt, progress.IsLearned));
                 }
 
@@ -384,7 +399,7 @@ public class TrainingSessionService
             if (progress != null && (progress.IsLearned || progress.LastSeenAt > training.CreatedAt))
             {
                 results.Add(new WordResult(
-                    word.Word, word.Translation, correct, total,
+                    word.Word, translations.GetValueOrDefault(group.Key, ""), correct, total,
                     progress.Box, progress.DueAt, progress.IsLearned));
 
                 continue;
@@ -413,7 +428,7 @@ public class TrainingSessionService
             progress.LastSeenAt = nowUtc;
 
             results.Add(new WordResult(
-                word.Word, word.Translation, correct, total, outcome.Box, outcome.DueAt, outcome.IsLearned));
+                word.Word, translations.GetValueOrDefault(group.Key, ""), correct, total, outcome.Box, outcome.DueAt, outcome.IsLearned));
         }
 
         if (!alreadyFinished)
@@ -432,7 +447,7 @@ public class TrainingSessionService
         return new TrainingSummary(correctAnswers, totalAnswers, ratio, totalAnswers > 0 && ratio >= PassThreshold, results);
     }
 
-    public async Task<TrainingStats> GetStatsAsync(long userId, DateTime nowUtc)
+    public async Task<TrainingStats> GetStatsAsync(long userId, string language, DateTime nowUtc)
     {
         var boxes = await _dbContext.WordProgresses
             .Where(p => p.UserId == userId && !p.IsLearned)
@@ -448,7 +463,7 @@ public class TrainingSessionService
         var known = await _dbContext.KnownWords.CountAsync(k => k.UserId == userId);
         var unknown = await _dbContext.UnknownWords.CountAsync(u => u.UserId == userId);
         var excluded = await _dbContext.ExcludedWords.CountAsync(e => e.UserId == userId);
-        var due = await _selection.CountDueAsync(userId, nowUtc);
+        var due = await _selection.CountDueAsync(userId, language, nowUtc);
 
         var correct = await _dbContext.WordProgresses.Where(p => p.UserId == userId).SumAsync(p => p.CorrectCount);
         var wrong = await _dbContext.WordProgresses.Where(p => p.UserId == userId).SumAsync(p => p.WrongCount);
@@ -461,9 +476,10 @@ public class TrainingSessionService
         long? dictionaryId,
         long? chapterId,
         TrainingMode mode,
-        IReadOnlyList<WordPair> words,
+        string language,
+        IReadOnlyList<TranslatedWord> words,
         int repeats,
-        IReadOnlyList<WordPair> distractorPool,
+        IReadOnlyList<TranslatedWord> distractorPool,
         DirectionPolicy policy,
         DateTime nowUtc)
     {
@@ -475,7 +491,8 @@ public class TrainingSessionService
             Mode = mode,
             UserId = userId,
             DictionaryId = dictionaryId,
-            ChapterId = chapterId
+            ChapterId = chapterId,
+            Language = language,
         };
 
         _dbContext.Trainings.Add(training);

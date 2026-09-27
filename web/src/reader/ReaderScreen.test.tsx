@@ -270,7 +270,7 @@ describe('ReaderScreen', () => {
     expect(container.querySelector('[data-pos="1.2.0"] .reader-translation')!.textContent).toBe(
       'Більшість чоловіків намагалися пристосуватися.',
     )
-    expect(await store.getTranslation(HASH, '1.2.0')).toBe('Більшість чоловіків намагалися пристосуватися.')
+    expect(await store.getTranslation(HASH, 'uk', '1.2.0')).toBe('Більшість чоловіків намагалися пристосуватися.')
   })
 
   it('names the daily limit when the server refuses', async () => {

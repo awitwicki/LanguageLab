@@ -25,13 +25,23 @@ describe('MemoryBookStore', () => {
     const store = new MemoryBookStore()
     await store.put(meta('a'), bytesOf('x'))
     await store.put(meta('b'), bytesOf('y'))
-    await store.putTranslation('a', '0.0.0', 'Привіт.')
-    await store.putTranslation('b', '0.0.0', 'Бувай.')
+    await store.putTranslation('a', 'uk', '0.0.0', 'Привіт.')
+    await store.putTranslation('b', 'uk', '0.0.0', 'Бувай.')
 
     await store.remove('a')
 
     expect((await store.list()).map((b) => b.hash)).toEqual(['b'])
-    expect(await store.getTranslation('a', '0.0.0')).toBeNull()
-    expect(await store.getTranslation('b', '0.0.0')).toBe('Бувай.')
+    expect(await store.getTranslation('a', 'uk', '0.0.0')).toBeNull()
+    expect(await store.getTranslation('b', 'uk', '0.0.0')).toBe('Бувай.')
+  })
+
+  it('keeps translations of the same sentence in different languages apart', async () => {
+    const store = new MemoryBookStore()
+
+    await store.putTranslation('a', 'uk', '0.0.0', 'Привіт.')
+    await store.putTranslation('a', 'pl', '0.0.0', 'Cześć.')
+
+    expect(await store.getTranslation('a', 'uk', '0.0.0')).toBe('Привіт.')
+    expect(await store.getTranslation('a', 'pl', '0.0.0')).toBe('Cześć.')
   })
 })

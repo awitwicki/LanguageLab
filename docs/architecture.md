@@ -11,13 +11,17 @@ this file is the map, not the rulebook.
 
 ### `LanguageLab.Domain/`
 
-Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`,
-`TrainingEvent`) and interfaces. No dependencies on infrastructure.
+Entities (`Dictionary`, `WordPair`, `WordTranslation`, `KnownWord`, `UnknownWord`, `TelegramUser`,
+`Training`, `TrainingEvent`) and interfaces. No dependencies on infrastructure. A word's meaning is
+`WordTranslation`, one row per `(WordPairId, Language)` — see
+[vocabulary-and-training.md](vocabulary-and-training.md#translation) — and `Training.Language`
+records the language a session was built and renders in.
 
 It also holds the three catalogs that live entirely in code rather than in the database —
 `IrregularVerbs/IrregularVerbCatalog`, `Pronunciation/PronunciationCatalog` and the IPA chart
-`Pronunciation/IpaCatalog` (see [trainers.md](trainers.md)) — and the value types that guard imported text
-(`ImportWordText`, `WordText`, `TitleText`) and the role predicate
+`Pronunciation/IpaCatalog` (see [trainers.md](trainers.md)) — plus the `Languages/LearnerLanguages`
+catalog of learner languages (see [auth.md](auth.md#learner-language)), and the value types that
+guard imported text (`ImportWordText`, `WordText`, `TitleText`) and the role predicate
 `Entities/UserRoles.CanPublishDirectly`.
 
 ### `LanguageLab.Infrastructure/`
@@ -142,7 +146,14 @@ whose file this device actually holds. See [reader.md](reader.md).
 ### Auth and admin
 
 `/api/auth/*` — `telegram/start`, the handler-owned `telegram/callback`, `telegram/webapp`, `me`,
-`logout`. `/api/admin/users*` — list, ban, unban, role, delete. See [auth.md](auth.md).
+`PUT /me/language`, `logout`. `/api/admin/users*` — list, ban, unban, role, delete. See
+[auth.md](auth.md#learner-language) for the language pick.
+
+### Languages
+
+`GET /api/languages` — the `LearnerLanguages` catalog (`code`, `englishName`, `nativeName`), in
+catalog order; anonymous, since the picker may render before `/me` settles. See
+[auth.md](auth.md#learner-language).
 
 ### Reader
 

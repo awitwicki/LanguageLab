@@ -86,7 +86,7 @@ public static class AdminEndpoints
         // is why this cannot reuse ParseStatus above.
         group.MapGet("/shelf-words", async (
                 string? status, string? search, int? page, int? pageSize,
-                WordSortingService sorting, ICurrentUserContext currentUser) =>
+                WordSortingService sorting, ICurrentUserContext currentUser, ICurrentLanguage language) =>
         {
             if (!TryParseShelfStatus(status, out var parsed))
             {
@@ -95,6 +95,7 @@ public static class AdminEndpoints
 
             return Results.Ok(await sorting.ListShelfWordsAsync(
                 currentUser.Require().Id,
+                language.Require().Code,
                 parsed,
                 search,
                 page ?? 1,

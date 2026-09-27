@@ -10,6 +10,8 @@ const user = {
   username: 'ada',
   photoUrl: null,
   role: 'admin' as const,
+  language: 'uk',
+  suggestedLanguage: null,
 }
 
 function respond(routes: Record<string, { status: number; body?: unknown }>) {
@@ -113,6 +115,32 @@ describe('useAuth', () => {
     await flush()
 
     expect(container.textContent).toBe('anonymous')
+  })
+
+  // After the picker saves, the server's view of the user replaces the one from sign-in.
+  it('re-reads the user on refresh', async () => {
+    const { useAuth } = await import('./useAuth')
+    const me = { status: 200, body: { ...user, language: null, suggestedLanguage: 'pl' } as unknown }
+    respond({ '/api/auth/me': me })
+
+    function Probe() {
+      const { state, refreshUser } = useAuth()
+      return (
+        <button type="button" onClick={() => void refreshUser()}>
+          {state.status === 'signed-in' ? String(state.user.language) : state.status}
+        </button>
+      )
+    }
+
+    const { container } = await render(<Probe />)
+    await flush()
+    expect(container.textContent).toBe('null')
+
+    me.body = { ...user, language: 'pl', suggestedLanguage: null }
+    await click(container.querySelector('button')!)
+    await flush()
+
+    expect(container.textContent).toBe('pl')
   })
 
   // `respond` keys on the path alone, and DELETE /api/auth/me shares its path with the boot

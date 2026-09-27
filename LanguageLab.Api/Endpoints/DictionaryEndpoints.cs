@@ -44,7 +44,8 @@ public static class DictionaryEndpoints
             WordSortingService sorting,
             DictionaryAccessService access,
             PersonalDictionaryService personal,
-            ICurrentUserContext currentUser) =>
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var (userId, role) = currentUser.Require();
 
@@ -58,11 +59,12 @@ public static class DictionaryEndpoints
                 .Select(d => new { d.Id, d.Name, d.WordsCount, HasChapters = d.Chapters.Any(), d.IsPersonal })
                 .ToListAsync();
 
+            var code = language.Require().Code;
             var items = new List<DictionaryListItem>(dictionaries.Count);
 
             foreach (var d in dictionaries)
             {
-                var queue = await sorting.GetQueueAsync(userId, d.Id, chapterIds: null, take: 1);
+                var queue = await sorting.GetQueueAsync(userId, code, d.Id, chapterIds: null, take: 1);
                 items.Add(new DictionaryListItem(d.Id, d.Name, d.WordsCount, d.HasChapters, queue.Sorted, d.IsPersonal));
             }
 
@@ -71,11 +73,12 @@ public static class DictionaryEndpoints
 
         // The caller's own word list — its own screen, so its own shape: no chapters, no
         // sorting, the words themselves instead of a top-frequency list.
-        group.MapGet("/personal", async (PersonalDictionaryService personal, ICurrentUser currentUser) =>
-            Results.Ok(await personal.GetAsync(await currentUser.GetIdAsync(), DateTime.UtcNow)));
+        group.MapGet("/personal", async (
+            PersonalDictionaryService personal, ICurrentUser currentUser, ICurrentLanguage language) =>
+            Results.Ok(await personal.GetAsync(await currentUser.GetIdAsync(), language.Require().Code, DateTime.UtcNow)));
 
         group.MapPost("/personal/words", async (
-            AddPersonalWordRequest request, PersonalDictionaryService personal, ICurrentUser currentUser) =>
+            AddPersonalWordRequest request, PersonalDictionaryService personal, ICurrentUser currentUser, ICurrentLanguage language) =>
         {
             var userId = await currentUser.GetIdAsync();
             PersonalWord? added;
@@ -83,7 +86,7 @@ public static class DictionaryEndpoints
             try
             {
                 added = await personal.AddAsync(
-                    userId, request.Word ?? string.Empty, request.Translation ?? string.Empty, DateTime.UtcNow);
+                    userId, language.Require().Code, request.Word ?? string.Empty, request.Translation ?? string.Empty, DateTime.UtcNow);
             }
             catch (ArgumentException e)
             {
@@ -96,7 +99,7 @@ public static class DictionaryEndpoints
         });
 
         group.MapPost("/personal/words/import", async (
-            AddPersonalWordsRequest request, PersonalDictionaryService personal, ICurrentUser currentUser) =>
+            AddPersonalWordsRequest request, PersonalDictionaryService personal, ICurrentUser currentUser, ICurrentLanguage language) =>
         {
             try
             {
@@ -104,7 +107,8 @@ public static class DictionaryEndpoints
                     .Select(w => new BulkWordEntry(w.Word ?? string.Empty, w.Translation ?? string.Empty))
                     .ToList();
 
-                var outcomes = await personal.AddManyAsync(await currentUser.GetIdAsync(), entries, DateTime.UtcNow);
+                var outcomes = await personal.AddManyAsync(
+                    await currentUser.GetIdAsync(), language.Require().Code, entries, DateTime.UtcNow);
 
                 return Results.Ok(outcomes);
             }
@@ -121,14 +125,15 @@ public static class DictionaryEndpoints
             long wordPairId,
             UpdatePersonalWordRequest request,
             PersonalDictionaryService personal,
-            ICurrentUser currentUser) =>
+            ICurrentUser currentUser,
+            ICurrentLanguage language) =>
         {
             PersonalWord? updated;
 
             try
             {
                 updated = await personal.UpdateTranslationAsync(
-                    await currentUser.GetIdAsync(), wordPairId, request.Translation ?? string.Empty);
+                    await currentUser.GetIdAsync(), language.Require().Code, wordPairId, request.Translation ?? string.Empty);
             }
             catch (ArgumentException e)
             {
@@ -152,7 +157,8 @@ public static class DictionaryEndpoints
             LearningProgressService learningProgress,
             ChapterStatsService chapterStats,
             DictionaryAccessService access,
-            ICurrentUserContext currentUser) =>
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var (userId, role) = currentUser.Require();
             var now = DateTime.UtcNow;
@@ -168,16 +174,17 @@ public static class DictionaryEndpoints
                 return Results.NotFound();
             }
 
-            var whole = await sorting.GetQueueAsync(userId, id, chapterIds: null, take: 1);
+            // "To learn" = translated into the learner's language, on the "don't know" shelf, never trained — what a new batch takes.
+            var code = language.Require().Code;
+            var whole = await sorting.GetQueueAsync(userId, code, id, chapterIds: null, take: 1);
             var topWords = await stats.GetTopWordsAsync(id, userId);
 
-            // "To learn" = translated, on the "don't know" shelf, never trained — what a new batch takes.
-            var learnable = await selection.CountLearnableAsync(userId, id);
-            var due = await selection.CountDueAsync(userId, now, id);
+            var learnable = await selection.CountLearnableAsync(userId, code, id);
+            var due = await selection.CountDueAsync(userId, code, now, id);
 
             // The book's own box breakdown; the chapters' come with their rows.
-            var learning = await learningProgress.GetAsync(userId, id);
-            var chapterViews = await chapterStats.GetChapterViewsAsync(userId, id, now);
+            var learning = await learningProgress.GetAsync(userId, code, id);
+            var chapterViews = await chapterStats.GetChapterViewsAsync(userId, code, id, now);
 
             return Results.Ok(new DictionaryDetail(
                 dictionary.Id,

@@ -1,0 +1,95 @@
+.language-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 32rem;
+  margin: 0 auto;
+}
+
+/* First sign-in: the picker is the whole page, on the login screen's backdrop and gutters. */
+.language-picker-first-run {
+  min-height: 100vh;
+  justify-content: center;
+  padding: calc(24px + var(--safe-top)) 24px calc(24px + var(--safe-bottom));
+}
+
+.language-search {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-body);
+}
+
+.language-search:focus-visible {
+  outline-offset: 0;
+  border-color: var(--accent);
+}
+
+.language-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 60vh;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+}
+
+.language-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 9px 12px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  transition:
+    background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.language-option:hover {
+  background: var(--surface-2);
+}
+
+.language-option:focus-visible {
+  outline-offset: 0;
+}
+
+.language-option[aria-checked='true'] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: var(--accent);
+}
+
+.language-native {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.language-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 480px) {
+  .language-picker-first-run {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .language-actions .btn-lg {
+    flex: 1;
+  }
+}

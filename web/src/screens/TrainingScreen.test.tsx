@@ -29,7 +29,7 @@ const questionOne: NextQuestion = {
   question: {
     id: 100,
     wordPairId: 1,
-    direction: 'enToUa',
+    direction: 'enToNative',
     prompt: 'abide',
     options: [
       { wordPairId: 2, label: 'силос' },
@@ -219,7 +219,7 @@ describe('TrainingScreen — quiz', () => {
       ...questionOne,
       question: {
         ...questionOne.question!,
-        direction: 'uaToEn',
+        direction: 'nativeToEn',
         prompt: 'дотримуватися',
         options: [
           { wordPairId: 2, label: 'silo' },

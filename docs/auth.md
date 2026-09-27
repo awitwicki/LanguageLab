@@ -70,3 +70,28 @@ predicate because the question at its call sites is whether an import skips revi
 importer curates.
 
 Admins set a user's role from the admin screen's picker.
+
+## Learner language
+
+`TelegramUser.Language` (a `LearnerLanguages` code, see
+[vocabulary-and-training.md](vocabulary-and-training.md#translation)) is `null` until the learner
+picks one — only ever true for a brand-new account. The SPA gates on it: while `user.language` is
+`null`, `App.tsx` renders the language picker full-screen instead of any route, before the account
+can reach anything that needs a translation.
+
+`TelegramUser.TelegramLanguageCode` is Telegram's raw `language_code` from the last Mini App
+sign-in, kept only to seed the picker: `GET /api/auth/me`'s `suggestedLanguage` is
+`LearnerLanguages.FromTelegram(TelegramLanguageCode)` while `language` is still `null`, and `null`
+otherwise. It is never stored as the language itself — the OIDC and dev-login paths never set it at
+all, so on those `suggestedLanguage` is always `null` and the picker falls back to Ukrainian.
+
+`PUT /api/auth/me/language {code}` saves the pick: `204` on success, `400
+{"error":"unknown_language"}` for any code not in the catalog (`ru` included, since it was never
+added), `401` if the session's user row is somehow gone.
+
+`SessionValidator` already loads the user row on every request to check the ban and the role, so it
+puts `Language` straight onto `HttpContext.Items` at no extra cost; `ICurrentLanguage.Get()`
+(`HttpCurrentLanguage`) reads it back and resolves it against `LearnerLanguages`. An endpoint that
+needs a language calls `ICurrentLanguage.Require()`, which throws `LanguageNotSetException` for a
+`null` language; `LanguageNotSetMiddleware` turns that into `409 {"error":"language_not_set"}`. The
+SPA's gate means a real user never reaches it — it exists for a client that skips the picker.

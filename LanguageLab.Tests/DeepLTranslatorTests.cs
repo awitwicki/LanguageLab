@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using LanguageLab.Application.Translation;
+using LanguageLab.Domain.Languages;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -44,7 +45,7 @@ public class DeepLTranslatorTests
     {
         var handler = new StubHandler(_ => Json(Answer));
 
-        var result = await Translator(handler).TranslateAsync("All of them had some difficulty.", CancellationToken.None);
+        var result = await Translator(handler).TranslateAsync("All of them had some difficulty.", LearnerLanguages.Default, CancellationToken.None);
 
         Assert.Equal(SentenceTranslation.Success("Усі вони мали певні труднощі."), result);
         Assert.Equal(HttpMethod.Post, handler.LastRequest!.Method);
@@ -60,7 +61,7 @@ public class DeepLTranslatorTests
     {
         var handler = new StubHandler(_ => new HttpResponseMessage((HttpStatusCode)456));
 
-        Assert.Equal(SentenceTranslation.Quota, await Translator(handler).TranslateAsync("Hi.", CancellationToken.None));
+        Assert.Equal(SentenceTranslation.Quota, await Translator(handler).TranslateAsync("Hi.", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Theory]
@@ -73,7 +74,7 @@ public class DeepLTranslatorTests
     {
         var handler = new StubHandler(_ => Json(body, status));
 
-        Assert.Equal(SentenceTranslation.Failure, await Translator(handler).TranslateAsync("Hi.", CancellationToken.None));
+        Assert.Equal(SentenceTranslation.Failure, await Translator(handler).TranslateAsync("Hi.", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Fact]
@@ -81,7 +82,7 @@ public class DeepLTranslatorTests
     {
         var handler = new StubHandler(_ => throw new HttpRequestException("connection reset"));
 
-        Assert.Equal(SentenceTranslation.Failure, await Translator(handler).TranslateAsync("Hi.", CancellationToken.None));
+        Assert.Equal(SentenceTranslation.Failure, await Translator(handler).TranslateAsync("Hi.", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Theory]
@@ -94,7 +95,20 @@ public class DeepLTranslatorTests
         var translator = Translator(handler, key);
 
         Assert.False(translator.IsConfigured);
-        Assert.Equal(SentenceTranslation.Failure, await translator.TranslateAsync("Hi.", CancellationToken.None));
+        Assert.Equal(SentenceTranslation.Failure, await translator.TranslateAsync("Hi.", LearnerLanguages.Default, CancellationToken.None));
         Assert.Equal(0, handler.Calls);
+    }
+
+    [Theory]
+    [InlineData("pl", "\"target_lang\":\"PL\"")]
+    [InlineData("zh", "\"target_lang\":\"ZH-HANS\"")]
+    [InlineData("tl", "\"target_lang\":\"TL\"")]
+    public async Task Sends_the_target_languages_DeepL_code(string code, string expected)
+    {
+        var handler = new StubHandler(_ => Json(Answer));
+
+        await Translator(handler).TranslateAsync("Hi.", LearnerLanguages.Find(code)!, CancellationToken.None);
+
+        Assert.Contains(expected, handler.LastBody);
     }
 }

@@ -23,7 +23,7 @@ public class TrainingSessionServiceTests
         var db = NewContext();
 
         var words = Enumerable.Range(1, 12)
-            .Select(i => new WordPair { Id = i, Word = $"word{i}", Translation = $"переклад{i}" })
+            .Select(i => TestWords.Pair(i, $"word{i}", $"переклад{i}"))
             .ToList();
 
         var dictionary = new LanguageLab.Domain.Entities.Dictionary
@@ -74,7 +74,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await Service(db).StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
 
         Assert.NotNull(training);
         Assert.Equal(TrainingMode.NewBatch, training.Mode);
@@ -83,7 +83,7 @@ public class TrainingSessionServiceTests
         var questions = await db.TrainingQuestions.Where(q => q.TrainingId == training.Id).ToListAsync();
         Assert.Equal(10, questions.Count);
         Assert.Equal(5, questions.Select(q => q.WordPairId).Distinct().Count());
-        Assert.All(questions, q => Assert.Equal(QuestionDirection.EnToUa, q.Direction));
+        Assert.All(questions, q => Assert.Equal(QuestionDirection.EnToNative, q.Direction));
     }
 
     [Fact]
@@ -93,7 +93,7 @@ public class TrainingSessionServiceTests
         db.UnknownWords.RemoveRange(db.UnknownWords);
         await db.SaveChangesAsync();
 
-        Assert.Null(await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now));
+        Assert.Null(await Service(db).StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now));
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var question = await service.GetNextQuestionAsync(training!.Id);
 
         var first = await service.AnswerAsync(question!.Id, question.WordPairId, Now);
@@ -117,7 +117,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var question = await service.GetNextQuestionAsync(training!.Id);
         var wrongPick = question!.OptionIds.First(id => id != question.WordPairId);
 
@@ -131,7 +131,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var question = await service.GetNextQuestionAsync(training!.Id);
         var wordPairId = question!.WordPairId;
 
@@ -151,7 +151,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var question = await service.GetNextQuestionAsync(training!.Id);
         var wordPairId = question!.WordPairId;
 
@@ -170,7 +170,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var question = await service.GetNextQuestionAsync(training!.Id);
         var wordPairId = question!.WordPairId;
 
@@ -187,7 +187,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var failedWordId = (await db.TrainingQuestions
             .Where(q => q.TrainingId == training!.Id)
             .Select(q => q.WordPairId)
@@ -224,7 +224,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var wordIds = await db.TrainingQuestions
             .Where(q => q.TrainingId == training!.Id)
             .Select(q => q.WordPairId)
@@ -245,7 +245,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var first = await service.GetNextQuestionAsync(training!.Id);
         await service.MarkKnownAsync(first!.Id, Now);
 
@@ -268,7 +268,7 @@ public class TrainingSessionServiceTests
             new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 3, DueAt = Now.AddDays(-2), LastSeenAt = Now });
         await db.SaveChangesAsync();
 
-        var training = await Service(db).StartReviewAsync(UserId, Now);
+        var training = await Service(db).StartReviewAsync(UserId, TestWords.Uk, Now);
 
         Assert.NotNull(training);
         Assert.Equal(TrainingMode.Review, training.Mode);
@@ -297,7 +297,7 @@ public class TrainingSessionServiceTests
             new WordProgress { Id = 3, UserId = UserId, WordPairId = 3, Box = 2, DueAt = Now.AddDays(-2), LastSeenAt = Now });
         await db.SaveChangesAsync();
 
-        var training = await Service(db).StartReviewAsync(UserId, Now, DictionaryId, [1]);
+        var training = await Service(db).StartReviewAsync(UserId, TestWords.Uk, Now, DictionaryId, [1]);
 
         Assert.NotNull(training);
         Assert.Equal(TrainingMode.Review, training.Mode);
@@ -318,7 +318,7 @@ public class TrainingSessionServiceTests
             new WordProgress { Id = 2, UserId = UserId, WordPairId = 2, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now });
         await db.SaveChangesAsync();
 
-        Assert.Null(await Service(db).StartReviewAsync(UserId, Now, DictionaryId, [1]));
+        Assert.Null(await Service(db).StartReviewAsync(UserId, TestWords.Uk, Now, DictionaryId, [1]));
     }
 
     [Fact]
@@ -326,7 +326,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var wordIds = await db.TrainingQuestions
             .Where(q => q.TrainingId == training!.Id)
             .Select(q => q.WordPairId)
@@ -350,7 +350,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
 
         await AnswerEverythingAsync(service, training!.Id);
         await service.FinishAsync(training.Id, Now);
@@ -387,7 +387,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
 
         var first = await service.GetNextQuestionAsync(training!.Id);
         var wordPairId = first!.WordPairId;
@@ -446,7 +446,7 @@ public class TrainingSessionServiceTests
 
         await db.SaveChangesAsync();
 
-        var stats = await Service(db).GetStatsAsync(UserId, Now);
+        var stats = await Service(db).GetStatsAsync(UserId, TestWords.Uk, Now);
 
         Assert.Equal(LeitnerScheduler.MaxBox, stats.BoxCounts.Count);
         Assert.Equal(new[] { 2, 1, 1, 0, 1 }, stats.BoxCounts);
@@ -472,8 +472,8 @@ public class TrainingSessionServiceTests
 
         // Both sessions start before either finishes — so both see the same set of
         // due words.
-        var sessionA = await service.StartReviewAsync(UserId, Now.AddMinutes(1));
-        var sessionB = await service.StartReviewAsync(UserId, Now.AddMinutes(2));
+        var sessionA = await service.StartReviewAsync(UserId, TestWords.Uk, Now.AddMinutes(1));
+        var sessionB = await service.StartReviewAsync(UserId, TestWords.Uk, Now.AddMinutes(2));
 
         Assert.NotNull(sessionA);
         Assert.NotNull(sessionB);
@@ -512,8 +512,8 @@ public class TrainingSessionServiceTests
 
         var service = Service(db);
 
-        var sessionA = await service.StartReviewAsync(UserId, Now);
-        var sessionB = await service.StartReviewAsync(UserId, Now);
+        var sessionA = await service.StartReviewAsync(UserId, TestWords.Uk, Now);
+        var sessionB = await service.StartReviewAsync(UserId, TestWords.Uk, Now);
 
         Assert.NotNull(sessionA);
         Assert.NotNull(sessionB);
@@ -542,7 +542,7 @@ public class TrainingSessionServiceTests
         // wrongly "covers" the review session's CreatedAt (also == Now), and the boxes do not move.
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var wordIds = await db.TrainingQuestions
             .Where(q => q.TrainingId == training!.Id)
             .Select(q => q.WordPairId)
@@ -578,7 +578,7 @@ public class TrainingSessionServiceTests
         await using var db = await ArrangeAsync();
         var service = Service(db);
 
-        var batch = await service.StartNewBatchAsync(UserId, DictionaryId, Now);
+        var batch = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
         var wordId = await db.TrainingQuestions
             .Where(q => q.TrainingId == batch!.Id)
             .Select(q => q.WordPairId)
@@ -592,7 +592,7 @@ public class TrainingSessionServiceTests
         Assert.Equal(0, afterBatch.WrongCount);
 
         var reviewNow = Now.AddDays(4);
-        var review = await service.StartReviewAsync(UserId, reviewNow);
+        var review = await service.StartReviewAsync(UserId, TestWords.Uk, reviewNow);
         Assert.NotNull(review);
         var reviewWords = await db.TrainingQuestions
             .Where(q => q.TrainingId == review!.Id)
@@ -616,7 +616,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, chapterIds: null, batchSize: 10);
+        var training = await Service(db).StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now, chapterIds: null, batchSize: 10);
 
         Assert.NotNull(training);
         var questions = await db.TrainingQuestions.Where(q => q.TrainingId == training.Id).ToListAsync();
@@ -629,7 +629,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, chapterIds: null, batchSize: 0);
+        var training = await Service(db).StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now, chapterIds: null, batchSize: 0);
 
         Assert.NotNull(training);
         Assert.Equal(2, await db.TrainingQuestions.CountAsync(q => q.TrainingId == training.Id));
@@ -646,7 +646,7 @@ public class TrainingSessionServiceTests
             new ChapterWord { ChapterId = 1, WordPairId = 3, Count = 1 });
         await db.SaveChangesAsync();
 
-        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, chapterIds: [1], batchSize: 10);
+        var training = await Service(db).StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now, chapterIds: [1], batchSize: 10);
 
         Assert.NotNull(training);
         var wordIds = await db.TrainingQuestions
@@ -663,7 +663,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var training = (await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now))!;
 
         var view = await service.GetNextQuestionViewAsync(training.Id);
 
@@ -687,7 +687,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var training = (await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now))!;
         var view = await service.GetNextQuestionViewAsync(training.Id);
 
         await service.MarkKnownAsync(view.Question!.Id, Now);
@@ -703,7 +703,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var training = (await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now))!;
         var question = (await service.GetNextQuestionAsync(training.Id))!;
 
         question.OptionIds = question.OptionIds.Where(id => id != question.WordPairId).ToList();
@@ -720,7 +720,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var training = (await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now))!;
 
         await AnswerEverythingAsync(service, training.Id);
 
@@ -736,7 +736,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var training = (await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now))!;
 
         var words = await service.GetBatchWordsAsync(training.Id);
 
@@ -750,7 +750,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        var training = (await service.StartNewBatchAsync(UserId, DictionaryId, Now))!;
+        var training = (await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now))!;
 
         Assert.NotNull(await service.FindAsync(training.Id, UserId));
         Assert.Null(await service.FindAsync(training.Id, userId: 999));
@@ -763,7 +763,7 @@ public class TrainingSessionServiceTests
         await using var db = await ArrangeAsync();
 
         var training = await Service(db).StartNewBatchAsync(
-            UserId, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3, 7, 11]);
+            UserId, TestWords.Uk, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3, 7, 11]);
 
         Assert.NotNull(training);
         var wordIds = await db.TrainingQuestions
@@ -783,7 +783,7 @@ public class TrainingSessionServiceTests
         await db.SaveChangesAsync();
 
         var training = await Service(db).StartNewBatchAsync(
-            UserId, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3, 7]);
+            UserId, TestWords.Uk, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3, 7]);
 
         Assert.NotNull(training);
         var wordIds = await db.TrainingQuestions
@@ -802,7 +802,7 @@ public class TrainingSessionServiceTests
         await db.SaveChangesAsync();
 
         Assert.Null(await Service(db).StartNewBatchAsync(
-            UserId, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3]));
+            UserId, TestWords.Uk, DictionaryId, Now, chapterIds: null, batchSize: 10, wordPairIds: [3]));
     }
 
     [Fact]
@@ -811,7 +811,7 @@ public class TrainingSessionServiceTests
         await using var db = await ArrangeAsync();
 
         var training = await Service(db).StartNewBatchAsync(
-            UserId, DictionaryId, Now, chapterIds: null, batchSize: 2, wordPairIds: [1, 2, 3, 4]);
+            UserId, TestWords.Uk, DictionaryId, Now, chapterIds: null, batchSize: 2, wordPairIds: [1, 2, 3, 4]);
 
         Assert.NotNull(training);
         var wordIds = await db.TrainingQuestions
@@ -829,11 +829,11 @@ public class TrainingSessionServiceTests
         await using var db = await ArrangeAsync();
         var selection = new WordSelectionService(db);
 
-        var expected = (await selection.GetCandidatesAsync(UserId, DictionaryId, null, take: 5))
+        var expected = (await selection.GetCandidatesAsync(UserId, TestWords.Uk, DictionaryId, null, take: 5))
             .Select(c => c.WordPairId)
             .OrderBy(id => id);
 
-        var training = await new TrainingSessionService(db, selection).StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await new TrainingSessionService(db, selection).StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
 
         var actual = await db.TrainingQuestions
             .Where(q => q.TrainingId == training!.Id)
@@ -857,7 +857,7 @@ public class TrainingSessionServiceTests
             new ChapterWord { ChapterId = 7, WordPairId = 2, Count = 1 });
         await db.SaveChangesAsync();
 
-        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, [7]);
+        var training = await Service(db).StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now, [7]);
 
         Assert.NotNull(training);
         Assert.Equal(7, training.ChapterId);
@@ -868,7 +868,7 @@ public class TrainingSessionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now);
+        var training = await Service(db).StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
 
         Assert.NotNull(training);
         Assert.Null(training.ChapterId);
@@ -890,7 +890,7 @@ public class TrainingSessionServiceTests
             new ChapterWord { ChapterId = 8, WordPairId = 2, Count = 1 });
         await db.SaveChangesAsync();
 
-        var training = await Service(db).StartNewBatchAsync(UserId, DictionaryId, Now, [7, 8]);
+        var training = await Service(db).StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now, [7, 8]);
 
         Assert.NotNull(training);
         Assert.Null(training.ChapterId);
@@ -906,7 +906,7 @@ public class TrainingSessionServiceTests
             new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now });
         await db.SaveChangesAsync();
 
-        var training = await Service(db).StartReviewAsync(UserId, Now, DictionaryId, [7]);
+        var training = await Service(db).StartReviewAsync(UserId, TestWords.Uk, Now, DictionaryId, [7]);
 
         Assert.NotNull(training);
         Assert.Equal(7, training.ChapterId);
@@ -924,7 +924,7 @@ public class TrainingSessionServiceTests
         await db.SaveChangesAsync();
 
         var service = Service(db);
-        var training = await service.StartNewBatchAsync(UserId, DictionaryId, Now, [7]);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now, [7]);
         Assert.NotNull(training);
 
         await AnswerEverythingAsync(service, training.Id, wordIdsToFail: 1);
@@ -932,5 +932,69 @@ public class TrainingSessionServiceTests
 
         Assert.NotNull(retry);
         Assert.Equal(7, retry.ChapterId);
+    }
+
+    /// <summary>Gives every fixture word a Polish translation next to its Ukrainian one.</summary>
+    private static async Task AddPolishAsync(ApplicationDbContext db)
+    {
+        for (long id = 1; id <= 12; id++)
+        {
+            db.WordTranslations.Add(new WordTranslation { WordPairId = id, Language = "pl", Text = $"tłumaczenie{id}" });
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Review focus 1.</summary>
+    [Fact]
+    public async Task A_session_renders_in_the_language_it_was_built_in()
+    {
+        await using var db = await ArrangeAsync();
+        await AddPolishAsync(db);
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, TestWords.Uk, DictionaryId, Now);
+
+        Assert.Equal("uk", training!.Language);
+
+        // The learner switches to Polish mid-session; nothing about this session changes.
+        var user = await db.Users.SingleAsync(u => u.Id == UserId);
+        user.Language = "pl";
+        await db.SaveChangesAsync();
+
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+
+        Assert.All(view.Options, o => Assert.StartsWith("переклад", o.Translation));
+        Assert.StartsWith("переклад", view.Target!.Translation);
+
+        var outcome = await service.AnswerAsync(view.Question!.Id, view.Question.WordPairId, Now);
+        Assert.StartsWith("переклад", outcome!.Word.Translation);
+        Assert.All(await service.GetBatchWordsAsync(training.Id), w => Assert.StartsWith("переклад", w.Translation));
+    }
+
+    [Fact]
+    public async Task A_session_built_in_another_language_renders_in_it_and_its_retry_keeps_it()
+    {
+        await using var db = await ArrangeAsync();
+        await AddPolishAsync(db);
+        var service = Service(db);
+        var training = await service.StartNewBatchAsync(UserId, "pl", DictionaryId, Now);
+
+        Assert.Equal("pl", training!.Language);
+
+        var view = await service.GetNextQuestionViewAsync(training.Id);
+        Assert.All(view.Options, o => Assert.StartsWith("tłumaczenie", o.Translation));
+        Assert.StartsWith("tłumaczenie", view.Target!.Translation);
+
+        var failed = view.Question!.WordPairId;
+        await AnswerEverythingAsync(service, training.Id, failed);
+        var summary = await service.FinishAsync(training.Id, Now);
+        Assert.All(summary.Words, w => Assert.StartsWith("tłumaczenie", w.Translation));
+
+        var retry = await service.StartRetryAsync(UserId, training.Id, Now);
+
+        Assert.Equal("pl", retry!.Language);
+        var retryView = await service.GetNextQuestionViewAsync(retry.Id);
+        Assert.Equal(failed, retryView.Target!.Id);
+        Assert.StartsWith("tłumaczenie", retryView.Target.Translation);
     }
 }

@@ -29,7 +29,9 @@ limit as a manual import. The import screen also puts an imported book in the re
   personal rows training uses. `GetAsync` gives the New/Learning/Known that the highlights use;
   `GetShelfAsync` gives the panel's New/Learning/Known/**Ignored**, plus whether a Leitner row makes
   it a word really in training.
-- **`ReaderWordService`** — the word panel's lookup and its three buttons:
+- **`ReaderWordService`** — the word panel's lookup and its three buttons, translated into the
+  learner's language (`WordPanel.tsx` and `Sentence.tsx` render with `lang={language}` rather than
+  a hardcoded `"uk"`):
   - **Add to training** shelves the word in the dictionary of the book being read when the word is
     there, and otherwise adds it to "My words" (`LearnTargetAsync`).
   - **I know it** and **Ignore** shelve the shared row — know, or exclude — creating it untranslated
@@ -88,7 +90,11 @@ Everything format-dependent, and the only place that branches on format:
 
 ## Sentence translation
 
-`POST /api/translate/sentence` uses DeepL when `Translation:DeepLApiKey` is set and MyMemory
-otherwise, stores nothing, and answers 413 for a sentence MyMemory cannot take (over 500 bytes) or
-429 past the user's 20 000-characters-a-day quota (`SentenceQuota`). The server-wide budget behind
-it is in [vocabulary-and-training.md](vocabulary-and-training.md#budgets).
+`POST /api/translate/sentence` translates into the learner's language, using DeepL when
+`Translation:DeepLApiKey` is set and MyMemory otherwise, stores nothing, and answers 413 for a
+sentence MyMemory cannot take (over 500 bytes) or 429 past the user's 20 000-characters-a-day quota
+(`SentenceQuota`). The server-wide budget behind it is in
+[vocabulary-and-training.md](vocabulary-and-training.md#budgets).
+
+The device-side cache in `bookStore.ts` keys each translation `${hash}:${language}:${key}`, so
+switching the learner's language never serves back another language's cached text.

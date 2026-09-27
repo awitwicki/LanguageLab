@@ -17,7 +17,7 @@ public class WordSelectionServiceTests
             .Options);
 
     private static WordPair Word(long id, string word, string translation) =>
-        new() { Id = id, Word = word, Translation = translation };
+        TestWords.Pair(id, word, translation);
 
     /// <summary>
     /// One graph holding a representative of every exclusion rule.
@@ -177,7 +177,7 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSelectionService(db);
 
-        var batch = await service.GetNewBatchAsync(UserId, DictionaryId, size: 5);
+        var batch = await service.GetNewBatchAsync(UserId, TestWords.Uk, DictionaryId, size: 5);
 
         Assert.Equal(new[] { 1L, 2L }, batch.Select(w => w.Id).OrderBy(id => id));
     }
@@ -188,7 +188,7 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSelectionService(db);
 
-        var batch = await service.GetNewBatchAsync(UserId, DictionaryId, size: 1);
+        var batch = await service.GetNewBatchAsync(UserId, TestWords.Uk, DictionaryId, size: 1);
 
         Assert.Single(batch);
     }
@@ -202,7 +202,7 @@ public class WordSelectionServiceTests
             new WordProgress { Id = 3, UserId = UserId, WordPairId = 2, Box = 1, DueAt = Now, LastSeenAt = Now });
         await db.SaveChangesAsync();
 
-        var batch = await new WordSelectionService(db).GetNewBatchAsync(UserId, DictionaryId, size: 5);
+        var batch = await new WordSelectionService(db).GetNewBatchAsync(UserId, TestWords.Uk, DictionaryId, size: 5);
 
         Assert.Empty(batch);
     }
@@ -212,7 +212,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        Assert.Equal(2, await new WordSelectionService(db).CountLearnableAsync(UserId, DictionaryId));
+        Assert.Equal(2, await new WordSelectionService(db).CountLearnableAsync(UserId, TestWords.Uk, DictionaryId));
     }
 
     [Fact]
@@ -231,7 +231,7 @@ public class WordSelectionServiceTests
             new WordProgress { Id = 4, UserId = UserId, WordPairId = 4, Box = 5, DueAt = null, IsLearned = true, LastSeenAt = Now });
         await db.SaveChangesAsync();
 
-        var due = await new WordSelectionService(db).GetDueWordsAsync(UserId, Now, size: 20);
+        var due = await new WordSelectionService(db).GetDueWordsAsync(UserId, TestWords.Uk, Now, size: 20);
 
         Assert.Equal(new[] { 2L, 1L }, due.Select(w => w.Id));
     }
@@ -258,11 +258,11 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeWithDueWordsInChaptersAsync();
         var service = new WordSelectionService(db);
 
-        Assert.Equal(new[] { 4L, 1L }, (await service.GetDueWordsAsync(UserId, Now, 20)).Select(w => w.Id));
-        Assert.Equal(new[] { 4L, 1L }, (await service.GetDueWordsAsync(UserId, Now, 20, DictionaryId)).Select(w => w.Id));
-        Assert.Equal(new[] { 1L }, (await service.GetDueWordsAsync(UserId, Now, 20, DictionaryId, [1])).Select(w => w.Id));
-        Assert.Equal(new[] { 4L }, (await service.GetDueWordsAsync(UserId, Now, 20, DictionaryId, [2])).Select(w => w.Id));
-        Assert.Empty(await service.GetDueWordsAsync(UserId, Now, 20, dictionaryId: 999));
+        Assert.Equal(new[] { 4L, 1L }, (await service.GetDueWordsAsync(UserId, TestWords.Uk, Now, 20)).Select(w => w.Id));
+        Assert.Equal(new[] { 4L, 1L }, (await service.GetDueWordsAsync(UserId, TestWords.Uk, Now, 20, DictionaryId)).Select(w => w.Id));
+        Assert.Equal(new[] { 1L }, (await service.GetDueWordsAsync(UserId, TestWords.Uk, Now, 20, DictionaryId, [1])).Select(w => w.Id));
+        Assert.Equal(new[] { 4L }, (await service.GetDueWordsAsync(UserId, TestWords.Uk, Now, 20, DictionaryId, [2])).Select(w => w.Id));
+        Assert.Empty(await service.GetDueWordsAsync(UserId, TestWords.Uk, Now, 20, dictionaryId: 999));
     }
 
     [Fact]
@@ -271,9 +271,9 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeWithDueWordsInChaptersAsync();
         var service = new WordSelectionService(db);
 
-        Assert.Equal(2, await service.CountDueAsync(UserId, Now));
-        Assert.Equal(1, await service.CountDueAsync(UserId, Now, DictionaryId, [1]));
-        Assert.Equal(0, await service.CountDueAsync(UserId, Now, dictionaryId: 999));
+        Assert.Equal(2, await service.CountDueAsync(UserId, TestWords.Uk, Now));
+        Assert.Equal(1, await service.CountDueAsync(UserId, TestWords.Uk, Now, DictionaryId, [1]));
+        Assert.Equal(0, await service.CountDueAsync(UserId, TestWords.Uk, Now, dictionaryId: 999));
     }
 
     /// <summary>
@@ -285,7 +285,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeWithDueWordsInChaptersAsync();
 
-        var byChapter = await new WordSelectionService(db).GetReviewAvailabilityByChapterAsync(UserId, DictionaryId, Now);
+        var byChapter = await new WordSelectionService(db).GetReviewAvailabilityByChapterAsync(UserId, TestWords.Uk, DictionaryId, Now);
 
         Assert.Equal(new ReviewAvailability(1, Now.AddDays(2)), byChapter[1]);
         Assert.Equal(new ReviewAvailability(1, null), byChapter[2]);
@@ -297,7 +297,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeWithChaptersAsync();
 
-        var byChapter = await new WordSelectionService(db).GetReviewAvailabilityByChapterAsync(UserId, DictionaryId, Now);
+        var byChapter = await new WordSelectionService(db).GetReviewAvailabilityByChapterAsync(UserId, TestWords.Uk, DictionaryId, Now);
 
         Assert.Empty(byChapter);
         Assert.Equal(new ReviewAvailability(0, null), ReviewAvailability.None);
@@ -315,7 +315,7 @@ public class WordSelectionServiceTests
             new WordProgress { Id = 3, UserId = UserId, WordPairId = 3, Box = 5, DueAt = null, IsLearned = true, LastSeenAt = Now });
         await db.SaveChangesAsync();
 
-        Assert.Equal(1, await new WordSelectionService(db).CountDueAsync(UserId, Now));
+        Assert.Equal(1, await new WordSelectionService(db).CountDueAsync(UserId, TestWords.Uk, Now));
     }
 
     [Fact]
@@ -323,7 +323,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, DictionaryId, size: 60, new Random(1));
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, TestWords.Uk, DictionaryId, size: 60, new Random(1));
 
         Assert.DoesNotContain(pool, w => w.Translation.Length == 0);
     }
@@ -333,7 +333,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, dictionaryId: null, size: 60, new Random(1));
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, TestWords.Uk, dictionaryId: null, size: 60, new Random(1));
 
         Assert.Contains(pool, w => w.Id == 6);
     }
@@ -348,7 +348,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, DictionaryId, size: 60, new Random(1));
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, TestWords.Uk, DictionaryId, size: 60, new Random(1));
 
         var siloIds = new long[] { 1, 2, 3, 4, 7, 8 };
         Assert.Equal(7, pool.Count);
@@ -361,7 +361,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, DictionaryId, size: 3, new Random(1));
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, TestWords.Uk, DictionaryId, size: 3, new Random(1));
 
         Assert.Equal(3, pool.Count);
         Assert.DoesNotContain(pool, w => w.Id == 6);
@@ -380,12 +380,12 @@ public class WordSelectionServiceTests
         { Name = "My words", WordsCount = 1, OwnerId = 2, PublicationStatus = PublicationStatus.Private, IsPersonal = true };
         var myPersonal = new Domain.Entities.Dictionary
         { Name = "My words", WordsCount = 1, OwnerId = UserId, PublicationStatus = PublicationStatus.Private, IsPersonal = true };
-        theirPersonal.Words = [new WordPair { Id = 20, Word = "theirs", Translation = "їхнє", OwnerId = 2 }];
-        myPersonal.Words = [new WordPair { Id = 21, Word = "mine", Translation = "моє", OwnerId = UserId }];
+        theirPersonal.Words = [TestWords.Pair(20, "theirs", "їхнє", 2)];
+        myPersonal.Words = [TestWords.Pair(21, "mine", "моє", UserId)];
         db.Dictionaries.AddRange(theirPersonal, myPersonal);
         await db.SaveChangesAsync();
 
-        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, dictionaryId: null, size: 60, new Random(1));
+        var pool = await new WordSelectionService(db).GetDistractorPoolAsync(UserId, TestWords.Uk, dictionaryId: null, size: 60, new Random(1));
 
         Assert.DoesNotContain(pool, w => w.Id == 20);
         Assert.Contains(pool, w => w.Id == 21);
@@ -401,7 +401,7 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSelectionService(db);
 
-        var batch = await service.GetNewBatchAsync(UserId, DictionaryId, size: 10);
+        var batch = await service.GetNewBatchAsync(UserId, TestWords.Uk, DictionaryId, size: 10);
 
         Assert.DoesNotContain(batch, w => w.Word == "solo");
     }
@@ -412,8 +412,8 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeWithChaptersAsync();
         var service = new WordSelectionService(db);
 
-        var chapterOne = await service.GetNewBatchAsync(UserId, DictionaryId, size: 10, chapterIds: [1]);
-        var chapterTwo = await service.GetNewBatchAsync(UserId, DictionaryId, size: 10, chapterIds: [2]);
+        var chapterOne = await service.GetNewBatchAsync(UserId, TestWords.Uk, DictionaryId, size: 10, chapterIds: [1]);
+        var chapterTwo = await service.GetNewBatchAsync(UserId, TestWords.Uk, DictionaryId, size: 10, chapterIds: [2]);
 
         Assert.Equal(new[] { 1L, 2L }, chapterOne.Select(w => w.Id).OrderBy(id => id));
         Assert.Equal(new[] { 4L, 5L }, chapterTwo.Select(w => w.Id).OrderBy(id => id));
@@ -425,8 +425,8 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeWithChaptersAsync();
         var service = new WordSelectionService(db);
 
-        var nullScope = await service.GetNewBatchAsync(UserId, DictionaryId, size: 10);
-        var emptyScope = await service.GetNewBatchAsync(UserId, DictionaryId, size: 10, chapterIds: []);
+        var nullScope = await service.GetNewBatchAsync(UserId, TestWords.Uk, DictionaryId, size: 10);
+        var emptyScope = await service.GetNewBatchAsync(UserId, TestWords.Uk, DictionaryId, size: 10, chapterIds: []);
 
         Assert.Equal(new[] { 1L, 2L, 4L, 5L }, nullScope.Select(w => w.Id).OrderBy(id => id));
         Assert.Equal(new[] { 1L, 2L, 4L, 5L }, emptyScope.Select(w => w.Id).OrderBy(id => id));
@@ -438,10 +438,10 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeWithChaptersAsync();
         var service = new WordSelectionService(db);
 
-        Assert.Equal(4, await service.CountLearnableAsync(UserId, DictionaryId));
-        Assert.Equal(2, await service.CountLearnableAsync(UserId, DictionaryId, chapterIds: [1]));
-        Assert.Equal(2, await service.CountLearnableAsync(UserId, DictionaryId, chapterIds: [2]));
-        Assert.Equal(4, await service.CountLearnableAsync(UserId, DictionaryId, chapterIds: [1, 2]));
+        Assert.Equal(4, await service.CountLearnableAsync(UserId, TestWords.Uk, DictionaryId));
+        Assert.Equal(2, await service.CountLearnableAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [1]));
+        Assert.Equal(2, await service.CountLearnableAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [2]));
+        Assert.Equal(4, await service.CountLearnableAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [1, 2]));
     }
 
     [Fact]
@@ -449,7 +449,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeWithFrequenciesAsync();
 
-        var candidates = await new WordSelectionService(db).GetCandidatesAsync(UserId, DictionaryId, chapterIds: null, take: 10);
+        var candidates = await new WordSelectionService(db).GetCandidatesAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: null, take: 10);
 
         Assert.Equal(new long[] { 1, 6, 4, 2, 3, 5 }, candidates.Select(c => c.WordPairId));
         Assert.Equal(new[] { 15, 7, 7, 3, 2, 1 }, candidates.Select(c => c.Frequency));
@@ -462,9 +462,9 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeWithFrequenciesAsync();
         var service = new WordSelectionService(db);
 
-        var one = await service.GetCandidatesAsync(UserId, DictionaryId, chapterIds: [1], take: 10);
-        var two = await service.GetCandidatesAsync(UserId, DictionaryId, chapterIds: [2], take: 10);
-        var both = await service.GetCandidatesAsync(UserId, DictionaryId, chapterIds: [1, 2], take: 10);
+        var one = await service.GetCandidatesAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [1], take: 10);
+        var two = await service.GetCandidatesAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [2], take: 10);
+        var both = await service.GetCandidatesAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [1, 2], take: 10);
 
         Assert.Equal(new long[] { 1, 2, 3 }, one.Select(c => c.WordPairId));
         Assert.Equal(new[] { 10, 3, 2 }, one.Select(c => c.Frequency));
@@ -481,9 +481,9 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeWithFrequenciesAsync();
         var service = new WordSelectionService(db);
 
-        Assert.Equal(2, (await service.GetCandidatesAsync(UserId, DictionaryId, null, take: 2)).Count);
-        Assert.Single(await service.GetCandidatesAsync(UserId, DictionaryId, null, take: 0));
-        Assert.Equal(6, (await service.GetCandidatesAsync(UserId, DictionaryId, null, take: 100)).Count);
+        Assert.Equal(2, (await service.GetCandidatesAsync(UserId, TestWords.Uk, DictionaryId, null, take: 2)).Count);
+        Assert.Single(await service.GetCandidatesAsync(UserId, TestWords.Uk, DictionaryId, null, take: 0));
+        Assert.Equal(6, (await service.GetCandidatesAsync(UserId, TestWords.Uk, DictionaryId, null, take: 100)).Count);
     }
 
     [Fact]
@@ -491,7 +491,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeWithFrequenciesAsync();
 
-        var batch = await new WordSelectionService(db).GetNewBatchAsync(UserId, DictionaryId, size: 3);
+        var batch = await new WordSelectionService(db).GetNewBatchAsync(UserId, TestWords.Uk, DictionaryId, size: 3);
 
         Assert.Equal(new long[] { 1, 6, 4 }, batch.Select(w => w.Id));
     }
@@ -503,7 +503,7 @@ public class WordSelectionServiceTests
 
         // 99 — does not exist; 4 — already has progress; 3 — "know"; 5 — no translation; 8 — excluded; 2 — twice.
         var words = await new WordSelectionService(db)
-            .GetLearnableByIdsAsync(UserId, DictionaryId, chapterIds: null, ids: [2, 99, 4, 1, 2, 3, 5, 8]);
+            .GetLearnableByIdsAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: null, ids: [2, 99, 4, 1, 2, 3, 5, 8]);
 
         Assert.Equal(new long[] { 2, 1 }, words.Select(w => w.Id));
     }
@@ -514,7 +514,7 @@ public class WordSelectionServiceTests
         await using var db = await ArrangeWithChaptersAsync();
 
         var words = await new WordSelectionService(db)
-            .GetLearnableByIdsAsync(UserId, DictionaryId, chapterIds: [1], ids: [4, 1]);
+            .GetLearnableByIdsAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [1], ids: [4, 1]);
 
         Assert.Equal(new long[] { 1 }, words.Select(w => w.Id));
     }
@@ -524,7 +524,7 @@ public class WordSelectionServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        Assert.Empty(await new WordSelectionService(db).GetLearnableByIdsAsync(UserId, DictionaryId, null, ids: []));
+        Assert.Empty(await new WordSelectionService(db).GetLearnableByIdsAsync(UserId, TestWords.Uk, DictionaryId, null, ids: []));
     }
 
     [Fact]
@@ -534,17 +534,17 @@ public class WordSelectionServiceTests
 
         var mine = new Domain.Entities.Dictionary { Name = "Mine", WordsCount = 1, OwnerId = 1, PublicationStatus = PublicationStatus.Private };
         var theirs = new Domain.Entities.Dictionary { Name = "Theirs", WordsCount = 1, OwnerId = 2, PublicationStatus = PublicationStatus.Private };
-        mine.Words = [new WordPair { Word = "silo", Translation = "бункер" }];
-        theirs.Words = [new WordPair { Word = "secret", Translation = "таємниця" }];
+        mine.Words = [TestWords.Pair("silo", "бункер")];
+        theirs.Words = [TestWords.Pair("secret", "таємниця")];
 
         db.Dictionaries.AddRange(mine, theirs);
 
         // A word cached by a reader lookup that never joined a dictionary: also out of the pool.
-        db.Words.Add(new WordPair { Word = "orphan", Translation = "сирота" });
+        db.Words.Add(TestWords.Pair("orphan", "сирота"));
         await db.SaveChangesAsync();
 
         var service = new WordSelectionService(db);
-        var pool = await service.GetDistractorPoolAsync(userId: 1, dictionaryId: mine.Id, size: 60, new Random(1));
+        var pool = await service.GetDistractorPoolAsync(userId: 1, TestWords.Uk, dictionaryId: mine.Id, size: 60, new Random(1));
 
         Assert.DoesNotContain(pool, w => w.Word == "secret");
         Assert.DoesNotContain(pool, w => w.Word == "orphan");
@@ -558,18 +558,65 @@ public class WordSelectionServiceTests
 
         var personal = new Domain.Entities.Dictionary
         { Name = "My words", WordsCount = 1, OwnerId = 1, PublicationStatus = PublicationStatus.Private, IsPersonal = true };
-        personal.Words = [new WordPair { Word = "silo", Translation = "бункер", OwnerId = 1 }];
+        personal.Words = [TestWords.Pair("silo", "бункер", 1)];
 
         var shared = new Domain.Entities.Dictionary { Name = "Wool", WordsCount = 1, PublicationStatus = PublicationStatus.Published };
-        shared.Words = [new WordPair { Word = "cleaning", Translation = "чистка" }];
+        shared.Words = [TestWords.Pair("cleaning", "чистка")];
 
         db.Dictionaries.AddRange(personal, shared);
         await db.SaveChangesAsync();
 
         var service = new WordSelectionService(db);
-        var pool = await service.GetDistractorPoolAsync(userId: 1, dictionaryId: personal.Id, size: 60, new Random(1));
+        var pool = await service.GetDistractorPoolAsync(userId: 1, TestWords.Uk, dictionaryId: personal.Id, size: 60, new Random(1));
 
         Assert.Contains(pool, w => w.Word == "cleaning");
         Assert.Contains(pool, w => w.Word == "silo");
+    }
+
+    [Fact]
+    public async Task Only_words_translated_into_the_language_are_learnable()
+    {
+        // Words 1 and 2 are the learnable ones; only word 1 has a Polish translation.
+        await using var db = await ArrangeAsync();
+        var service = new WordSelectionService(db);
+        db.WordTranslations.Add(new WordTranslation { WordPairId = 1, Language = "pl", Text = "jabłko" });
+        await db.SaveChangesAsync();
+
+        var candidates = await service.GetCandidatesAsync(UserId, "pl", DictionaryId, chapterIds: null, take: 10);
+
+        Assert.Equal([1L], candidates.Select(c => c.WordPairId));
+        Assert.Equal("jabłko", candidates[0].Translation);
+        Assert.Equal(1, await service.CountLearnableAsync(UserId, "pl", DictionaryId));
+    }
+
+    [Fact]
+    public async Task Distractors_come_only_from_words_translated_into_the_language()
+    {
+        await using var db = await ArrangeAsync();
+        var service = new WordSelectionService(db);
+        db.WordTranslations.Add(new WordTranslation { WordPairId = 2, Language = "pl", Text = "pies" });
+        await db.SaveChangesAsync();
+
+        var pool = await service.GetDistractorPoolAsync(UserId, "pl", DictionaryId, 60, new Random(1));
+
+        Assert.NotEmpty(pool);
+        Assert.All(pool, w => Assert.Equal("pies", w.Translation));
+    }
+
+    /// <summary>Review focus 2.</summary>
+    [Fact]
+    public async Task Due_words_without_a_translation_in_the_language_are_not_served()
+    {
+        await using var db = NewContext();
+        db.Users.Add(new TelegramUser { Id = UserId, TelegramUserId = 1111111111 });
+        db.Words.Add(Word(1, "one", "один"));
+        db.WordProgresses.Add(
+            new WordProgress { Id = 1, UserId = UserId, WordPairId = 1, Box = 1, DueAt = Now.AddDays(-1), LastSeenAt = Now });
+        await db.SaveChangesAsync();
+        var service = new WordSelectionService(db);
+
+        Assert.Empty(await service.GetDueWordsAsync(UserId, "pl", Now, 20));
+        Assert.Equal(0, await service.CountDueAsync(UserId, "pl", Now));
+        Assert.NotEmpty(await service.GetDueWordsAsync(UserId, "uk", Now, 20));
     }
 }

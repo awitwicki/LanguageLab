@@ -1,3 +1,4 @@
+using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +11,13 @@ public enum AccountDeleteResult
 
     /// <summary>The user is the only administrator; leaving would strand the instance.</summary>
     LastAdmin,
+}
+
+public enum SetLanguageResult
+{
+    Saved,
+    UnknownLanguage,
+    NotFound,
 }
 
 /// <summary>
@@ -50,5 +58,25 @@ public class AccountService
         await _dbContext.SaveChangesAsync();
 
         return AccountDeleteResult.Ok;
+    }
+
+    /// <summary>Only a catalog code is accepted — Russian is not in the catalog, so it is refused like any unknown code.</summary>
+    public async Task<SetLanguageResult> SetLanguageAsync(long userId, string? code)
+    {
+        if (LearnerLanguages.Find(code) is not { } language)
+        {
+            return SetLanguageResult.UnknownLanguage;
+        }
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user == null)
+        {
+            return SetLanguageResult.NotFound;
+        }
+
+        user.Language = language.Code;
+        await _dbContext.SaveChangesAsync();
+        return SetLanguageResult.Saved;
     }
 }

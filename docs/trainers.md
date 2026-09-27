@@ -9,6 +9,12 @@ The 68 verbs and their examples live in code
 (`LanguageLab.Domain/IrregularVerbs/IrregularVerbCatalog`), grouped into the four stages the
 learner sees — one per verb type, all open from the start, with no families and nothing locked.
 
+**Ukrainian learners only** — the catalog's translations are Ukrainian in code, so
+`/api/irregular-verbs/*` (`IrregularVerbEndpoints.IsAvailableFor`) answers `404` for every other
+`LearnerLanguages` code, and `web/src/layout/mode.ts`'s `visibleModes` hides "Irregular verbs" from
+the top bar the same way. A learner's `VerbKnowledge`/`VerbAnswer` rows are untouched by the
+language they are on, so switching back to Ukrainian brings the progress back exactly as it was.
+
 ### The session
 
 The browser is handed a whole session rather than one card at a time: the words in play, their

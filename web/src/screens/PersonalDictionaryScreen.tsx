@@ -412,7 +412,11 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
               ) : (
                 <li key={item.wordPairId} className="personal-word">
                   <span className="word">{item.word}</span>
-                  <span className="translation">{item.translation}</span>
+                  {item.translation ? (
+                    <span className="translation">{item.translation}</span>
+                  ) : (
+                    <span className="translation missing caption">No translation yet — edit to add one</span>
+                  )}
                   <span className="state footnote">{wordState(item)}</span>
                   <span className="actions">
                     <button

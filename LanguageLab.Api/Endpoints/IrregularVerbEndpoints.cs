@@ -1,5 +1,6 @@
 using LanguageLab.Application.Services;
 using LanguageLab.Domain.IrregularVerbs;
+using LanguageLab.Domain.Languages;
 
 namespace LanguageLab.Api.Endpoints;
 
@@ -25,9 +26,20 @@ public static class IrregularVerbEndpoints
     /// </summary>
     public const int MaxAnswersPerRequest = 100;
 
+    /// <summary>
+    /// The catalog's translations are Ukrainian (IrregularVerbCatalog), so the trainer exists
+    /// only for Ukrainian learners. Their VerbKnowledge rows stay put through a language switch.
+    /// </summary>
+    public static bool IsAvailableFor(LearnerLanguage? language) => language?.Code == "uk";
+
     public static void MapIrregularVerbEndpoints(this WebApplication app)
     {
-        var verbs = app.MapGroup("/api/irregular-verbs").RequireAuthorization();
+        var verbs = app.MapGroup("/api/irregular-verbs")
+            .RequireAuthorization()
+            .AddEndpointFilter(async (context, next) =>
+                IsAvailableFor(context.HttpContext.RequestServices.GetRequiredService<ICurrentLanguage>().Get())
+                    ? await next(context)
+                    : Results.NotFound());
 
         verbs.MapGet("/progress", async (VerbKnowledgeService knowledge, ICurrentUserContext currentUser) =>
         {

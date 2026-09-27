@@ -31,6 +31,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ClaimsCurrentUser>();
 builder.Services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<ClaimsCurrentUser>());
 builder.Services.AddScoped<ICurrentUserContext>(sp => sp.GetRequiredService<ClaimsCurrentUser>());
+builder.Services.AddScoped<ICurrentLanguage, HttpCurrentLanguage>();
 builder.Services.AddScoped<UserLoginService>();
 
 var telegram = new TelegramLoginOptions(
@@ -288,8 +289,10 @@ app.UseSpaFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+app.UseLanguageNotSet();
 
 app.MapAuthEndpoints();
+app.MapLanguageEndpoints();
 app.MapDictionaryEndpoints();
 app.MapChapterEndpoints();
 app.MapHomeEndpoints();

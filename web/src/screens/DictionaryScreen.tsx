@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useLearnerLanguage } from '../account/learnerLanguage'
 import {
   api,
   type ChapterView,
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDeleted }: Props) {
+  const learnerLanguage = useLearnerLanguage()
   const [detail, setDetail] = useState<DictionaryDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reviewBusy, setReviewBusy] = useState(false)
@@ -264,7 +266,9 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
 
       {detail.learnableCount === 0 && (
         <p className="footnote dict-actions-hint">
-          No words to learn yet: mark words as “don’t know” while sorting.
+          {learnerLanguage === 'uk'
+            ? 'No words to learn yet: mark words as “don’t know” while sorting.'
+            : 'No words translated into your language yet — look words up while reading, or add translations in My words.'}
         </p>
       )}
 

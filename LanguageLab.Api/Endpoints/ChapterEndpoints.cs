@@ -10,11 +10,12 @@ public static class ChapterEndpoints
         var group = app.MapGroup("/api/chapters").RequireAuthorization();
 
         // The home screen's shortcut list: every starred chapter whose book the caller can still see.
-        group.MapGet("/starred", async (StarredChapterService stars, ICurrentUserContext currentUser) =>
+        group.MapGet("/starred", async (
+            StarredChapterService stars, ICurrentUserContext currentUser, ICurrentLanguage language) =>
         {
             var (userId, role) = currentUser.Require();
 
-            return Results.Ok(await stars.GetStarredAsync(userId, role, DateTime.UtcNow));
+            return Results.Ok(await stars.GetStarredAsync(userId, language.Require().Code, role, DateTime.UtcNow));
         });
 
         // PUT rather than POST: starring twice is the same star, so a retry is harmless.

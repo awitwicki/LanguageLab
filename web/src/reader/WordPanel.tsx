@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLearnerLanguage } from '../account/learnerLanguage'
 import { api, type LearnTarget, type ReaderWord, type ReaderWordShelf } from '../api/client'
 import { formatInt } from '../lib/format'
 import './WordPanel.css'
@@ -89,6 +90,7 @@ function ShelfButton({ className, busy, marked, disabled, onClick, children }: S
 }
 
 export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusChange }: Props) {
+  const language = useLearnerLanguage()
   const [word, setWord] = useState<ReaderWord | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [typed, setTyped] = useState('')
@@ -225,7 +227,7 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
       )}
 
       {word?.translation && (
-        <p className="word-panel-translation" lang="uk">
+        <p className="word-panel-translation" lang={language}>
           {word.translation}
         </p>
       )}
@@ -237,7 +239,7 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
             className="word-panel-input"
             value={typed}
             placeholder="Type a translation"
-            lang="uk"
+            lang={language}
             onChange={(event) => setTyped(event.target.value)}
           />
         </label>

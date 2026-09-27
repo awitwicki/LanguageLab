@@ -8,13 +8,13 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 - Do not run `git add`, `git commit`, `git push`, or any history-rewriting command on your own.
 - When the user has allowed committing step-by-step during multi-step work (e.g. executing a plan — one commit per task), once all steps are done, squash those commits into one (`git reset --soft` to the state before the first of them, then commit again as a single commit) **before considering the work done**. The user reviews one commit before push, not a series. This is squashing intermediate commits within already-approved work, not standalone permission for a new commit — but the push itself still waits for a separate request.
 - Creating migrations is fine (`dotnet ef ... migrations add`), but `--startup-project` is now `LanguageLab.Api`.
-- Everything in the project — code, comments, doc-comments, commit messages, documentation — is English. The one exception: the vocabulary translation shown to the learner (`WordPair.Translation`) stays Ukrainian, since teaching Ukrainian-speaking learners English is the whole point of the app. UI copy in the SPA is also English now (see "Frontend conventions" below).
+- Everything in the project — code, comments, doc-comments, commit messages, documentation — is English. The one exception: the vocabulary translation shown to the learner (`WordTranslation.Text`) is in their chosen language (`TelegramUser.Language`, a `LearnerLanguages` code), since teaching English to speakers of that language is the whole point of the app. UI copy in the SPA is also English now (see "Frontend conventions" below).
 
 ## Project layout
 
 | Path | What it is |
 |---|---|
-| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation and IPA catalogs. No dependencies on infrastructure. |
+| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation and IPA catalogs and the `LearnerLanguages` language catalog. No dependencies on infrastructure. |
 | `LanguageLab.Infrastructure/` | EF Core `ApplicationDbContext`, PostgreSQL provider, migrations. |
 | `LanguageLab.Application/` | Services on top of the domain: word selection, training sessions, book import, sorting, Leitner progress, translation, the reader's services, the two trainers. |
 | `LanguageLab.Api/` | ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. `Auth/` holds the claims, session validation and OIDC handlers. |
@@ -32,7 +32,10 @@ These hold wherever you are working, whatever you are changing:
 - **Shared vocabulary is `OwnerId IS NULL`.** Any lookup by word text must filter on it; a
   `WordPair` with `OwnerId` set belongs to one user's personal dictionary (unique on
   `(Word, OwnerId)`, `NULLS NOT DISTINCT`).
-- **Training requires a non-empty `WordPair.Translation`** — for batch words and distractors alike.
+- **Training requires a `WordTranslation` in the learner's language** — for batch words and
+  distractors alike; a session renders in `Training.Language`.
+- **Russian is never a learner language**: it is absent from `LearnerLanguages`, and the
+  irregular-verbs trainer is Ukrainian-only.
 - **Import validation** (`BookImportService`, `LanguageLab.Domain`): a word must be lowercase ASCII
   letters, 3-64 characters (`ImportWordText`) or it is dropped; an import where more than 20% of its
   distinct words are invalid is refused outright. Caps: 50,000 distinct words, 2,000 chapters,

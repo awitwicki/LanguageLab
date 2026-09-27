@@ -1,4 +1,5 @@
 import { Fragment, memo } from 'react'
+import { useLearnerLanguage } from '../account/learnerLanguage'
 import type { ReaderSentence } from './readerBook'
 import { resolveWord, type KnownStatuses, type ResolvedWord } from './wordStatus'
 import './Sentence.css'
@@ -71,6 +72,7 @@ export const Sentence = memo(function Sentence({
   onToggleTranslation,
 }: Props) {
   const toggle = () => onToggleTranslation(positionKey, sentence.text)
+  const language = useLearnerLanguage()
   const stripClasses = ['reader-strip']
 
   if (translation) stripClasses.push('reader-strip-open')
@@ -131,7 +133,7 @@ export const Sentence = memo(function Sentence({
       )}
 
       {translation?.state === 'open' && (
-        <p className="reader-translation" lang="uk">
+        <p className="reader-translation" lang={language}>
           {translation.text}
         </p>
       )}

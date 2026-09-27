@@ -1,5 +1,6 @@
 import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { LearnerLanguageContext } from '../account/learnerLanguage'
 import type { DictionaryDetail, LearningProgress, TrainingStarted } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { DictionaryScreen } from './DictionaryScreen'
@@ -243,6 +244,30 @@ describe('DictionaryScreen — actions', () => {
 
     expect(buttons(container).find((b) => b.textContent?.includes('Learn new words'))!.disabled).toBe(true)
     expect(container.textContent).toContain('No words to learn yet')
+  })
+
+  // A Ukrainian learner's near-total translation coverage means an empty queue is really about
+  // sorting, unlike a non-Ukrainian learner (see the next test) — so this copy must stay put.
+  it('with nothing to learn and a Ukrainian learner, the sorting hint is shown', async () => {
+    apiMock.getDictionary.mockResolvedValue({ ...detail, learnableCount: 0 })
+    const { container } = await render(
+      <LearnerLanguageContext.Provider value="uk">{screen()}</LearnerLanguageContext.Provider>,
+    )
+    await flush()
+
+    expect(container.textContent).toContain('No words to learn yet: mark words as')
+    expect(container.textContent).not.toContain('No words translated into your language yet')
+  })
+
+  it('with nothing to learn and a non-Ukrainian learner, the untranslated-words hint is shown instead', async () => {
+    apiMock.getDictionary.mockResolvedValue({ ...detail, learnableCount: 0 })
+    const { container } = await render(
+      <LearnerLanguageContext.Provider value="pl">{screen()}</LearnerLanguageContext.Provider>,
+    )
+    await flush()
+
+    expect(container.textContent).toContain('No words translated into your language yet')
+    expect(container.textContent).not.toContain('No words to learn yet: mark words as')
   })
 
   it('"Review (3)" appears when dueCount > 0 and starts a review scoped to the book', async () => {

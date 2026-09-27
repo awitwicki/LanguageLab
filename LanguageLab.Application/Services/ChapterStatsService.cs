@@ -47,7 +47,7 @@ public class ChapterStatsService
 
     /// <param name="onlyChapterIds">null — every chapter of the book; otherwise just these, still in book order.</param>
     public async Task<IReadOnlyList<ChapterView>> GetChapterViewsAsync(
-        long userId, long dictionaryId, DateTime nowUtc, IReadOnlyList<long>? onlyChapterIds = null)
+        long userId, string language, long dictionaryId, DateTime nowUtc, IReadOnlyList<long>? onlyChapterIds = null)
     {
         var query = _dbContext.Chapters.Where(c => c.DictionaryId == dictionaryId);
 
@@ -68,11 +68,11 @@ public class ChapterStatsService
 
         var progress = (await _sorting.GetChapterProgressAsync(userId, dictionaryId))
             .ToDictionary(p => p.ChapterId);
-        var chapterLearning = await _learningProgress.GetByChapterAsync(userId, dictionaryId);
+        var chapterLearning = await _learningProgress.GetByChapterAsync(userId, language, dictionaryId);
 
         // Once a chapter has no new words left, its row offers a review of what is due
         // there instead — or says when the next word comes due. One query for all chapters.
-        var chapterReview = await _selection.GetReviewAvailabilityByChapterAsync(userId, dictionaryId, nowUtc);
+        var chapterReview = await _selection.GetReviewAvailabilityByChapterAsync(userId, language, dictionaryId, nowUtc);
 
         var starred = (await _dbContext.StarredChapters
                 .Where(s => s.UserId == userId && s.Chapter.DictionaryId == dictionaryId)
@@ -86,7 +86,7 @@ public class ChapterStatsService
         {
             // "To learn" = translated, on the "don't know" shelf, never trained — exactly
             // what a new batch would take. One COUNT per chapter, like the sorting progress.
-            var learnable = await _selection.CountLearnableAsync(userId, dictionaryId, [c.Id]);
+            var learnable = await _selection.CountLearnableAsync(userId, language, dictionaryId, [c.Id]);
             var review = chapterReview.TryGetValue(c.Id, out var r) ? r : ReviewAvailability.None;
 
             views.Add(new ChapterView(

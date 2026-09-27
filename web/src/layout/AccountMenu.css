@@ -50,6 +50,19 @@
   background: var(--surface-2);
 }
 
+/* A setting with its current value on the right. */
+.to-language {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.account-action-value {
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
 /* Destructive, and set apart from the everyday items above it. */
 .delete-account {
   margin-top: 8px;

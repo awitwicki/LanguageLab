@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using LanguageLab.Domain.Languages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -37,7 +38,7 @@ public sealed class MyMemorySentenceTranslator : ISentenceTranslator
 
     public bool IsConfigured => true;
 
-    public async Task<SentenceTranslation> TranslateAsync(string text, CancellationToken cancellationToken)
+    public async Task<SentenceTranslation> TranslateAsync(string text, LearnerLanguage target, CancellationToken cancellationToken)
     {
         if (Encoding.UTF8.GetByteCount(text) > MaxBytes)
         {
@@ -50,7 +51,7 @@ public sealed class MyMemorySentenceTranslator : ISentenceTranslator
             return SentenceTranslation.Quota;
         }
 
-        var query = $"get?q={Uri.EscapeDataString(text)}&langpair=en%7Cuk";
+        var query = $"get?q={Uri.EscapeDataString(text)}&langpair=en%7C{Uri.EscapeDataString(target.MyMemoryCode)}";
 
         if (!string.IsNullOrWhiteSpace(_options.MyMemoryEmail))
         {

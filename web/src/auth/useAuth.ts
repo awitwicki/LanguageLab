@@ -118,6 +118,12 @@ export function useAuth() {
     setState({ status: 'anonymous' })
   }, [])
 
+  /** After the language changes: the server's view of the user is the source of truth. */
+  const refreshUser = useCallback(async () => {
+    const user = await api.getMe()
+    setState(user ? { status: 'signed-in', user } : { status: 'anonymous' })
+  }, [])
+
   /** The banned screen's way back: there is no session to end, only a message to leave. */
   const dismissBanned = useCallback(() => setState({ status: 'anonymous' }), [])
 
@@ -138,5 +144,6 @@ export function useAuth() {
     signOut,
     deleteAccount,
     dismissBanned,
+    refreshUser,
   }
 }

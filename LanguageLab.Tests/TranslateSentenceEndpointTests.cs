@@ -1,6 +1,7 @@
 using LanguageLab.Api;
 using LanguageLab.Api.Endpoints;
 using LanguageLab.Application.Translation;
+using LanguageLab.Domain.Languages;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -13,29 +14,39 @@ public class TranslateSentenceEndpointTests
         public Task<long> GetIdAsync() => Task.FromResult(7L);
     }
 
+    private sealed class FakeLanguage : ICurrentLanguage
+    {
+        public LearnerLanguage? Get() => LearnerLanguages.Find("pl");
+    }
+
     private sealed class FakeSentences(bool configured, SentenceTranslation answer) : ISentenceTranslator
     {
         public int Calls { get; private set; }
+        public LearnerLanguage? LastTarget { get; private set; }
 
         public bool IsConfigured => configured;
 
-        public Task<SentenceTranslation> TranslateAsync(string text, CancellationToken cancellationToken)
+        public Task<SentenceTranslation> TranslateAsync(string text, LearnerLanguage target, CancellationToken cancellationToken)
         {
             Calls++;
+            LastTarget = target;
             return Task.FromResult(answer);
         }
     }
 
     private static Task<IResult> Call(ISentenceTranslator translator, string? text, SentenceQuota? quota = null) =>
         TranslationEndpoints.TranslateSentenceAsync(
-            new SentenceRequest(text), translator, quota ?? new SentenceQuota(), new FakeUser(), CancellationToken.None);
+            new SentenceRequest(text), translator, quota ?? new SentenceQuota(), new FakeUser(), new FakeLanguage(), CancellationToken.None);
 
     [Fact]
     public async Task A_translation_comes_back()
     {
-        var result = await Call(new FakeSentences(true, SentenceTranslation.Success("Привіт.")), " Hello. ");
+        var translator = new FakeSentences(true, SentenceTranslation.Success("Привіт."));
+
+        var result = await Call(translator, " Hello. ");
 
         Assert.Equal("Привіт.", Assert.IsType<Ok<SentenceTranslationResponse>>(result).Value!.Translation);
+        Assert.Equal("pl", translator.LastTarget!.Code);
     }
 
     [Fact]

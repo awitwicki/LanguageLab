@@ -20,7 +20,8 @@ public static class SortingEndpoints
             int? take,
             WordSortingService sorting,
             DictionaryAccessService access,
-            ICurrentUserContext currentUser) =>
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var (userId, role) = currentUser.Require();
 
@@ -32,7 +33,7 @@ public static class SortingEndpoints
             var chapters = QueryParsing.ParseChapterIds(chapterIds);
 
             var queue = await sorting.GetQueueAsync(
-                userId, dictionaryId, chapters, take ?? WordSortingService.DefaultTake);
+                userId, language.Require().Code, dictionaryId, chapters, take ?? WordSortingService.DefaultTake);
 
             return Results.Ok(queue);
         });
@@ -54,10 +55,10 @@ public static class SortingEndpoints
             return marked ? Results.NoContent() : Results.NotFound();
         });
 
-        group.MapPost("/undo", async (WordSortingService sorting, ICurrentUser currentUser) =>
+        group.MapPost("/undo", async (WordSortingService sorting, ICurrentUser currentUser, ICurrentLanguage language) =>
         {
             var userId = await currentUser.GetIdAsync();
-            var undone = await sorting.UndoAsync(userId);
+            var undone = await sorting.UndoAsync(userId, language.Require().Code);
 
             return undone == null ? Results.NoContent() : Results.Ok(undone);
         });

@@ -1,6 +1,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using LanguageLab.Domain.Languages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -32,7 +33,7 @@ public sealed class DeepLTranslator : ISentenceTranslator
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_options.DeepLApiKey);
 
-    public async Task<SentenceTranslation> TranslateAsync(string text, CancellationToken cancellationToken)
+    public async Task<SentenceTranslation> TranslateAsync(string text, LearnerLanguage target, CancellationToken cancellationToken)
     {
         if (!IsConfigured)
         {
@@ -41,7 +42,7 @@ public sealed class DeepLTranslator : ISentenceTranslator
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "v2/translate")
         {
-            Content = JsonContent.Create(new DeepLRequest([text], "EN", "UK")),
+            Content = JsonContent.Create(new DeepLRequest([text], "EN", target.DeepLCode)),
         };
         request.Headers.TryAddWithoutValidation("Authorization", $"DeepL-Auth-Key {_options.DeepLApiKey}");
 

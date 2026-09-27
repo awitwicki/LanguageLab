@@ -18,7 +18,7 @@ public class DictionaryDeletionServiceTests
         await using var db = NewContext();
 
         var dictionary = new Domain.Entities.Dictionary { Name = "Wool", WordsCount = 1 };
-        dictionary.Words = [new WordPair { Word = "silo", Translation = "бункер" }];
+        dictionary.Words = [TestWords.Pair("silo", "бункер")];
         db.Dictionaries.Add(dictionary);
         await db.SaveChangesAsync();
 
@@ -33,7 +33,7 @@ public class DictionaryDeletionServiceTests
     {
         await using var db = NewContext();
 
-        var word = new WordPair { Word = "silo", Translation = "бункер" };
+        var word = TestWords.Pair("silo", "бункер");
         var first = new Domain.Entities.Dictionary { Name = "Wool", WordsCount = 1, Words = [word] };
         var second = new Domain.Entities.Dictionary { Name = "Shift", WordsCount = 1, Words = [word] };
         db.Dictionaries.AddRange(first, second);
@@ -49,7 +49,7 @@ public class DictionaryDeletionServiceTests
     {
         await using var db = NewContext();
 
-        var word = new WordPair { Word = "silo", Translation = "бункер" };
+        var word = TestWords.Pair("silo", "бункер");
         var dictionary = new Domain.Entities.Dictionary { Name = "Wool", WordsCount = 1, Words = [word] };
         db.Dictionaries.Add(dictionary);
         await db.SaveChangesAsync();

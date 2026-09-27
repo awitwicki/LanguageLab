@@ -24,12 +24,12 @@ public class DictionaryStatsServiceTests
         db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 2, Name = "Other", WordsCount = 1 });
 
         db.Words.AddRange(
-            new WordPair { Id = 1, Word = "silo", Translation = "" },
-            new WordPair { Id = 2, Word = "abide", Translation = "" },
-            new WordPair { Id = 3, Word = "cleaning", Translation = "" },
-            new WordPair { Id = 4, Word = "holston", Translation = "" },
-            new WordPair { Id = 5, Word = "jahns", Translation = "" },
-            new WordPair { Id = 6, Word = "dune", Translation = "" });
+            TestWords.Pair(1, "silo", null),
+            TestWords.Pair(2, "abide", null),
+            TestWords.Pair(3, "cleaning", null),
+            TestWords.Pair(4, "holston", null),
+            TestWords.Pair(5, "jahns", null),
+            TestWords.Pair(6, "dune", null));
 
         db.DictionaryWords.AddRange(
             new DictionaryWord { DictionaryId = 1, WordPairId = 1, Frequency = 15 },
@@ -88,8 +88,8 @@ public class DictionaryStatsServiceTests
         await using var db = NewContext();
         db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 1, Name = "Ties", WordsCount = 2 });
         db.Words.AddRange(
-            new WordPair { Id = 1, Word = "zebra", Translation = "" },
-            new WordPair { Id = 2, Word = "apple", Translation = "" });
+            TestWords.Pair(1, "zebra", null),
+            TestWords.Pair(2, "apple", null));
         db.DictionaryWords.AddRange(
             new DictionaryWord { DictionaryId = 1, WordPairId = 1, Frequency = 4 },
             new DictionaryWord { DictionaryId = 1, WordPairId = 2, Frequency = 4 });

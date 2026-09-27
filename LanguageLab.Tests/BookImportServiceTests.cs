@@ -76,7 +76,7 @@ public class BookImportServiceTests
     public async Task Existing_translation_is_never_overwritten()
     {
         await using var db = NewContext();
-        db.Words.Add(new WordPair { Id = 1, Word = "silo", Translation = "бункер" });
+        db.Words.Add(TestWords.Pair(1, "silo", "бункер"));
         await db.SaveChangesAsync();
 
         var service = new BookImportService(db);
@@ -84,14 +84,14 @@ public class BookImportServiceTests
 
         var silo = await db.Words.SingleAsync(w => w.Word == "silo");
 
-        Assert.Equal("бункер", silo.Translation);
+        Assert.Equal("бункер", (await db.WordTranslations.SingleAsync(t => t.WordPairId == silo.Id && t.Language == TestWords.Uk)).Text);
     }
 
     [Fact]
     public async Task Existing_word_is_reused_not_duplicated()
     {
         await using var db = NewContext();
-        db.Words.Add(new WordPair { Id = 1, Word = "silo", Translation = "бункер" });
+        db.Words.Add(TestWords.Pair(1, "silo", "бункер"));
         await db.SaveChangesAsync();
 
         var service = new BookImportService(db);
@@ -158,7 +158,7 @@ public class BookImportServiceTests
     {
         await using var db = NewContext();
         db.Users.Add(new TelegramUser { Id = 5, TelegramUserId = 555 });
-        db.Words.Add(new WordPair { Id = 1, Word = "silo", Translation = "силос", OwnerId = 5 });
+        db.Words.Add(TestWords.Pair(1, "silo", "силос", ownerId: 5));
         await db.SaveChangesAsync();
 
         var result = await new BookImportService(db).ImportAsync(TwoChapterBook(), ownerId: 1, status: PublicationStatus.Published);
@@ -166,7 +166,7 @@ public class BookImportServiceTests
         var silos = await db.Words.Where(w => w.Word == "silo").OrderBy(w => w.Id).ToListAsync();
         Assert.Equal(2, silos.Count);
         Assert.Null(silos[1].OwnerId);
-        Assert.Equal("", silos[1].Translation);
+        Assert.False(await db.WordTranslations.AnyAsync(t => t.WordPairId == silos[1].Id));
         Assert.Equal(3, result.NewWords);
     }
 

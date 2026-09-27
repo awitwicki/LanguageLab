@@ -7,9 +7,21 @@ export interface CurrentUser {
   username: string | null
   photoUrl: string | null
   role: UserRole
+  /** The learner's language code; null until they pick one on first sign-in. */
+  language: string | null
+  /** From Telegram's language_code, only while language is null — preselects the picker. */
+  suggestedLanguage: string | null
 }
 
-export interface AdminUser extends CurrentUser {
+/** One entry of the server's language catalog. */
+export interface Language {
+  code: string
+  englishName: string
+  nativeName: string
+}
+
+/** The admin list's row: the account, without the learner-language fields /me carries. */
+export interface AdminUser extends Omit<CurrentUser, 'language' | 'suggestedLanguage'> {
   isBanned: boolean
   createdAt: string
   lastLoginAt: string | null
@@ -315,7 +327,7 @@ export interface RecentActivity {
   sorting: RecentSorting[]
 }
 
-export type QuestionDirection = 'enToUa' | 'uaToEn'
+export type QuestionDirection = 'enToNative' | 'nativeToEn'
 
 export interface BatchWord {
   wordPairId: number
@@ -985,6 +997,11 @@ export const api = {
 
   /** Answers 409 { message } when refused — the last-admin rule. */
   deleteMe: () => request<null>('/api/auth/me', { method: 'DELETE' }),
+
+  listLanguages: () => request<Language[]>('/api/languages') as Promise<Language[]>,
+
+  setLanguage: (code: string) =>
+    request<null>('/api/auth/me/language', { method: 'PUT', body: JSON.stringify({ code }) }),
 
   /** Page size is the server's default; the answer says what it was. */
   listUsers: (params: { search?: string; page: number }) => {

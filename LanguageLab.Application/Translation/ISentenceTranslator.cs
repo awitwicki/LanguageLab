@@ -1,3 +1,5 @@
+using LanguageLab.Domain.Languages;
+
 namespace LanguageLab.Application.Translation;
 
 public enum SentenceTranslationStatus
@@ -20,13 +22,13 @@ public sealed record SentenceTranslation(SentenceTranslationStatus Status, strin
 }
 
 /// <summary>
-/// English → Ukrainian, one sentence of a book the learner is reading. Never throws. The text
-/// belongs to someone's book: an implementation must neither store it nor write it to a log.
+/// English → the learner's language, one sentence of a book the learner is reading. Never throws.
+/// The text belongs to someone's book: an implementation must neither store it nor write it to a log.
 /// </summary>
 public interface ISentenceTranslator
 {
     /// <summary>False without credentials. FallbackSentenceTranslator, the registered one, is always configured.</summary>
     bool IsConfigured { get; }
 
-    Task<SentenceTranslation> TranslateAsync(string text, CancellationToken cancellationToken);
+    Task<SentenceTranslation> TranslateAsync(string text, LearnerLanguage target, CancellationToken cancellationToken);
 }

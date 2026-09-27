@@ -393,6 +393,10 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.Property<bool>("IsBanned")
                         .HasColumnType("boolean");
 
+                    b.Property<string>("Language")
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -404,6 +408,10 @@ namespace LanguageLab.Infrastructure.Migrations
 
                     b.Property<int>("Role")
                         .HasColumnType("integer");
+
+                    b.Property<string>("TelegramLanguageCode")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
 
                     b.Property<long>("TelegramUserId")
                         .HasColumnType("bigint");
@@ -438,6 +446,13 @@ namespace LanguageLab.Infrastructure.Migrations
 
                     b.Property<DateTime?>("FinishedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasDefaultValue("uk");
 
                     b.Property<int>("Mode")
                         .HasColumnType("integer");
@@ -624,13 +639,6 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.Property<long?>("OwnerId")
                         .HasColumnType("bigint");
 
-                    b.Property<string>("Translation")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("TranslationOrigin")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Word")
                         .IsRequired()
                         .HasColumnType("text");
@@ -689,6 +697,37 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.HasIndex("UserId", "IsLearned", "DueAt");
 
                     b.ToTable("WordProgresses");
+                });
+
+            modelBuilder.Entity("LanguageLab.Domain.Entities.WordTranslation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Language")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)");
+
+                    b.Property<int>("Origin")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("WordPairId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WordPairId", "Language")
+                        .IsUnique();
+
+                    b.ToTable("WordTranslations");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
@@ -1006,6 +1045,17 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.Navigation("WordPair");
                 });
 
+            modelBuilder.Entity("LanguageLab.Domain.Entities.WordTranslation", b =>
+                {
+                    b.HasOne("LanguageLab.Domain.Entities.WordPair", "WordPair")
+                        .WithMany("Translations")
+                        .HasForeignKey("WordPairId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("WordPair");
+                });
+
             modelBuilder.Entity("LanguageLab.Domain.Entities.Chapter", b =>
                 {
                     b.Navigation("Words");
@@ -1019,6 +1069,11 @@ namespace LanguageLab.Infrastructure.Migrations
             modelBuilder.Entity("LanguageLab.Domain.Entities.Training", b =>
                 {
                     b.Navigation("Questions");
+                });
+
+            modelBuilder.Entity("LanguageLab.Domain.Entities.WordPair", b =>
+                {
+                    b.Navigation("Translations");
                 });
 #pragma warning restore 612, 618
         }

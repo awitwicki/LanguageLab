@@ -1,6 +1,8 @@
+using LanguageLab.Api;
 using LanguageLab.Api.Auth;
 using LanguageLab.Application.Services;
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
@@ -30,10 +32,13 @@ public sealed record TelegramWebAppOptions(string BotToken)
 }
 
 public sealed record CurrentUserView(
-    long Id, long TelegramUserId, string DisplayName, string? Username, string? PhotoUrl, UserRole Role);
+    long Id, long TelegramUserId, string DisplayName, string? Username, string? PhotoUrl, UserRole Role,
+    string? Language, string? SuggestedLanguage);
 
 /// <summary>The body of POST /api/auth/telegram/webapp: window.Telegram.WebApp.initData, verbatim.</summary>
 public sealed record WebAppLoginRequest(string? InitData);
+
+public sealed record SetLanguageRequest(string? Code);
 
 public static class AuthEndpoints
 {
@@ -61,6 +66,15 @@ public static class AuthEndpoints
 
             return user == null ? Results.Unauthorized() : Results.Ok(ToView(user));
         }).RequireAuthorization();
+
+        group.MapPut("/me/language", async (
+            SetLanguageRequest body, ICurrentUserContext currentUser, AccountService accounts) =>
+            await accounts.SetLanguageAsync(currentUser.Require().Id, body.Code) switch
+            {
+                SetLanguageResult.Saved => Results.NoContent(),
+                SetLanguageResult.NotFound => Results.Unauthorized(),
+                _ => Results.Json(new LanguageError("unknown_language"), statusCode: StatusCodes.Status400BadRequest),
+            }).RequireAuthorization();
 
         group.MapPost("/logout", async (HttpContext http) =>
         {
@@ -159,6 +173,9 @@ public static class AuthEndpoints
     }
 
     // DisplayName is computed on the entity (Task 1) so the admin list gives the same answer.
+    // SuggestedLanguage only matters while there is no Language: it preselects the picker.
     private static CurrentUserView ToView(TelegramUser user) =>
-        new(user.Id, user.TelegramUserId, user.DisplayName, user.Username, user.PhotoUrl, user.Role);
+        new(user.Id, user.TelegramUserId, user.DisplayName, user.Username, user.PhotoUrl, user.Role,
+            user.Language,
+            user.Language == null ? LearnerLanguages.FromTelegram(user.TelegramLanguageCode)?.Code : null);
 }

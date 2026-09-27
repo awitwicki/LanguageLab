@@ -1,5 +1,3 @@
-using LanguageLab.Domain.Entities;
-
 namespace LanguageLab.Domain.Training;
 
 /// <summary>
@@ -10,9 +8,9 @@ public static class QuestionQueueBuilder
     public const int OptionsPerQuestion = 6;
 
     public static IReadOnlyList<PlannedQuestion> Build(
-        IReadOnlyList<WordPair> targets,
+        IReadOnlyList<TranslatedWord> targets,
         int repeats,
-        IReadOnlyList<WordPair> distractorPool,
+        IReadOnlyList<TranslatedWord> distractorPool,
         DirectionPolicy policy,
         Random rng)
     {
@@ -37,8 +35,8 @@ public static class QuestionQueueBuilder
         {
             var direction = policy switch
             {
-                DirectionPolicy.EnToUa => QuestionDirection.EnToUa,
-                DirectionPolicy.Random => rng.Next(2) == 0 ? QuestionDirection.EnToUa : QuestionDirection.UaToEn,
+                DirectionPolicy.EnToNative => QuestionDirection.EnToNative,
+                DirectionPolicy.Random => rng.Next(2) == 0 ? QuestionDirection.EnToNative : QuestionDirection.NativeToEn,
                 _ => throw new ArgumentOutOfRangeException(nameof(policy), policy, "Unknown direction policy.")
             };
 
@@ -52,13 +50,13 @@ public static class QuestionQueueBuilder
     /// Lays the words out so the same word never comes twice in a row: each step takes
     /// the word with the most repeats left, except the one just placed.
     /// </summary>
-    private static List<WordPair> BuildOrder(IReadOnlyList<WordPair> targets, int repeats, Random rng)
+    private static List<TranslatedWord> BuildOrder(IReadOnlyList<TranslatedWord> targets, int repeats, Random rng)
     {
         var total = targets.Count * repeats;
         var left = new int[targets.Count];
         Array.Fill(left, repeats);
 
-        var result = new List<WordPair>(total);
+        var result = new List<TranslatedWord>(total);
         var candidates = new List<int>(targets.Count);
         var previousIndex = -1;
 
@@ -107,9 +105,9 @@ public static class QuestionQueueBuilder
         return result;
     }
 
-    private static IReadOnlyList<long> BuildOptions(WordPair target, IReadOnlyList<WordPair> pool, Random rng)
+    private static IReadOnlyList<long> BuildOptions(TranslatedWord target, IReadOnlyList<TranslatedWord> pool, Random rng)
     {
-        var valid = new List<WordPair>(pool.Count);
+        var valid = new List<TranslatedWord>(pool.Count);
 
         foreach (var candidate in pool)
         {

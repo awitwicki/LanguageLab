@@ -45,7 +45,7 @@ public class ChapterStatsServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var views = await Service(db).GetChapterViewsAsync(UserId, DictionaryId, Now);
+        var views = await Service(db).GetChapterViewsAsync(UserId, TestWords.Uk, DictionaryId, Now);
 
         Assert.Equal(new long[] { 1, 2, 3 }, views.Select(v => v.Id));
         Assert.Equal(new[] { 0, 1, 2 }, views.Select(v => v.Order));
@@ -58,7 +58,7 @@ public class ChapterStatsServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var views = await Service(db).GetChapterViewsAsync(UserId, DictionaryId, Now, [3, 1]);
+        var views = await Service(db).GetChapterViewsAsync(UserId, TestWords.Uk, DictionaryId, Now, [3, 1]);
 
         Assert.Equal(new long[] { 1, 3 }, views.Select(v => v.Id));
     }
@@ -69,8 +69,8 @@ public class ChapterStatsServiceTests
         await using var db = await ArrangeAsync();
         var service = Service(db);
 
-        var mine = await service.GetChapterViewsAsync(UserId, DictionaryId, Now);
-        var theirs = await service.GetChapterViewsAsync(OtherId, DictionaryId, Now);
+        var mine = await service.GetChapterViewsAsync(UserId, TestWords.Uk, DictionaryId, Now);
+        var theirs = await service.GetChapterViewsAsync(OtherId, TestWords.Uk, DictionaryId, Now);
 
         Assert.Equal(new[] { false, true, false }, mine.Select(v => v.IsStarred));
         Assert.All(theirs, v => Assert.False(v.IsStarred));
@@ -83,7 +83,7 @@ public class ChapterStatsServiceTests
         db.Dictionaries.Add(new Domain.Entities.Dictionary { Id = 20, Name = "Flat", WordsCount = 0 });
         await db.SaveChangesAsync();
 
-        var views = await Service(db).GetChapterViewsAsync(UserId, 20, Now);
+        var views = await Service(db).GetChapterViewsAsync(UserId, TestWords.Uk, 20, Now);
 
         Assert.Empty(views);
     }

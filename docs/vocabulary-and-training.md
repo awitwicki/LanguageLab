@@ -67,15 +67,34 @@ words themselves.
 
 `Translation:MyMemoryEmail` and `Translation:DeepLApiKey` are both optional config.
 
+A word's meaning lives in `WordTranslation` (table `WordTranslations`), not on `WordPair` itself:
+`WordPairId` + `Language` (a `LearnerLanguages` code) is unique, `Text` is required and non-empty,
+and `Origin` is `Manual` or `Machine`. A row exists only when there is a translation — there is no
+more "untranslated" sentinel value, only the absence of a row for that language. A shared `WordPair`
+can carry a different translation per language at once; a personal word (`OwnerId` set) keeps one
+translation per language too, so switching languages does not lose what was typed for another one.
+
 Provider word translations (`TranslationService.LookupAsync`, used by both `GET /api/translate` and
-the reader's word panel) are cached into the shared vocabulary as a `WordPair` row with
-`TranslationOrigin = Machine`, so the same word is looked up at most once. A `Manual` translation
-already on that row is never overwritten.
+the reader's word panel) are cached into the shared vocabulary as a `Machine` `WordTranslation` in
+the language asked for, so the same word costs the network at most once per language. A `Manual`
+translation already there for that language is never overwritten, and a hit in one language says
+nothing about any other.
+
+**A word without a `WordTranslation` in the learner's current language is neither learnable, nor
+due, nor a distractor** — `WordSelectionService`'s learnable query, due-words query and distractor
+pool, and `QuestionQueueBuilder`'s option list, all filter on it. A personal word or a due Leitner
+row that has no translation in the language just switched to waits untranslated until the learner
+adds one or switches back.
 
 Training only pulls new words from a specific dictionary, so a cached word becomes trainable only
 once it belongs to one — which is why the reader's "Add to training" shelves a word in the
 dictionary of the book being read when it can, and falls back to "My words" otherwise
 (`ReaderWordService.LearnTargetAsync`, in [reader.md](reader.md)).
+
+**Migration note.** The `MultilingualTranslations` migration moved every pre-existing
+`WordPair.Translation` into `WordTranslations` as a `uk` row (shared and personal words alike, origin
+carried over from the old `TranslationOrigin` column), then dropped the two old columns. Every
+account that predates the language picker was set to `uk` at the same time.
 
 ### Budgets
 
@@ -99,9 +118,11 @@ endpoints one account could otherwise make expensive for everybody, per day:
 
 ## Training
 
-Training requires a non-empty `WordPair.Translation`, both for batch words and for distractors.
+Training requires a `WordTranslation` in the learner's language, both for batch words and for
+distractors; see [Translation](#translation) above. A session is built once and renders in
+`Training.Language` from then on, so a language switch mid-session never blanks a button.
 Translations for the "don't know" shelf were backfilled once on 2026-09-07
-(`result/translations.txt`, local); auto-translation is still in the README TODO.
+(`result/translations.txt`, local, `uk` only); auto-translation is still in the README TODO.
 
 A batch is the scope's most frequent learnable words, by chapter or book frequency, and is
 deterministic. The web app shows a preview and passes `wordPairIds` explicitly.

@@ -113,8 +113,8 @@ public class DictionaryPublicationServiceTests
         var second = await Seed(db, PublicationStatus.Pending);
         await Seed(db, PublicationStatus.Private);
 
-        var rare = new WordPair { Word = "abide", Translation = "дотримуватися" };
-        var common = new WordPair { Word = "silo", Translation = "бункер" };
+        var rare = TestWords.Pair("abide", "дотримуватися");
+        var common = TestWords.Pair("silo", "бункер");
         db.Words.AddRange(rare, common);
         await db.SaveChangesAsync();
 

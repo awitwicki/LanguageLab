@@ -116,7 +116,7 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
         return
       }
 
-      const enToUa = question.direction === 'enToUa'
+      const enToNative = question.direction === 'enToNative'
       const correctLabel = question.options.find((o) => o.wordPairId === question.wordPairId)?.label ?? ''
 
       // Graded right here: the question carries its own answer, and a round trip between the
@@ -125,8 +125,8 @@ export function TrainingScreen({ dictionaryId, dictionaryName, scopeTitle, chapt
       setPickedId(wordPairId)
       setAnswer({
         isCorrect: wordPairId === question.wordPairId,
-        word: enToUa ? question.prompt : correctLabel,
-        translation: enToUa ? correctLabel : question.prompt,
+        word: enToNative ? question.prompt : correctLabel,
+        translation: enToNative ? correctLabel : question.prompt,
       })
 
       // The server still records the answer — it grades the session at the end — and the

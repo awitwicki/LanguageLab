@@ -25,14 +25,14 @@ public class ReaderWordStatusServiceTests
         db.Users.AddRange(new TelegramUser { Id = User, TelegramUserId = 11 }, new TelegramUser { Id = Other, TelegramUserId = 22 });
 
         db.Words.AddRange(
-            new WordPair { Id = 1, Word = "adjust", Translation = "налаштувати" },
-            new WordPair { Id = 2, Word = "abide", Translation = "дотримуватися" },
-            new WordPair { Id = 3, Word = "silo", Translation = "силос" },
-            new WordPair { Id = 4, Word = "cold", Translation = "холодний" },
-            new WordPair { Id = 5, Word = "run", Translation = "бігти" },
-            new WordPair { Id = 6, Word = "run", Translation = "запускати", OwnerId = User },
-            new WordPair { Id = 7, Word = "ghost", Translation = "привид" },
-            new WordPair { Id = 8, Word = "holston", Translation = "" });
+            TestWords.Pair(1, "adjust", "налаштувати"),
+            TestWords.Pair(2, "abide", "дотримуватися"),
+            TestWords.Pair(3, "silo", "силос"),
+            TestWords.Pair(4, "cold", "холодний"),
+            TestWords.Pair(5, "run", "бігти"),
+            TestWords.Pair(6, "run", "запускати", User),
+            TestWords.Pair(7, "ghost", "привид"),
+            TestWords.Pair(8, "holston", null));
 
         db.WordProgresses.AddRange(
             new WordProgress { UserId = User, WordPairId = 1, Box = 2, IsLearned = false },

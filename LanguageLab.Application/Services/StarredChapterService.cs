@@ -87,7 +87,8 @@ public class StarredChapterService
     /// order. One round of per-book queries per starred book, per-chapter COUNTs only for
     /// the starred chapters.
     /// </summary>
-    public async Task<IReadOnlyList<StarredChapterView>> GetStarredAsync(long userId, UserRole role, DateTime nowUtc)
+    public async Task<IReadOnlyList<StarredChapterView>> GetStarredAsync(
+        long userId, string language, UserRole role, DateTime nowUtc)
     {
         var stars = await _dbContext.StarredChapters
             .Where(s => s.UserId == userId)
@@ -112,7 +113,7 @@ public class StarredChapterService
         foreach (var book in books)
         {
             var chapterIds = stars.Where(s => s.DictionaryId == book.Id).Select(s => s.ChapterId).ToList();
-            var views = await _chapterStats.GetChapterViewsAsync(userId, book.Id, nowUtc, chapterIds);
+            var views = await _chapterStats.GetChapterViewsAsync(userId, language, book.Id, nowUtc, chapterIds);
 
             result.AddRange(views.Select(v => new StarredChapterView(book.Id, book.Name, v)));
         }

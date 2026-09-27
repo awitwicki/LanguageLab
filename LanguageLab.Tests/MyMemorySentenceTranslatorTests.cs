@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using LanguageLab.Application.Translation;
+using LanguageLab.Domain.Languages;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
@@ -43,7 +44,7 @@ public class MyMemorySentenceTranslatorTests
     {
         var handler = new StubHandler(_ => Json(Answer));
 
-        var result = await Translator(handler, "me@example.com").TranslateAsync("All of them had some difficulty.", CancellationToken.None);
+        var result = await Translator(handler, "me@example.com").TranslateAsync("All of them had some difficulty.", LearnerLanguages.Default, CancellationToken.None);
 
         Assert.Equal(SentenceTranslation.Success("Усі вони мали певні труднощі."), result);
         var query = handler.LastRequest!.RequestUri!.Query;
@@ -57,7 +58,7 @@ public class MyMemorySentenceTranslatorTests
     {
         var handler = new StubHandler(_ => Json(Answer));
 
-        var result = await Translator(handler).TranslateAsync(new string('a', 501), CancellationToken.None);
+        var result = await Translator(handler).TranslateAsync(new string('a', 501), LearnerLanguages.Default, CancellationToken.None);
 
         Assert.Equal(SentenceTranslation.TooLong, result);
         Assert.Equal(0, handler.Calls);
@@ -70,7 +71,7 @@ public class MyMemorySentenceTranslatorTests
     {
         var handler = new StubHandler(_ => Json(body));
 
-        Assert.Equal(SentenceTranslation.Quota, await Translator(handler).TranslateAsync("Hi there.", CancellationToken.None));
+        Assert.Equal(SentenceTranslation.Quota, await Translator(handler).TranslateAsync("Hi there.", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Fact]
@@ -78,7 +79,7 @@ public class MyMemorySentenceTranslatorTests
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests));
 
-        Assert.Equal(SentenceTranslation.Quota, await Translator(handler).TranslateAsync("Hi there.", CancellationToken.None));
+        Assert.Equal(SentenceTranslation.Quota, await Translator(handler).TranslateAsync("Hi there.", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Theory]
@@ -90,7 +91,7 @@ public class MyMemorySentenceTranslatorTests
     {
         var handler = new StubHandler(_ => Json(body, status));
 
-        Assert.Equal(SentenceTranslation.Failure, await Translator(handler).TranslateAsync("Hi there.", CancellationToken.None));
+        Assert.Equal(SentenceTranslation.Failure, await Translator(handler).TranslateAsync("Hi there.", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Fact]
@@ -98,7 +99,7 @@ public class MyMemorySentenceTranslatorTests
     {
         var handler = new StubHandler(_ => throw new HttpRequestException("reset"));
 
-        Assert.Equal(SentenceTranslation.Failure, await Translator(handler).TranslateAsync("Hi there.", CancellationToken.None));
+        Assert.Equal(SentenceTranslation.Failure, await Translator(handler).TranslateAsync("Hi there.", LearnerLanguages.Default, CancellationToken.None));
     }
 
     [Fact]
@@ -115,9 +116,23 @@ public class MyMemorySentenceTranslatorTests
         var budget = new MyMemorySentenceBudget(Options.Create(new TranslationOptions()));
         Assert.True(budget.TryConsume(2_000, DateTime.UtcNow));
 
-        var result = await Translator(handler, budget: budget).TranslateAsync("Hi there.", CancellationToken.None);
+        var result = await Translator(handler, budget: budget).TranslateAsync("Hi there.", LearnerLanguages.Default, CancellationToken.None);
 
         Assert.Equal(SentenceTranslation.Quota, result);
         Assert.Equal(0, handler.Calls);
+    }
+
+    [Theory]
+    [InlineData("pl", "langpair=en%7Cpl")]
+    [InlineData("zh", "langpair=en%7Czh-CN")]
+    [InlineData("nb", "langpair=en%7Cno")]
+    [InlineData("tl", "langpair=en%7Ctl")]
+    public async Task Asks_for_the_target_languages_MyMemory_code(string code, string expected)
+    {
+        var handler = new StubHandler(_ => Json(Answer));
+
+        await Translator(handler).TranslateAsync("Hi there.", LearnerLanguages.Find(code)!, CancellationToken.None);
+
+        Assert.Contains(expected, handler.LastRequest!.RequestUri!.Query);
     }
 }

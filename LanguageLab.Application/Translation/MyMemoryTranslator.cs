@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LanguageLab.Domain.Languages;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -37,7 +38,7 @@ public sealed class MyMemoryTranslator : ITranslator
         _logger = logger;
     }
 
-    public async Task<string?> TranslateAsync(string word, CancellationToken cancellationToken)
+    public async Task<string?> TranslateAsync(string word, LearnerLanguage target, CancellationToken cancellationToken)
     {
         // Spent only on a lookup that actually goes out, so a cache hit upstream costs nothing.
         if (!_budget.TryConsume(word.Length, DateTime.UtcNow))
@@ -46,7 +47,7 @@ public sealed class MyMemoryTranslator : ITranslator
             return null;
         }
 
-        var query = $"get?q={Uri.EscapeDataString(word)}&langpair=en%7Cuk";
+        var query = $"get?q={Uri.EscapeDataString(word)}&langpair=en%7C{Uri.EscapeDataString(target.MyMemoryCode)}";
 
         if (!string.IsNullOrWhiteSpace(_options.MyMemoryEmail))
         {

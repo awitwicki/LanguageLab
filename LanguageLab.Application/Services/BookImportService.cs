@@ -126,7 +126,7 @@ public class BookImportService
                 continue;
             }
 
-            var pair = new WordPair { Word = word, Translation = string.Empty };
+            var pair = new WordPair { Word = word };
             created.Add(pair);
             existing[word] = pair;
         }

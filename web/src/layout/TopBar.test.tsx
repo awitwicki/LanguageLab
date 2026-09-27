@@ -5,16 +5,19 @@ import { click, render } from '../test/render'
 import type { AppMode } from './mode'
 import { TopBar } from './TopBar'
 
-const user: CurrentUser = { id: 1, telegramUserId: 1, displayName: 'Ada', username: null, photoUrl: null, role: 'user' }
+const user: CurrentUser = { id: 1, telegramUserId: 1, displayName: 'Ada', username: null, photoUrl: null, role: 'user',
+  language: 'uk', suggestedLanguage: null }
 
-function topBar(mode: AppMode | null, onSelectMode: (mode: AppMode) => void = () => {}) {
+function topBar(mode: AppMode | null, onSelectMode: (mode: AppMode) => void = () => {}, who: CurrentUser = user) {
   return (
     <TopBar
-      user={user}
+      user={who}
       mode={mode}
       onSelectMode={onSelectMode}
       onHome={() => {}}
       onAdmin={() => {}}
+      onLanguage={() => {}}
+      languageName="Українська"
       onSignOut={() => {}}
       onDeleteAccount={() => Promise.resolve()}
     />
@@ -62,5 +65,12 @@ describe('TopBar — mode tabs', () => {
     await click(tabs(container)[3])
 
     expect(onSelectMode).toHaveBeenCalledWith('verbs')
+  })
+
+  // The verb catalog's translations are Ukrainian, so nobody else is offered the trainer.
+  it('hides irregular verbs from a learner of another language', async () => {
+    const { container } = await render(topBar('words', () => {}, { ...user, language: 'pl' }))
+
+    expect(tabs(container).map((t) => t.textContent)).toEqual(['Words', 'Reading', 'Pronunciation'])
   })
 })

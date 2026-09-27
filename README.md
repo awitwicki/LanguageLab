@@ -42,7 +42,8 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Moderation queue: flag when approving a dictionary would make it the lowest-id match for a `FileHash` an existing `ReaderBook` already points elsewhere — nothing surfaces that collision to the admin today (`DictionaryPublicationService`, `ReaderBookService`)
 - [ ] Grammar mode (MVP, about five minutes a day): a fifth top-level mode (`AppMode`, `web/src/layout/mode.ts`) with one or two of the simplest topics, each with an interactive drill. A domain of its own like the irregular verbs — topics and exercises in code, no `WordPair` and no dictionary
 - [ ] Phrasal verbs and idioms: a sixth top-level mode (`AppMode`, `web/src/layout/mode.ts`) for multi-word vocabulary — phrasal verbs (`give up`, `knuckle down`, `copy in`, `get along with`) and idioms (`a piece of cake`, `word of mouth`, `be up in the air`, `nip it in the bud`) as two groups of one catalog, since a learner's list of them is always mixed. A domain of its own like the irregular verbs — the phrases and their exercises in code, no dictionary; a book import cannot reach them either way (`ImportWordText` takes a single lowercase word), though `WordText` already allows spaces, so the personal dictionary can hold a phrase today
-- [ ] Multilingual: the learner picks a main language when the account is created (Telegram's `language_code` from the launch parameters is the default to offer), stored on `TelegramUser`, and every translator works English → that language instead of English → Ukrainian. The fixed pair sits in `MyMemoryTranslator` and `MyMemorySentenceTranslator` (`langpair=en|uk`), `DeepLTranslator`'s `target_lang`, and the `ITranslator`/`ISentenceTranslator` contracts. The harder half is storage: a shared `WordPair` row is unique on `(Word, OwnerId)` and holds one `Translation`, with no room for a second language — the shared vocabulary needs a language of its own (a row per language, or a translations table beside it), and the same goes for what the per-language cache of `TranslationService.LookupAsync` may reuse. `IrregularVerbCatalog`'s translations are Ukrainian in code too
+- [x] Multilingual: the learner picks a main language when the account is created (Telegram's `language_code` from the launch parameters is the default to offer), stored on `TelegramUser`, and every translator works English → that language instead of English → Ukrainian. The fixed pair sits in `MyMemoryTranslator` and `MyMemorySentenceTranslator` (`langpair=en|uk`), `DeepLTranslator`'s `target_lang`, and the `ITranslator`/`ISentenceTranslator` contracts. The harder half is storage: a shared `WordPair` row is unique on `(Word, OwnerId)` and holds one `Translation`, with no room for a second language — the shared vocabulary needs a language of its own (a row per language, or a translations table beside it), and the same goes for what the per-language cache of `TranslationService.LookupAsync` may reuse. `IrregularVerbCatalog`'s translations are Ukrainian in code too
+- [ ] Irregular verbs for other languages: `IrregularVerbCatalog` translations are Ukrainian only, so the verbs trainer is hidden for every other learner language (`IrregularVerbEndpoints.IsAvailableFor`, `web/src/layout/mode.ts` `visibleModes`).
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService.LookupAsync` (`LanguageLab.Application/Translation`) now caches a provider's answer into the shared vocabulary on every lookup, but nothing calls it from `BookImportService` or `WordSortingService.MarkAsync` yet (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation still don't enter exercises)
 - [x] Resume an interrupted irregular-verbs session after a page reload — the browser holds the
   session and nothing is stored, so a reload starts over from the start screen
@@ -55,7 +56,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 
 ### Conventions
 
-Everything in the project — code, comments, docs, UI copy — is English. The one exception: the vocabulary translation shown to the learner (`WordPair.Translation`, the Ukrainian meaning of each English word) stays Ukrainian, since that's the point of the app. See `CLAUDE.md` → Frontend conventions.
+Everything in the project — code, comments, docs, UI copy — is English. The one exception: the vocabulary translation shown to the learner (`WordTranslation.Text`) is in their chosen language (`TelegramUser.Language`, a `LearnerLanguages` code), since teaching English to speakers of that language is the whole point of the app. See `CLAUDE.md` → Frontend conventions.
 
 ### Versioning
 
@@ -272,11 +273,12 @@ retry.
 ### Personal dictionary and translation
 
 Every user has a private "My words" dictionary (created on first use, `IsPersonal`). Words are
-typed in by hand; `GET /api/translate?word=` suggests a Ukrainian translation — the shared
-vocabulary first, MyMemory after — and the user edits it before adding. Added words are
-`WordPair` rows owned by the user (`OwnerId`), so a personal translation never overwrites the
-shared one, and they are shelved "don't know" at once so the usual exercise and review flows
-train them like any book. Provider results are not cached (see TODO).
+typed in by hand; `GET /api/translate?word=` suggests a translation into the learner's language
+— the shared vocabulary first, MyMemory after — and the user edits it before adding. A provider's
+answer is cached in `WordTranslations` for that language, so the same word costs the network at
+most once per language. Added words are `WordPair` rows owned by the user (`OwnerId`), so a
+personal translation never overwrites the shared one, and they are shelved "don't know" at once
+so the usual exercise and review flows train them like any book.
 
 ## Run
 

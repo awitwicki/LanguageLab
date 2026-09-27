@@ -1,6 +1,7 @@
 using LanguageLab.Api.Endpoints;
 using LanguageLab.Application.Services;
 using LanguageLab.Domain.IrregularVerbs;
+using LanguageLab.Domain.Languages;
 
 namespace LanguageLab.Tests;
 
@@ -173,5 +174,15 @@ public class IrregularVerbEndpointsTests
     public void A_verb_outside_the_catalog_refuses_the_chunk()
     {
         Assert.False(IrregularVerbEndpoints.IsValidChunk(Chunk(Answer(), Answer(verb: "frobnicate"))));
+    }
+
+    [Theory]
+    [InlineData("uk", true)]
+    [InlineData("pl", false)]
+    [InlineData("tl", false)]
+    [InlineData(null, false)]
+    public void Only_Ukrainian_learners_get_the_trainer(string? code, bool expected)
+    {
+        Assert.Equal(expected, IrregularVerbEndpoints.IsAvailableFor(LearnerLanguages.Find(code)));
     }
 }

@@ -1,3 +1,5 @@
+using LanguageLab.Domain.Languages;
+
 namespace LanguageLab.Application.Translation;
 
 /// <summary>
@@ -17,6 +19,6 @@ public sealed class FallbackSentenceTranslator : ISentenceTranslator
 
     public bool IsConfigured => true;
 
-    public Task<SentenceTranslation> TranslateAsync(string text, CancellationToken cancellationToken) =>
-        _deepL.IsConfigured ? _deepL.TranslateAsync(text, cancellationToken) : _myMemory.TranslateAsync(text, cancellationToken);
+    public Task<SentenceTranslation> TranslateAsync(string text, LearnerLanguage target, CancellationToken cancellationToken) =>
+        _deepL.IsConfigured ? _deepL.TranslateAsync(text, target, cancellationToken) : _myMemory.TranslateAsync(text, target, cancellationToken);
 }

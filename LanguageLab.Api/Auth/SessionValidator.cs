@@ -1,3 +1,4 @@
+using LanguageLab.Api;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -27,7 +28,7 @@ public static class SessionValidator
         var user = await db.Users
             .AsNoTracking()
             .Where(u => u.Id == identity.Id)
-            .Select(u => new { u.Id, u.Role, u.IsBanned })
+            .Select(u => new { u.Id, u.Role, u.IsBanned, u.Language })
             .FirstOrDefaultAsync();
 
         if (user == null || user.IsBanned)
@@ -35,6 +36,9 @@ public static class SessionValidator
             await RejectAsync(context);
             return;
         }
+
+        // Read by ICurrentLanguage — this row is loaded here on every request anyway.
+        context.HttpContext.Items[HttpCurrentLanguage.ItemKey] = user.Language;
 
         // A promotion or demotion by an admin must not wait for the user to sign in again.
         if (user.Role != identity.Role)

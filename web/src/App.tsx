@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api, type DictionaryListItem, type DrillQuery, type TrainingStarted } from './api/client'
+import { LanguagePicker } from './account/LanguagePicker'
+import { LearnerLanguageContext, preselect } from './account/learnerLanguage'
+import { api, type DictionaryListItem, type DrillQuery, type Language, type TrainingStarted } from './api/client'
 import { useAuth } from './auth/useAuth'
 import { AppShell } from './layout/AppShell'
 import { modeOf, type AppMode } from './layout/mode'
@@ -53,6 +55,8 @@ type Route =
   /** Full screen, outside the app shell — the reader has its own header. */
   | { name: 'reader-book'; hash: string }
   | { name: 'admin' }
+  /** back: where Save or Back returns to — the screen the account menu was opened over. */
+  | { name: 'language'; back: Route }
 
 const REVIEW_TITLE = 'Review'
 const ALL_WORDS = 'All words'
@@ -65,11 +69,14 @@ const MODE_LANDING: Record<AppMode, Route> = {
 }
 
 export default function App() {
-  const { state, loginFailed, insideTelegram, signInWithTelegram, signOut, deleteAccount, dismissBanned } = useAuth()
+  const { state, loginFailed, insideTelegram, signInWithTelegram, signOut, deleteAccount, dismissBanned, refreshUser } =
+    useAuth()
 
   const [route, setRoute] = useState<Route>({ name: 'home' })
   const [dictionaries, setDictionaries] = useState<DictionaryListItem[] | null>(null)
   const [listError, setListError] = useState<string | null>(null)
+  // The language catalog, for the account menu's "Language  Polski ›" row.
+  const [languages, setLanguages] = useState<Language[] | null>(null)
 
   // Opened once here so the library and the reader share one store (and one memory fallback).
   const books = useBookStore()
@@ -93,13 +100,34 @@ export default function App() {
   // startup — so the list reloads on every route change.
   const routeKey = activeId === null ? route.name : `${route.name}:${activeId}`
 
+  // null until signed in *and* a language is picked — GET /api/dictionaries requires one and
+  // answers 409 otherwise. Also a dependency below, so picking a language re-triggers the load
+  // that a 409 while the picker was still up left undone.
+  const reloadLanguage = state.status === 'signed-in' ? state.user.language : null
+
+  useEffect(() => {
+    if (state.status !== 'signed-in' || reloadLanguage === null) {
+      return
+    }
+
+    void reload()
+  }, [reload, routeKey, state.status, reloadLanguage])
+
   useEffect(() => {
     if (state.status !== 'signed-in') {
       return
     }
 
-    void reload()
-  }, [reload, routeKey, state.status])
+    api.listLanguages().then(setLanguages, () => setLanguages(null))
+  }, [state.status])
+
+  // The verb catalog's translations are Ukrainian, so the trainer is too. A learner who
+  // switches away while on a verbs screen, or lands on one somehow, goes home.
+  useEffect(() => {
+    if (state.status === 'signed-in' && state.user.language !== 'uk' && route.name.startsWith('verbs')) {
+      setRoute({ name: 'home' })
+    }
+  }, [state, route.name])
 
   const activeName = dictionaries?.find((d) => d.id === activeId)?.name ?? 'Dictionary'
   const mode = modeOf(route.name)
@@ -146,217 +174,246 @@ export default function App() {
     )
   }
 
+  // A brand-new account picks its language before anything else: every translation depends on it.
+  if (state.user.language === null) {
+    return <LanguagePicker initial={preselect(state.user)} firstRun onSaved={() => void refreshUser()} />
+  }
+
+  const learnerLanguage = state.user.language
+  const languageName = languages?.find((l) => l.code === learnerLanguage)?.nativeName ?? learnerLanguage
+  const verbsAllowed = learnerLanguage === 'uk'
+
   if (route.name === 'reader-book') {
-    return books ? (
-      <ReaderScreen
-        key={route.hash}
-        hash={route.hash}
-        store={books.store}
-        onBack={() => setRoute({ name: 'reader' })}
-        onOpenDictionary={(id) => setRoute({ name: 'dictionary', id })}
-      />
-    ) : (
-      <main className="boot" aria-busy="true" />
+    return (
+      <LearnerLanguageContext.Provider value={learnerLanguage}>
+        {books ? (
+          <ReaderScreen
+            key={route.hash}
+            hash={route.hash}
+            store={books.store}
+            onBack={() => setRoute({ name: 'reader' })}
+            onOpenDictionary={(id) => setRoute({ name: 'dictionary', id })}
+          />
+        ) : (
+          <main className="boot" aria-busy="true" />
+        )}
+      </LearnerLanguageContext.Provider>
     )
   }
 
   return (
-    <AppShell
-      user={state.user}
-      mode={mode}
-      onSelectMode={(next) => setRoute(MODE_LANDING[next])}
-      screenKey={routeKey}
-      onHome={() => setRoute({ name: 'home' })}
-      onAdmin={() => setRoute({ name: 'admin' })}
-      onSignOut={() => void signOut()}
-      onDeleteAccount={deleteAccount}
-      sidebar={
-        mode === 'words' ? (
-          <Sidebar
-            items={dictionaries}
-            error={listError}
-            activeId={activeId}
-            importActive={route.name === 'import'}
-            onSelect={openDictionary}
+    <LearnerLanguageContext.Provider value={learnerLanguage}>
+      <AppShell
+        user={state.user}
+        mode={mode}
+        onSelectMode={(next) => setRoute(MODE_LANDING[next])}
+        screenKey={routeKey}
+        onHome={() => setRoute({ name: 'home' })}
+        onAdmin={() => setRoute({ name: 'admin' })}
+        onLanguage={() => setRoute({ name: 'language', back: route.name === 'language' ? route.back : route })}
+        languageName={languageName}
+        onSignOut={() => void signOut()}
+        onDeleteAccount={deleteAccount}
+        sidebar={
+          mode === 'words' ? (
+            <Sidebar
+              items={dictionaries}
+              error={listError}
+              activeId={activeId}
+              importActive={route.name === 'import'}
+              onSelect={openDictionary}
+              onImport={() => setRoute({ name: 'import' })}
+              personalActive={route.name === 'personal'}
+              onOpenPersonal={() => setRoute({ name: 'personal' })}
+            />
+          ) : null
+        }
+      >
+        {route.name === 'home' && (
+          <HomeScreen
+            hasDictionaries={(dictionaries?.filter((d) => !d.isPersonal).length ?? 0) > 0}
             onImport={() => setRoute({ name: 'import' })}
-            personalActive={route.name === 'personal'}
-            onOpenPersonal={() => setRoute({ name: 'personal' })}
+            onReview={(started) =>
+              setRoute({
+                name: 'training',
+                dictionaryId: null,
+                scopeTitle: REVIEW_TITLE,
+                chapterIds: null,
+                batchSize: null,
+                started,
+              })
+            }
+            onSort={sortScope}
+            onTrain={trainScope}
+            onChapterReview={reviewScope}
+            bookStore={books?.store ?? null}
+            onOpenBook={(hash) => setRoute({ name: 'reader-book', hash })}
+            onOpenLibrary={(hash) => setRoute({ name: 'reader', continueHash: hash })}
           />
-        ) : null
-      }
-    >
-      {route.name === 'home' && (
-        <HomeScreen
-          hasDictionaries={(dictionaries?.filter((d) => !d.isPersonal).length ?? 0) > 0}
-          onImport={() => setRoute({ name: 'import' })}
-          onReview={(started) =>
-            setRoute({
-              name: 'training',
-              dictionaryId: null,
-              scopeTitle: REVIEW_TITLE,
-              chapterIds: null,
-              batchSize: null,
-              started,
-            })
-          }
-          onSort={sortScope}
-          onTrain={trainScope}
-          onChapterReview={reviewScope}
-          bookStore={books?.store ?? null}
-          onOpenBook={(hash) => setRoute({ name: 'reader-book', hash })}
-          onOpenLibrary={(hash) => setRoute({ name: 'reader', continueHash: hash })}
-        />
-      )}
+        )}
 
-      {route.name === 'import' && (
-        <ImportScreen onImported={openDictionary} role={state.user.role} bookStore={books?.store} />
-      )}
+        {route.name === 'import' && (
+          <ImportScreen onImported={openDictionary} role={state.user.role} bookStore={books?.store} />
+        )}
 
-      {route.name === 'personal' && (
-        <PersonalDictionaryScreen
-          onTrain={(dictionaryId) =>
-            setRoute({ name: 'training-start', dictionaryId, chapterIds: null, scopeTitle: ALL_WORDS })
-          }
-          onReview={(started, dictionaryId) =>
-            setRoute({
-              name: 'training',
-              dictionaryId,
-              scopeTitle: REVIEW_TITLE,
-              chapterIds: null,
-              batchSize: null,
-              started,
-            })
-          }
-          onChanged={() => void reload()}
-        />
-      )}
+        {route.name === 'personal' && (
+          <PersonalDictionaryScreen
+            onTrain={(dictionaryId) =>
+              setRoute({ name: 'training-start', dictionaryId, chapterIds: null, scopeTitle: ALL_WORDS })
+            }
+            onReview={(started, dictionaryId) =>
+              setRoute({
+                name: 'training',
+                dictionaryId,
+                scopeTitle: REVIEW_TITLE,
+                chapterIds: null,
+                batchSize: null,
+                started,
+              })
+            }
+            onChanged={() => void reload()}
+          />
+        )}
 
-      {route.name === 'dictionary' && (
-        <DictionaryScreen
-          id={route.id}
-          role={state.user.role}
-          onSort={(chapterIds, scopeTitle) => sortScope(route.id, chapterIds, scopeTitle)}
-          onTrain={(chapterIds, scopeTitle) => trainScope(route.id, chapterIds, scopeTitle)}
-          onReview={(started, scopeTitle) => reviewScope(started, route.id, scopeTitle)}
-          onDeleted={() => {
-            setRoute({ name: 'home' })
-            void reload()
-          }}
-        />
-      )}
+        {route.name === 'dictionary' && (
+          <DictionaryScreen
+            id={route.id}
+            role={state.user.role}
+            onSort={(chapterIds, scopeTitle) => sortScope(route.id, chapterIds, scopeTitle)}
+            onTrain={(chapterIds, scopeTitle) => trainScope(route.id, chapterIds, scopeTitle)}
+            onReview={(started, scopeTitle) => reviewScope(started, route.id, scopeTitle)}
+            onDeleted={() => {
+              setRoute({ name: 'home' })
+              void reload()
+            }}
+          />
+        )}
 
-      {route.name === 'sorting' && (
-        <SortingScreen
-          dictionaryId={route.id}
-          dictionaryName={activeName}
-          chapterIds={route.chapterIds}
-          scopeTitle={route.scopeTitle}
-          onBack={() => openDictionary(route.id)}
-        />
-      )}
+        {route.name === 'sorting' && (
+          <SortingScreen
+            dictionaryId={route.id}
+            dictionaryName={activeName}
+            chapterIds={route.chapterIds}
+            scopeTitle={route.scopeTitle}
+            onBack={() => openDictionary(route.id)}
+          />
+        )}
 
-      {route.name === 'training-start' && (
-        <TrainingStartScreen
-          dictionaryId={route.dictionaryId}
-          dictionaryName={activeName}
-          chapterIds={route.chapterIds}
-          scopeTitle={route.scopeTitle}
-          onStarted={(started, batchSize) =>
-            setRoute({
-              name: 'training',
-              dictionaryId: route.dictionaryId,
-              scopeTitle: route.scopeTitle,
-              chapterIds: route.chapterIds,
-              batchSize,
-              started,
-            })
-          }
-          onBack={() => openDictionary(route.dictionaryId)}
-        />
-      )}
+        {route.name === 'training-start' && (
+          <TrainingStartScreen
+            dictionaryId={route.dictionaryId}
+            dictionaryName={activeName}
+            chapterIds={route.chapterIds}
+            scopeTitle={route.scopeTitle}
+            onStarted={(started, batchSize) =>
+              setRoute({
+                name: 'training',
+                dictionaryId: route.dictionaryId,
+                scopeTitle: route.scopeTitle,
+                chapterIds: route.chapterIds,
+                batchSize,
+                started,
+              })
+            }
+            onBack={() => openDictionary(route.dictionaryId)}
+          />
+        )}
 
-      {route.name === 'training' && (
-        <TrainingScreen
-          key={route.started.trainingId}
-          dictionaryId={route.dictionaryId}
-          dictionaryName={route.dictionaryId === null ? ALL_DICTIONARIES : activeName}
-          scopeTitle={route.scopeTitle}
-          chapterIds={route.chapterIds}
-          batchSize={route.batchSize}
-          started={route.started}
-          onBack={() => {
-            if (route.dictionaryId === null) setRoute({ name: 'home' })
-            else openDictionary(route.dictionaryId)
-          }}
-        />
-      )}
+        {route.name === 'training' && (
+          <TrainingScreen
+            key={route.started.trainingId}
+            dictionaryId={route.dictionaryId}
+            dictionaryName={route.dictionaryId === null ? ALL_DICTIONARIES : activeName}
+            scopeTitle={route.scopeTitle}
+            chapterIds={route.chapterIds}
+            batchSize={route.batchSize}
+            started={route.started}
+            onBack={() => {
+              if (route.dictionaryId === null) setRoute({ name: 'home' })
+              else openDictionary(route.dictionaryId)
+            }}
+          />
+        )}
 
-      {route.name === 'admin' && <AdminScreen meId={state.user.id} />}
+        {route.name === 'admin' && <AdminScreen meId={state.user.id} />}
 
-      {route.name === 'verbs' && (
-        <VerbsScreen
-          userId={state.user.id}
-          onResume={(saved) => setRoute({ name: 'verbs-drill', query: saved.query, title: saved.title, resume: saved })}
-          onOpenStage={(group) => setRoute({ name: 'verbs-stage', group })}
-          onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
-        />
-      )}
+        {route.name === 'language' && (
+          <LanguagePicker
+            initial={learnerLanguage}
+            firstRun={false}
+            onBack={() => setRoute(route.back)}
+            onSaved={() => {
+              void refreshUser()
+              setRoute(route.back.name.startsWith('verbs') ? { name: 'home' } : route.back)
+            }}
+          />
+        )}
 
-      {route.name === 'verbs-stage' && (
-        <VerbStageScreen
-          group={route.group}
-          onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
-          onBack={() => setRoute({ name: 'verbs' })}
-        />
-      )}
+        {verbsAllowed && route.name === 'verbs' && (
+          <VerbsScreen
+            userId={state.user.id}
+            onResume={(saved) => setRoute({ name: 'verbs-drill', query: saved.query, title: saved.title, resume: saved })}
+            onOpenStage={(group) => setRoute({ name: 'verbs-stage', group })}
+            onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
+          />
+        )}
 
-      {route.name === 'verbs-drill' && (
-        <VerbDrillScreen
-          query={route.query}
-          title={route.title}
-          userId={state.user.id}
-          resume={route.resume}
-          onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
-          onBack={() =>
-            setRoute(
-              route.query.group === undefined
-                ? { name: 'verbs' }
-                : { name: 'verbs-stage', group: route.query.group },
-            )
-          }
-        />
-      )}
+        {verbsAllowed && route.name === 'verbs-stage' && (
+          <VerbStageScreen
+            group={route.group}
+            onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
+            onBack={() => setRoute({ name: 'verbs' })}
+          />
+        )}
 
-      {route.name === 'pronunciation' && (
-        <PronunciationFamiliesScreen
-          onOpenFamily={(key) => setRoute({ name: 'pronunciation-family', key })}
-          onOpenAlphabet={() => setRoute({ name: 'pronunciation-alphabet' })}
-        />
-      )}
+        {verbsAllowed && route.name === 'verbs-drill' && (
+          <VerbDrillScreen
+            query={route.query}
+            title={route.title}
+            userId={state.user.id}
+            resume={route.resume}
+            onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
+            onBack={() =>
+              setRoute(
+                route.query.group === undefined
+                  ? { name: 'verbs' }
+                  : { name: 'verbs-stage', group: route.query.group },
+              )
+            }
+          />
+        )}
 
-      {route.name === 'pronunciation-alphabet' && (
-        <IpaAlphabetScreen
-          onBack={() => setRoute({ name: 'pronunciation' })}
-          onOpenFamily={(key) => setRoute({ name: 'pronunciation-family', key })}
-        />
-      )}
+        {route.name === 'pronunciation' && (
+          <PronunciationFamiliesScreen
+            onOpenFamily={(key) => setRoute({ name: 'pronunciation-family', key })}
+            onOpenAlphabet={() => setRoute({ name: 'pronunciation-alphabet' })}
+          />
+        )}
 
-      {route.name === 'pronunciation-family' && (
-        <PronunciationFamilyScreen
-          key={route.key}
-          familyKey={route.key}
-          onBack={() => setRoute({ name: 'pronunciation' })}
-        />
-      )}
+        {route.name === 'pronunciation-alphabet' && (
+          <IpaAlphabetScreen
+            onBack={() => setRoute({ name: 'pronunciation' })}
+            onOpenFamily={(key) => setRoute({ name: 'pronunciation-family', key })}
+          />
+        )}
 
-      {route.name === 'reader' && books && (
-        <ReaderLibraryScreen
-          store={books.store}
-          persistent={books.persistent}
-          onOpen={(hash) => setRoute({ name: 'reader-book', hash })}
-          continueHash={route.continueHash ?? null}
-        />
-      )}
-    </AppShell>
+        {route.name === 'pronunciation-family' && (
+          <PronunciationFamilyScreen
+            key={route.key}
+            familyKey={route.key}
+            onBack={() => setRoute({ name: 'pronunciation' })}
+          />
+        )}
+
+        {route.name === 'reader' && books && (
+          <ReaderLibraryScreen
+            store={books.store}
+            persistent={books.persistent}
+            onOpen={(hash) => setRoute({ name: 'reader-book', hash })}
+            continueHash={route.continueHash ?? null}
+          />
+        )}
+      </AppShell>
+    </LearnerLanguageContext.Provider>
   )
 }
