@@ -40,7 +40,7 @@ The services on top of the domain:
   `TranslationService` trying the shared vocabulary first and the provider after;
   `ISentenceTranslator` → `FallbackSentenceTranslator`, which uses DeepL when a key is set and
   `MyMemorySentenceTranslator` otherwise.
-- **The irregular-verbs trainer** — `VerbKnowledgeService`, `VerbDrillService`.
+- **The irregular-verbs trainer** — `VerbKnowledgeService`, `VerbSessionService`.
 - **The reader** — `ReaderBookService`, `ReaderWordStatusService`, `ReaderWordService`. What each
   one owns is in [reader.md](reader.md).
 

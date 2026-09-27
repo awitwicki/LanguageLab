@@ -17,6 +17,10 @@ public sealed record ProgressView(
 
 public sealed record AnswerResultView(string Verb, double Mastery, int Streak, bool Passed);
 
+/// <summary>One judged card as the trainer records it.</summary>
+public sealed record VerbAnswerToApply(
+    string Verb, PromptForm PromptForm, bool Known, int ResponseMs, DrillMode Mode, int? Group);
+
 /// <summary>
 /// The learner's standing on the whole catalog, and the one write the trainer makes: a
 /// judged card updates its verb's row and appends to the answer log. The rules themselves
@@ -120,6 +124,45 @@ public class VerbKnowledgeService
         await _dbContext.SaveChangesAsync();
 
         return new AnswerResultView(verb, row.Mastery, row.Streak, VerbScoring.Passed(row.Streak));
+    }
+
+    /// <summary>
+    /// A chunk of answers, in the order they were given. The browser holds its own queue now
+    /// and drains it in the background, so one request carries several cards.
+    ///
+    /// One transaction is what makes a failed request safe to retry: there is no answer
+    /// identity to deduplicate against, so a half-applied chunk would count its first answers
+    /// a second time when the browser sent it again. Every answer shares the request's
+    /// timestamp, and <see cref="VerbScoring.Replay"/> falls back to the row id, which is
+    /// insert order — so the fold sees them in the order they arrived.
+    ///
+    /// Callers check catalog membership first (the endpoint refuses the whole body otherwise),
+    /// so no answer here can come back unapplied.
+    /// </summary>
+    public async Task<IReadOnlyList<AnswerResultView>> ApplyManyAsync(
+        long userId, IReadOnlyList<VerbAnswerToApply> answers, DateTime nowUtc)
+    {
+        if (answers.Count == 0)
+        {
+            return [];
+        }
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+        var results = new List<AnswerResultView>(answers.Count);
+
+        foreach (var answer in answers)
+        {
+            var result = await ApplyAsync(
+                userId, answer.Verb, answer.PromptForm, answer.Known, answer.ResponseMs,
+                answer.Mode, answer.Group, nowUtc);
+
+            results.Add(result!);
+        }
+
+        await transaction.CommitAsync();
+
+        return results;
     }
 
     /// <summary>The selection rules' input, in the order the verbs were asked for.</summary>

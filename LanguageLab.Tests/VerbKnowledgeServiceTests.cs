@@ -2,6 +2,8 @@ using LanguageLab.Application.Services;
 using LanguageLab.Domain.IrregularVerbs;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.InMemory.Internal;
 
 namespace LanguageLab.Tests;
 
@@ -9,9 +11,12 @@ public class VerbKnowledgeServiceTests
 {
     private static readonly DateTime Now = new(2026, 9, 25, 10, 0, 0, DateTimeKind.Utc);
 
+    // The in-memory provider has no transactions and makes the warning an error, so a test
+    // reaching ApplyManyAsync would throw where production simply commits.
     private static ApplicationDbContext NewContext() =>
         new(new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
             .Options);
 
     [Fact]
@@ -224,5 +229,57 @@ public class VerbKnowledgeServiceTests
         Assert.Equal(IrregularVerbCatalog.VerbsOfGroup(1).Select(v => v.V1), standings.Select(s => s.Verb));
         Assert.Equal(1, standings.Single(s => s.Verb == "put").Answers);
         Assert.Equal(0, standings.Single(s => s.Verb == "cut").Answers);
+    }
+
+    private static VerbAnswerToApply Answer(string verb, bool known) =>
+        new(verb, PromptForm.V1, known, 500, DrillMode.Batch, 1);
+
+    [Fact]
+    public async Task A_chunk_of_answers_is_applied_in_the_order_it_was_given()
+    {
+        await using var db = NewContext();
+        var knowledge = new VerbKnowledgeService(db);
+
+        var results = await knowledge.ApplyManyAsync(
+            1,
+            [Answer("cut", true), Answer("cut", true), Answer("cut", false), Answer("put", true)],
+            Now);
+
+        Assert.Equal(["cut", "cut", "cut", "put"], results.Select(r => r.Verb));
+
+        // The last answer for "cut" was a miss, so its streak is back to zero however fast
+        // the two before it came.
+        Assert.Equal(0, results[2].Streak);
+        Assert.Equal(1, results[3].Streak);
+
+        var cut = (await knowledge.GetAsync(1)).Verbs.Single(v => v.V1 == "cut");
+        Assert.Equal(3, cut.Answers);
+        Assert.Equal(0, cut.Streak);
+    }
+
+    [Fact]
+    public async Task A_chunk_passes_a_verb_exactly_as_four_separate_answers_would()
+    {
+        await using var db = NewContext();
+        var knowledge = new VerbKnowledgeService(db);
+
+        await knowledge.ApplyManyAsync(
+            1,
+            Enumerable.Repeat(Answer("cut", true), VerbScoring.PassStreak).ToList(),
+            Now);
+
+        var cut = (await knowledge.GetAsync(1)).Verbs.Single(v => v.V1 == "cut");
+        Assert.True(cut.Passed);
+        Assert.Equal(VerbScoring.PassStreak, cut.Answers);
+    }
+
+    [Fact]
+    public async Task An_empty_chunk_writes_nothing_and_returns_nothing()
+    {
+        await using var db = NewContext();
+        var knowledge = new VerbKnowledgeService(db);
+
+        Assert.Empty(await knowledge.ApplyManyAsync(1, [], Now));
+        Assert.All((await knowledge.GetAsync(1)).Verbs, v => Assert.Equal(0, v.Answers));
     }
 }

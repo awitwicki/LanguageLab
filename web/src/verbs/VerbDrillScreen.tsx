@@ -1,7 +1,8 @@
 import { useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { DrillQuery } from '../api/client'
 import { formatInt } from '../lib/format'
-import { useDrill } from './useDrill'
+import { useVerbSession } from './useVerbSession'
+import { VerbSessionStartScreen } from './VerbSessionStartScreen'
 import './VerbDrillScreen.css'
 
 interface Props {
@@ -12,32 +13,61 @@ interface Props {
   onStartDrill: (query: DrillQuery, title: string) => void
 }
 
-/// One card at a time: a form to recognise, the three forms blurred underneath, and the
-/// learner's own verdict. The verdict unblurs the answer; the level comes out of how fast
-/// it came.
+/// One card at a time: a form to recognise and the three forms blurred underneath. The
+/// introduction round only moves on; the drill round takes the learner's verdict, and a miss
+/// is what uncovers the answer.
 export function VerbDrillScreen({ query, title, onBack, onStartDrill }: Props) {
-  const { card, revealed, peeked, done, busy, error, answer, peek, next } = useDrill(query)
-  const shown = revealed !== null || peeked
+  const session = useVerbSession(query)
+  const { phase, card, intro, revealed, peeked, error, busy, syncing, stuck } = session
+  const shown = revealed || peeked
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (revealed) {
-        if (event.key === ' ' || event.key === 'Enter') {
+      // A held key auto-repeats every ~30ms; without this a held arrow or Space would race
+      // through cards faster than React can re-render between them.
+      if (event.repeat) {
+        return
+      }
+
+      // A keyboard user tabbed to a real control (a stepper, Skip to training, Back, the
+      // blurred answer) already has that control's own key handling; this shortcut is only for
+      // the page at large, not for hijacking Enter/Space away from whatever is focused.
+      const target = event.target
+      if (target instanceof HTMLElement && target.closest('button, [role="button"], input, textarea, select')) {
+        return
+      }
+
+      const enter = event.key === 'Enter'
+      const space = event.key === ' '
+
+      if (phase === 'start') {
+        if (enter) {
           event.preventDefault()
-          next()
+          session.startIntro()
         }
 
         return
       }
 
-      if (event.key === 'ArrowRight') answer(true)
-      if (event.key === 'ArrowLeft') answer(false)
+      if (phase === 'intro' || revealed) {
+        if (space || enter) {
+          event.preventDefault()
+          session.next()
+        }
+
+        return
+      }
+
+      if (phase === 'drill') {
+        if (event.key === 'ArrowRight') session.answer(true)
+        if (event.key === 'ArrowLeft') session.answer(false)
+      }
     }
 
     window.addEventListener('keydown', onKey)
 
     return () => window.removeEventListener('keydown', onKey)
-  }, [answer, next, revealed])
+  }, [phase, revealed, session])
 
   return (
     <>
@@ -46,16 +76,32 @@ export function VerbDrillScreen({ query, title, onBack, onStartDrill }: Props) {
           Back
         </button>
         <span className="footnote">{title}</span>
-        {card && (
+        {phase !== 'loading' && phase !== 'finished' && (
           <span className="footnote num">
-            {formatInt(card.scope.passed)} of {formatInt(card.scope.total)} passed
+            {formatInt(session.scope.passed)} of {formatInt(session.scope.total)} passed
           </span>
         )}
       </div>
 
       {error && <p className="error">{error}</p>}
 
-      {done && (
+      {/* The round carries on either way — this only says the answers have not left yet. */}
+      {stuck && !error && (
+        <p className="footnote drill-stuck">Your answers will be saved once the connection is back.</p>
+      )}
+
+      {phase === 'start' && (
+        <VerbSessionStartScreen
+          offer={session.offer}
+          settings={session.settings}
+          onWords={session.setWords}
+          onRounds={session.setRounds}
+          onStart={session.startIntro}
+          onSkip={session.skipIntro}
+        />
+      )}
+
+      {phase === 'finished' && (
         <div className="card drill-done">
           <p>Every verb of this stage has passed. Free training keeps them fresh.</p>
           <div className="drill-done-actions">
@@ -75,13 +121,41 @@ export function VerbDrillScreen({ query, title, onBack, onStartDrill }: Props) {
         </div>
       )}
 
-      {card && (
+      {phase === 'done' && (
+        <div className="card drill-done">
+          <p>This batch has passed. The next words are waiting.</p>
+          {syncing && <p className="footnote">Saving your answers…</p>}
+          <div className="drill-done-actions">
+            <button
+              type="button"
+              className="btn btn-primary drill-next-words"
+              onClick={session.nextWords}
+              disabled={syncing}
+            >
+              Take the next words
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={onBack}>
+              Back to the stage
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(phase === 'intro' || phase === 'drill') && !card && busy && <p className="footnote">Loading…</p>}
+
+      {(phase === 'intro' || phase === 'drill') && card && (
         <div className="card drill-card">
+          {intro && (
+            <p className="footnote num drill-intro-step">
+              {formatInt(intro.step)} of {formatInt(intro.total)}
+            </p>
+          )}
+
           <p className="drill-prompt">{promptOf(card.verb, card.promptForm)}</p>
 
-          {/* Blurred, the answer is a button: tapping it uncovers the forms without
-              judging the card, and its own text stays out of the screen-reader tree until
-              then — the label is what a reader announces instead. */}
+          {/* Blurred, the answer is a button: tapping it uncovers the forms without judging
+              the card, and its own text stays out of the screen-reader tree until then — the
+              label is what a reader announces instead. */}
           <div
             className={`drill-answer${shown ? '' : ' is-blurred'}`}
             {...(shown
@@ -90,11 +164,11 @@ export function VerbDrillScreen({ query, title, onBack, onStartDrill }: Props) {
                   role: 'button',
                   tabIndex: 0,
                   'aria-label': 'Show the answer',
-                  onClick: peek,
+                  onClick: session.peek,
                   onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault()
-                      peek()
+                      session.peek()
                     }
                   },
                 })}
@@ -107,25 +181,29 @@ export function VerbDrillScreen({ query, title, onBack, onStartDrill }: Props) {
             </p>
           </div>
 
-          {revealed ? (
+          {phase === 'intro' ? (
             <div className="drill-after">
-              <Example text={card.example.text} />
+              <button type="button" className="btn btn-primary btn-lg drill-next" onClick={session.next}>
+                Next <kbd>Space</kbd>
+              </button>
+              <button type="button" className="btn btn-quiet drill-skip-intro" onClick={session.skipIntro}>
+                Skip introduction
+              </button>
+            </div>
+          ) : revealed ? (
+            <div className="drill-after">
+              <Example text={exampleOf(card.verb, card.promptForm)} />
               {card.verb.note && <p className="footnote">{card.verb.note}</p>}
-              <button type="button" className="btn btn-primary btn-lg drill-next" onClick={next} disabled={busy}>
+              <button type="button" className="btn btn-primary btn-lg drill-next" onClick={session.next}>
                 Next <kbd>Space</kbd>
               </button>
             </div>
           ) : (
             <div className="drill-verdict">
-              <button
-                type="button"
-                className="btn btn-lg btn-unknown"
-                onClick={() => answer(false)}
-                disabled={busy}
-              >
+              <button type="button" className="btn btn-lg btn-unknown" onClick={() => session.answer(false)}>
                 I don't know <kbd>←</kbd>
               </button>
-              <button type="button" className="btn btn-lg btn-known" onClick={() => answer(true)} disabled={busy}>
+              <button type="button" className="btn btn-lg btn-known" onClick={() => session.answer(true)}>
                 I know <kbd>→</kbd>
               </button>
             </div>
@@ -154,6 +232,14 @@ function Example({ text }: { readonly text: string }) {
       {after}
     </p>
   )
+}
+
+/// The example of the tense the prompted form belongs to.
+function exampleOf(
+  verb: { examples: { present: string; past: string; perfect: string } },
+  form: string,
+): string {
+  return form === 'v1' ? verb.examples.present : form === 'v2' ? verb.examples.past : verb.examples.perfect
 }
 
 function promptOf(verb: { v1: string; v2: string; v3: string }, form: string): string {

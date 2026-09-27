@@ -44,6 +44,12 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [ ] Phrasal verbs and idioms: a sixth top-level mode (`AppMode`, `web/src/layout/mode.ts`) for multi-word vocabulary — phrasal verbs (`give up`, `knuckle down`, `copy in`, `get along with`) and idioms (`a piece of cake`, `word of mouth`, `be up in the air`, `nip it in the bud`) as two groups of one catalog, since a learner's list of them is always mixed. A domain of its own like the irregular verbs — the phrases and their exercises in code, no dictionary; a book import cannot reach them either way (`ImportWordText` takes a single lowercase word), though `WordText` already allows spaces, so the personal dictionary can hold a phrase today
 - [ ] Multilingual: the learner picks a main language when the account is created (Telegram's `language_code` from the launch parameters is the default to offer), stored on `TelegramUser`, and every translator works English → that language instead of English → Ukrainian. The fixed pair sits in `MyMemoryTranslator` and `MyMemorySentenceTranslator` (`langpair=en|uk`), `DeepLTranslator`'s `target_lang`, and the `ITranslator`/`ISentenceTranslator` contracts. The harder half is storage: a shared `WordPair` row is unique on `(Word, OwnerId)` and holds one `Translation`, with no room for a second language — the shared vocabulary needs a language of its own (a row per language, or a translations table beside it), and the same goes for what the per-language cache of `TranslationService.LookupAsync` may reuse. `IrregularVerbCatalog`'s translations are Ukrainian in code too
 - [ ] Auto-translate on book import and when marking a word "don't know" + edit translation in the UI — `TranslationService.LookupAsync` (`LanguageLab.Application/Translation`) now caches a provider's answer into the shared vocabulary on every lookup, but nothing calls it from `BookImportService` or `WordSortingService.MarkAsync` yet (one-off backfill of 2797 "don't know" shelf words done on 2026-09-07; new "don't know" words without a translation still don't enter exercises)
+- [ ] Resume an interrupted irregular-verbs session after a page reload — the browser holds the
+  session and nothing is stored, so a reload starts over from the start screen
+  (`web/src/verbs/useVerbSession.ts`)
+- [ ] The introduction round's word and round counts live in `localStorage` per device rather than on
+  the account, so a learner sets them again on a second device
+  (`web/src/verbs/introSettings.ts`)
 
 ## Development
 

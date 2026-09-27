@@ -5,10 +5,10 @@ using LanguageLab.Domain.IrregularVerbs;
 namespace LanguageLab.Tests;
 
 /// <summary>
-/// <see cref="IrregularVerbEndpoints.ParseDrill"/> is what `GET /next` uses to read its
+/// <see cref="IrregularVerbEndpoints.ParseSession"/> is what `GET /session` uses to read its
 /// query string, by hand: minimal API's own binding for a query enum is case-sensitive
-/// (`Enum.TryParse` without `ignoreCase: true`), so it would 400 on the lowercase `batch`
-/// the SPA sends. No HTTP here — this is the parsing and validation behind the endpoint.
+/// (`Enum.TryParse` without `ignoreCase: true`), so it would 400 on the lowercase `batch` the
+/// SPA sends. No HTTP here — this is the parsing and validation behind the endpoints.
 /// </summary>
 public class IrregularVerbEndpointsTests
 {
@@ -19,9 +19,9 @@ public class IrregularVerbEndpointsTests
     [InlineData("BATCH")]
     public void Batch_is_read_case_insensitively(string mode)
     {
-        var request = IrregularVerbEndpoints.ParseDrill(mode, group: 3, scope: null, exclude: null);
+        var request = IrregularVerbEndpoints.ParseSession(mode, group: 3, scope: null);
 
-        Assert.Equal(new DrillRequest(DrillMode.Batch, 3, DrillScope.Stage, null), request);
+        Assert.Equal(new SessionRequest(DrillMode.Batch, 3, DrillScope.Stage), request);
     }
 
     [Theory]
@@ -29,29 +29,21 @@ public class IrregularVerbEndpointsTests
     [InlineData("Cumulative", DrillScope.Cumulative)]
     public void A_free_run_reads_its_scope_case_insensitively(string scope, DrillScope expected)
     {
-        var request = IrregularVerbEndpoints.ParseDrill("free", group: 2, scope, exclude: null);
+        var request = IrregularVerbEndpoints.ParseSession("free", group: 2, scope);
 
-        Assert.Equal(new DrillRequest(DrillMode.Free, 2, expected, null), request);
+        Assert.Equal(new SessionRequest(DrillMode.Free, 2, expected), request);
     }
 
     [Fact]
     public void The_whole_catalog_needs_no_stage_and_ignores_one()
     {
         Assert.Equal(
-            new DrillRequest(DrillMode.Free, null, DrillScope.All, null),
-            IrregularVerbEndpoints.ParseDrill("free", group: null, "all", exclude: null));
+            new SessionRequest(DrillMode.Free, null, DrillScope.All),
+            IrregularVerbEndpoints.ParseSession("free", group: null, "all"));
 
         Assert.Equal(
-            new DrillRequest(DrillMode.Free, null, DrillScope.All, null),
-            IrregularVerbEndpoints.ParseDrill("free", group: 2, "all", exclude: null));
-    }
-
-    [Fact]
-    public void The_card_on_screen_is_carried_through()
-    {
-        var request = IrregularVerbEndpoints.ParseDrill("batch", 1, null, exclude: "cut");
-
-        Assert.Equal("cut", request!.Exclude);
+            new SessionRequest(DrillMode.Free, null, DrillScope.All),
+            IrregularVerbEndpoints.ParseSession("free", group: 2, "all"));
     }
 
     /// <summary>Review focus 2: junk and numbers must not slip through as enum values.</summary>
@@ -73,7 +65,7 @@ public class IrregularVerbEndpointsTests
     [InlineData("free", 9, "all")]       // stage out of range even when ignored
     public void Incoherent_parameters_are_refused(string? mode, int? group, string? scope)
     {
-        Assert.Null(IrregularVerbEndpoints.ParseDrill(mode, group, scope, exclude: null));
+        Assert.Null(IrregularVerbEndpoints.ParseSession(mode, group, scope));
     }
 
     [Fact]
@@ -81,7 +73,7 @@ public class IrregularVerbEndpointsTests
     {
         for (var group = 1; group <= IrregularVerbCatalog.GroupCount; group++)
         {
-            Assert.NotNull(IrregularVerbEndpoints.ParseDrill("batch", group, null, null));
+            Assert.NotNull(IrregularVerbEndpoints.ParseSession("batch", group, null));
         }
     }
 
@@ -129,5 +121,57 @@ public class IrregularVerbEndpointsTests
     public void A_stage_outside_the_catalog_is_refused(int group)
     {
         Assert.False(IrregularVerbEndpoints.IsValidAnswer(Answer(group: group)));
+    }
+
+    private static VerbAnswersRequest Chunk(params VerbAnswerRequest[] answers) => new(answers);
+
+    /// <summary>
+    /// A chunk is all-or-nothing: the browser retries a failed request, and without an answer
+    /// identity to deduplicate against, a half-applied chunk would count its first answers
+    /// twice. So one bad entry refuses the whole body.
+    /// </summary>
+    [Fact]
+    public void A_well_formed_chunk_is_valid()
+    {
+        Assert.True(IrregularVerbEndpoints.IsValidChunk(Chunk(Answer())));
+        Assert.True(IrregularVerbEndpoints.IsValidChunk(
+            Chunk(Answer(), Answer("put"), Answer(mode: DrillMode.Free, group: null))));
+    }
+
+    [Fact]
+    public void A_chunk_with_no_answers_is_refused()
+    {
+        Assert.False(IrregularVerbEndpoints.IsValidChunk(Chunk()));
+        Assert.False(IrregularVerbEndpoints.IsValidChunk(new VerbAnswersRequest(null)));
+    }
+
+    [Fact]
+    public void A_chunk_longer_than_the_cap_is_refused()
+    {
+        var cap = IrregularVerbEndpoints.MaxAnswersPerRequest;
+
+        Assert.True(IrregularVerbEndpoints.IsValidChunk(
+            new VerbAnswersRequest(Enumerable.Repeat(Answer(), cap).ToList())));
+        Assert.False(IrregularVerbEndpoints.IsValidChunk(
+            new VerbAnswersRequest(Enumerable.Repeat(Answer(), cap + 1).ToList())));
+    }
+
+    [Fact]
+    public void One_bad_entry_refuses_the_whole_chunk()
+    {
+        Assert.False(IrregularVerbEndpoints.IsValidChunk(Chunk(Answer(), Answer(verb: ""))));
+        Assert.False(IrregularVerbEndpoints.IsValidChunk(Chunk(Answer(), Answer(form: (PromptForm)7))));
+        Assert.False(IrregularVerbEndpoints.IsValidChunk(Chunk(Answer(), Answer(group: 9))));
+    }
+
+    /// <summary>
+    /// A verb outside the catalog used to come back as a 404 from the service. Among ninety-nine
+    /// good answers that is a broken client, not a missing resource — and it must not let the
+    /// other ninety-nine through either, since the retry would double-count them.
+    /// </summary>
+    [Fact]
+    public void A_verb_outside_the_catalog_refuses_the_chunk()
+    {
+        Assert.False(IrregularVerbEndpoints.IsValidChunk(Chunk(Answer(), Answer(verb: "frobnicate"))));
     }
 }

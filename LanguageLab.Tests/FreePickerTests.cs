@@ -100,4 +100,54 @@ public class FreePickerTests
 
         Assert.Equal("a", FreePicker.Next(scope, exclude: "a", new Random(1))!.Verb);
     }
+
+    [Fact]
+    public void A_chunk_is_as_long_as_it_was_asked_for()
+    {
+        List<VerbStanding> scope = [Weak("a"), Weak("b"), Strong("c")];
+
+        Assert.Equal(20, FreePicker.Draw(scope, 20, new Random(1)).Count);
+    }
+
+    [Fact]
+    public void No_verb_of_a_chunk_follows_itself()
+    {
+        List<VerbStanding> scope = [Weak("a"), Weak("b"), Strong("c"), Strong("d")];
+
+        for (var seed = 0; seed < 50; seed++)
+        {
+            var drawn = FreePicker.Draw(scope, 20, new Random(seed)).Select(s => s.Verb).ToList();
+
+            for (var i = 1; i < drawn.Count; i++)
+            {
+                Assert.NotEqual(drawn[i - 1], drawn[i]);
+            }
+        }
+    }
+
+    [Fact]
+    public void A_lone_verb_is_all_a_chunk_can_hold()
+    {
+        var drawn = FreePicker.Draw([Weak("a")], 5, new Random(1));
+
+        Assert.Equal(5, drawn.Count);
+        Assert.All(drawn, s => Assert.Equal("a", s.Verb));
+    }
+
+    [Fact]
+    public void A_chunk_leans_on_the_weak_verbs_without_dropping_the_strong_ones()
+    {
+        List<VerbStanding> scope = [Weak("a"), Weak("b"), Strong("c"), Strong("d")];
+
+        var drawn = FreePicker.Draw(scope, 2000, new Random(7));
+        var weakShare = drawn.Count(FreePicker.IsWeak) / (double)drawn.Count;
+
+        Assert.InRange(weakShare, FreePicker.WeakShare - 0.1, FreePicker.WeakShare + 0.1);
+    }
+
+    [Fact]
+    public void An_empty_scope_draws_nothing()
+    {
+        Assert.Empty(FreePicker.Draw([], 20, new Random(1)));
+    }
 }

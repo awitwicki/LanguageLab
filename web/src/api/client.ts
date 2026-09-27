@@ -410,6 +410,49 @@ export type DrillMode = 'batch' | 'free'
 /** What a free run draws from. */
 export type DrillScope = 'stage' | 'cumulative' | 'all'
 
+/** A verb as a session hands it over: everything to draw its cards, plus the learner's standing. */
+export interface SessionVerb {
+  v1: string
+  v2: string
+  v3: string
+  translation: string
+  group: number
+  note: string | null
+  examples: { present: string; past: string; perfect: string }
+  /** The three forms in this verb's own order; each showing takes the next one. */
+  formOrder: PromptForm[]
+  mastery: number
+  streak: number
+  answers: number
+  /** Never answered before — what the introduction round exists for. */
+  fresh: boolean
+}
+
+/** One judged card on its way to the server. */
+export interface VerbAnswerToPost {
+  verb: string
+  promptForm: PromptForm
+  known: boolean
+  responseMs: number
+  mode: DrillMode
+  group?: number
+}
+
+/** One card of a free run's queue; `verb` is the `v1` its data is listed under. */
+export interface SessionCard {
+  verb: string
+  promptForm: PromptForm
+}
+
+/** A whole session: the verbs in play, and the play order of a free run. */
+export interface VerbSession {
+  mode: DrillMode
+  verbs: SessionVerb[]
+  /** Null for ordinary training, where the browser builds the order itself. */
+  queue: SessionCard[] | null
+  scope: { passed: number; total: number }
+}
+
 /** One row of a stage's table. `passed` is four "I know" answers in a row. */
 export interface VerbRow {
   v1: string
@@ -437,13 +480,6 @@ export interface VerbsProgress {
   verbs: VerbRow[]
 }
 
-export interface DrillCard {
-  verb: { v1: string; v2: string; v3: string; translation: string; group: number; note: string | null }
-  promptForm: PromptForm
-  example: { tense: string; text: string }
-  scope: { passed: number; total: number }
-}
-
 export interface VerbAnswerResult {
   verb: string
   mastery: number
@@ -455,7 +491,6 @@ export interface DrillQuery {
   mode: DrillMode
   group?: number
   scope?: DrillScope
-  exclude?: string
 }
 
 export type PronunciationState = 'new' | 'learning' | 'mastered'
@@ -876,28 +911,20 @@ export const api = {
 
   getVerbsProgress: () => request<VerbsProgress>('/api/irregular-verbs/progress') as Promise<VerbsProgress>,
 
-  /** Null when a batch run has passed every verb of its stage. */
-  nextVerbCard: (query: DrillQuery) => {
+  /** Null when ordinary training has passed every verb of its stage. */
+  getVerbSession: (query: DrillQuery) => {
     const params = new URLSearchParams({ mode: query.mode })
     if (query.group !== undefined) params.set('group', String(query.group))
     if (query.scope !== undefined) params.set('scope', query.scope)
-    if (query.exclude !== undefined) params.set('exclude', query.exclude)
 
-    return request<DrillCard>(`/api/irregular-verbs/next?${params}`)
+    return request<VerbSession>(`/api/irregular-verbs/session?${params}`)
   },
 
-  answerVerbCard: (body: {
-    verb: string
-    promptForm: PromptForm
-    known: boolean
-    responseMs: number
-    mode: DrillMode
-    group?: number
-  }) =>
-    request<VerbAnswerResult>('/api/irregular-verbs/answers', {
+  postVerbAnswers: (answers: VerbAnswerToPost[]) =>
+    request<{ results: VerbAnswerResult[] }>('/api/irregular-verbs/answers', {
       method: 'POST',
-      body: JSON.stringify(body),
-    }) as Promise<VerbAnswerResult>,
+      body: JSON.stringify({ answers }),
+    }) as Promise<{ results: VerbAnswerResult[] }>,
 
   getPronunciationProgress: () =>
     request<PronunciationProgress>('/api/pronunciation/progress') as Promise<PronunciationProgress>,
