@@ -57,7 +57,13 @@ A verb's standing is one `VerbKnowledge` row, and every judged card is appended 
 row is a cache of that log, replayed from it on every answer (`VerbScoring.Replay`) rather than
 incremented, so two devices answering at once cannot leave the counters behind the log.
 
-There is no session and no stored queue, so nothing needs resuming — and nothing survives a reload.
+The server keeps no session and no queue. The device does: as a round is played, the browser saves
+it to `localStorage` (`web/src/verbs/savedSession.ts`) — the card the learner lands on next, the
+drill round's streaks, a free run's queue, and the answers the outbox has not sent yet, re-saved on
+every change to that queue so a resume never posts one twice. After a reload the Verbs screen offers
+the round back ("Resume session" or "Discard"). The saved round belongs to one user and lapses after
+12 hours; Back, a passed batch, or Discard forget it, and a round's unsent answers still go out
+whichever way it ends, including when a fresh round is started over it.
 
 ### API and presentation
 

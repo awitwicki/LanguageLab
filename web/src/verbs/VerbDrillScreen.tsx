@@ -1,6 +1,7 @@
 import { useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import type { DrillQuery } from '../api/client'
 import { formatInt } from '../lib/format'
+import type { SavedSession } from './savedSession'
 import { useVerbSession } from './useVerbSession'
 import { VerbSessionStartScreen } from './VerbSessionStartScreen'
 import './VerbDrillScreen.css'
@@ -8,6 +9,10 @@ import './VerbDrillScreen.css'
 interface Props {
   query: DrillQuery
   title: string
+  /// Whose device-saved round this is; see `savedSession.ts`.
+  userId: number
+  /// A round saved before a reload, to carry on from instead of fetching a new one.
+  resume?: SavedSession | null
   onBack: () => void
   /// A finished stage has nothing left to drill in order, so the only way on is a free run.
   onStartDrill: (query: DrillQuery, title: string) => void
@@ -16,8 +21,13 @@ interface Props {
 /// One card at a time: a form to recognise and the three forms blurred underneath. The
 /// introduction round only moves on; the drill round takes the learner's verdict, and a miss
 /// is what uncovers the answer.
-export function VerbDrillScreen({ query, title, onBack, onStartDrill }: Props) {
-  const session = useVerbSession(query)
+export function VerbDrillScreen({ query, title, userId, resume, onBack: leave, onStartDrill }: Props) {
+  const session = useVerbSession(query, { userId, title, resume })
+  // Leaving on purpose forgets the round; only a reload or a closed tab keeps it.
+  const onBack = () => {
+    session.discard()
+    leave()
+  }
   const { phase, card, intro, revealed, peeked, error, busy, syncing, stuck } = session
   const shown = revealed || peeked
 

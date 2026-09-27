@@ -18,6 +18,7 @@ import { PersonalDictionaryScreen } from './screens/PersonalDictionaryScreen'
 import { VerbsScreen } from './verbs/VerbsScreen'
 import { VerbStageScreen } from './verbs/VerbStageScreen'
 import { VerbDrillScreen } from './verbs/VerbDrillScreen'
+import type { SavedSession } from './verbs/savedSession'
 import { PronunciationFamiliesScreen } from './pronunciation/PronunciationFamiliesScreen'
 import { PronunciationFamilyScreen } from './pronunciation/PronunciationFamilyScreen'
 import { IpaAlphabetScreen } from './pronunciation/IpaAlphabetScreen'
@@ -43,7 +44,7 @@ type Route =
     }
   | { name: 'verbs' }
   | { name: 'verbs-stage'; group: number }
-  | { name: 'verbs-drill'; query: DrillQuery; title: string }
+  | { name: 'verbs-drill'; query: DrillQuery; title: string; resume?: SavedSession }
   | { name: 'pronunciation' }
   | { name: 'pronunciation-family'; key: string }
   | { name: 'pronunciation-alphabet' }
@@ -294,6 +295,8 @@ export default function App() {
 
       {route.name === 'verbs' && (
         <VerbsScreen
+          userId={state.user.id}
+          onResume={(saved) => setRoute({ name: 'verbs-drill', query: saved.query, title: saved.title, resume: saved })}
           onOpenStage={(group) => setRoute({ name: 'verbs-stage', group })}
           onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
         />
@@ -311,6 +314,8 @@ export default function App() {
         <VerbDrillScreen
           query={route.query}
           title={route.title}
+          userId={state.user.id}
+          resume={route.resume}
           onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
           onBack={() =>
             setRoute(

@@ -15,6 +15,10 @@ export interface Outbox {
   flush: () => Promise<void>
   /** How many answers are still waiting. */
   pending: () => number
+  /** The answers still waiting, in the order they will leave. */
+  queued: () => VerbAnswerToPost[]
+  /** Calls `listener` whenever an answer joins the queue or leaves it for the server. */
+  subscribe: (listener: (queued: VerbAnswerToPost[]) => void) => () => void
 }
 
 function wait(ms: number) {
@@ -28,10 +32,17 @@ function wait(ms: number) {
  *
  * A failed chunk is retried once and otherwise stays queued — a chunk leaves the queue only
  * after the server has taken it, so nothing is dropped and nothing is sent twice.
+ *
+ * `initial` holds answers left over from before a reload, sent ahead of anything added.
  */
-export function createOutbox(post: AnswerPoster): Outbox {
-  let queue: VerbAnswerToPost[] = []
+export function createOutbox(post: AnswerPoster, initial: VerbAnswerToPost[] = []): Outbox {
+  let queue: VerbAnswerToPost[] = [...initial]
   let draining: Promise<void> | null = null
+  const listeners = new Set<(queued: VerbAnswerToPost[]) => void>()
+
+  function changed() {
+    listeners.forEach((listener) => listener(queue))
+  }
 
   async function drain() {
     while (queue.length > 0) {
@@ -46,6 +57,7 @@ export function createOutbox(post: AnswerPoster): Outbox {
       }
 
       queue = queue.slice(chunk.length)
+      changed()
     }
   }
 
@@ -67,10 +79,17 @@ export function createOutbox(post: AnswerPoster): Outbox {
   return {
     add(answer) {
       queue.push(answer)
+      changed()
       // A background drain's failure is the next flush's to report, not an unhandled rejection.
       start().catch(() => {})
     },
     flush: () => (queue.length === 0 && !draining ? Promise.resolve() : start()),
     pending: () => queue.length,
+    queued: () => [...queue],
+    subscribe(listener) {
+      listeners.add(listener)
+
+      return () => listeners.delete(listener)
+    },
   }
 }

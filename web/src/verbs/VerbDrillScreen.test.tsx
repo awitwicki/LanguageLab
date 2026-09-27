@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DrillQuery, SessionVerb, VerbSession } from '../api/client'
 import { click, flush, render } from '../test/render'
+import { readSavedSession } from './savedSession'
 import { VerbDrillScreen } from './VerbDrillScreen'
 
 const apiMock = vi.hoisted(() => ({ getVerbSession: vi.fn(), postVerbAnswers: vi.fn() }))
@@ -40,6 +41,7 @@ function screen(onStartDrill: (query: DrillQuery, title: string) => void = () =>
     <VerbDrillScreen
       query={{ mode: 'batch', group: 4 }}
       title="All three forms differ"
+      userId={7}
       onBack={() => {}}
       onStartDrill={onStartDrill}
     />
@@ -259,5 +261,15 @@ describe('VerbDrillScreen', () => {
     await flush()
 
     expect(container.querySelector('.error')!.textContent).toContain('no network')
+  })
+
+  it('keeps the round for a reload, and forgets it on Back', async () => {
+    const container = await open('drill')
+
+    expect(readSavedSession(7)).not.toBeNull()
+
+    await click(container.querySelector('.drill-head .btn-quiet')!)
+
+    expect(readSavedSession(7)).toBeNull()
   })
 })

@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type DrillQuery, type SessionVerb, type VerbSession } from '../api/client'
 import { readIntroSettings, writeIntroSettings, type IntroSettings } from './introSettings'
 import { createOutbox } from './outbox'
-import { applyAnswer, createDrill, introQueue, isDone, PassStreak, type Card, type DrillState } from './session'
+import { clearSavedSession, readSavedSession, writeSavedSession, type SavedSession } from './savedSession'
+import {
+  applyAnswer,
+  createDrill,
+  introQueue,
+  isDone,
+  PassStreak,
+  type Card,
+  type DrillState,
+  type Played,
+} from './session'
 
 /// What the server keeps at most (VerbScoring.MaxResponseMs). Clamping here as well keeps a
 /// card left open for weeks from overflowing the int the request is typed with.
@@ -13,11 +23,11 @@ const RefillAt = 5
 
 export type Phase = 'loading' | 'start' | 'intro' | 'drill' | 'done' | 'finished'
 
-/** The introduction round, and a free run's queue: a fixed list played in order. */
-interface Played {
-  kind: 'intro' | 'queue'
-  cards: Card[]
-  index: number
+/** Who the round is saved for, and — after a reload — the saved round to pick up. */
+export interface SessionSaving {
+  userId: number
+  title: string
+  resume?: SavedSession | null
 }
 
 /**
@@ -28,8 +38,11 @@ interface Played {
  * Ordinary training opens on the start screen (`start`), walks the introduction (`intro`) and
  * then the drill round (`drill`), and ends on `done` — or on `finished` when the whole stage
  * has already passed. A free run has nothing to introduce and opens straight on `drill`.
+ *
+ * Given `saving`, the round is kept on the device as it is played, so a reload can hand it
+ * back as `saving.resume` and carry on from the same card — see `savedSession.ts`.
  */
-export function useVerbSession(query: DrillQuery) {
+export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
   const [phase, setPhase] = useState<Phase>('loading')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -43,7 +56,15 @@ export function useVerbSession(query: DrillQuery) {
   const [revealed, setRevealed] = useState(false)
   const [peeked, setPeeked] = useState(false)
 
-  const outbox = useMemo(() => createOutbox(api.postVerbAnswers), [])
+  const resume = saving?.resume ?? null
+  // Answers a saved round never sent go out with this one, resumed or not: a fresh round
+  // started over a saved one replaces it, and must not drop what it had not delivered.
+  const [outbox] = useState(() =>
+    createOutbox(api.postVerbAnswers, (resume ?? (saving ? readSavedSession(saving.userId) : null))?.pending),
+  )
+  // The latest `save`, for the outbox to reach: its queue changes outside any render.
+  const saveRef = useRef(() => {})
+  const discarded = useRef(false)
   const shownAt = useRef(0)
   // Which card `answer()` has already recorded — by reference, since `session.ts` builds a
   // fresh `Card` object for every deal, even a verb repeating from earlier in the round. Kept
@@ -105,20 +126,6 @@ export function useVerbSession(query: DrillQuery) {
     },
     [startedAt],
   )
-
-  useEffect(() => {
-    let live = true
-
-    load()
-      .then((session) => live && open(session))
-      .catch((e) => live && setError(String(e)))
-
-    return () => {
-      live = false
-    }
-    // `query` is created once when training starts and kept in the route's state, so it is
-    // referentially stable across renders — no need to pick it apart into primitives.
-  }, [query, load, open])
 
   // One last push on the way out: a closing tab gets a single shot, which is why the endpoint
   // takes an array.
@@ -244,6 +251,117 @@ export function useVerbSession(query: DrillQuery) {
     }
   }, [beginDrill, chosen, drill, finish, played, refill, startedAt])
 
+  /// Puts a saved round back on screen. It was saved on the card the learner lands on next, so
+  /// nothing here needs to know whether the last one was answered.
+  const restore = useCallback(
+    (saved: SavedSession) => {
+      setScope(saved.scope)
+      setOffer(saved.offer)
+      setSettings({ ...readIntroSettings(saved.offer.length), words: saved.words })
+      setPlayed(saved.played)
+      setDrill(saved.drill)
+
+      if (saved.played) {
+        setPhase(saved.played.kind === 'intro' ? 'intro' : 'drill')
+        startedAt()
+
+        if (saved.played.kind === 'queue' && saved.played.cards.length - saved.played.index <= RefillAt) {
+          refill()
+        }
+
+        return
+      }
+
+      if (saved.drill && isDone(saved.drill)) {
+        finish()
+
+        return
+      }
+
+      setPhase('drill')
+      startedAt()
+    },
+    [finish, refill, startedAt],
+  )
+
+  useEffect(() => {
+    let live = true
+
+    // Whatever a saved round left unsent goes out first, before anything new is answered.
+    if (outbox.pending() > 0) {
+      outbox
+        .flush()
+        .then(() => setStuck(false))
+        .catch(() => setStuck(true))
+    }
+
+    if (resume) {
+      // Put back a tick later, the way a fetched session lands, rather than inside the effect.
+      void Promise.resolve(resume).then((saved) => live && restore(saved))
+    } else {
+      load()
+        .then((session) => live && open(session))
+        .catch((e) => live && setError(String(e)))
+    }
+
+    return () => {
+      live = false
+    }
+    // `query` is created once when training starts and kept in the route's state, so it is
+    // referentially stable across renders — no need to pick it apart into primitives.
+  }, [query, resume, load, open, outbox, restore])
+
+  const save = () => {
+    if (!saving || discarded.current || phase === 'loading') {
+      return
+    }
+
+    const queued = outbox.queued()
+
+    if (phase !== 'intro' && phase !== 'drill' && !(phase === 'done' && queued.length > 0)) {
+      clearSavedSession()
+
+      return
+    }
+
+    // An answered card is behind the learner already: save the one they land on next.
+    const answered = card !== null && answeredCard.current === card
+
+    writeSavedSession({
+      userId: saving.userId,
+      savedAt: Date.now(),
+      query,
+      title: saving.title,
+      phase,
+      offer,
+      words: settings.words,
+      scope,
+      played: answered && played ? { ...played, index: played.index + 1 } : played,
+      drill: answered ? (pending.current ?? drill) : drill,
+      pending: queued,
+    })
+  }
+
+  useEffect(() => {
+    saveRef.current = save
+  })
+
+  // Every change to the queue is saved too, so the saved round never lists an answer the
+  // server already has — a resume would post it a second time.
+  useEffect(() => outbox.subscribe(() => saveRef.current()), [outbox])
+
+  // Saved on every move of the round. The dependencies are what a saved round is made of;
+  // the queue has its own trigger through the outbox.
+  useEffect(() => {
+    saveRef.current()
+  }, [phase, played, drill, revealed])
+
+  /// The learner left the round on purpose: nothing is offered back to them later.
+  const discard = useCallback(() => {
+    discarded.current = true
+    clearSavedSession()
+  }, [])
+
   const answer = useCallback(
     (known: boolean) => {
       if (!card || answeredCard.current === card || phase === 'intro') {
@@ -251,6 +369,13 @@ export function useVerbSession(query: DrillQuery) {
       }
 
       answeredCard.current = card
+
+      // Ahead of `outbox.add`, which saves the round: the drill state after this answer is
+      // the one a reload has to land on.
+      if (drill) {
+        pending.current = applyAnswer(drill, known)
+      }
+
       outbox.add({
         verb: card.verb.v1,
         promptForm: card.promptForm,
@@ -266,10 +391,6 @@ export function useVerbSession(query: DrillQuery) {
         .flush()
         .then(() => setStuck(false))
         .catch(() => setStuck(true))
-
-      if (drill) {
-        pending.current = applyAnswer(drill, known)
-      }
 
       // "I know" needs no answer on screen: the next card comes at once. A miss is the moment
       // the word is learned, so it stays until the learner has read it.
@@ -339,6 +460,7 @@ export function useVerbSession(query: DrillQuery) {
     scope: { passed: scope.passed + passedHere, total: scope.total },
     nextWords,
     retryFlush: nextWords,
+    discard,
   }
 }
 

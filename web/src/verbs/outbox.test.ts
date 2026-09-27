@@ -106,4 +106,34 @@ describe('the answer outbox', () => {
     expect(post.mock.calls[0][0]).toHaveLength(MaxPerRequest)
     expect(post.mock.calls[1][0]).toHaveLength(3)
   })
+
+  /// A round resumed after a reload carries the answers that had not left before it.
+  it('sends the answers it was opened with', async () => {
+    const post = vi.fn().mockResolvedValue({ results: [] })
+    const outbox = createOutbox(post, [answer('a'), answer('b')])
+
+    expect(outbox.queued()).toEqual([answer('a'), answer('b')])
+
+    await outbox.flush()
+
+    expect(post).toHaveBeenCalledWith([answer('a'), answer('b')])
+    expect(outbox.queued()).toEqual([])
+  })
+
+  /// The saved round must never list an answer the server already has, or a resume would
+  /// post it a second time.
+  it('reports every change to what is queued', async () => {
+    const post = vi.fn().mockResolvedValue({ results: [] })
+    const seen: string[][] = []
+    const outbox = createOutbox(post)
+    const unsubscribe = outbox.subscribe((queued) => seen.push(queued.map((a) => a.verb)))
+
+    outbox.add(answer('a'))
+    await outbox.flush()
+    unsubscribe()
+    outbox.add(answer('b'))
+    await outbox.flush()
+
+    expect(seen).toEqual([['a'], []])
+  })
 })

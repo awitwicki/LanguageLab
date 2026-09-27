@@ -3,6 +3,33 @@
   margin: 0 0 24px;
 }
 
+.verbs-resume {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 16px;
+  margin: 0 0 24px;
+  padding: 16px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.verbs-resume-title {
+  margin: 0 0 4px;
+}
+
+.verbs-resume .footnote {
+  margin: 0;
+}
+
+.verbs-resume-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .stage-tiles {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
