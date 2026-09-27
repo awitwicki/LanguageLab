@@ -103,6 +103,20 @@
   white-space: nowrap;
 }
 
+/* Edit and Remove — or Save and Cancel — as one cell, so the row keeps its four columns. */
+.personal-word .actions {
+  display: flex;
+  gap: 4px;
+}
+
+.personal-word .edit-translation input {
+  width: 100%;
+}
+
+.personal-word .edit-error {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 800px) {
   .add-word {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -112,7 +126,8 @@
     grid-template-columns: minmax(0, 1fr) auto auto;
   }
 
-  .personal-word .translation {
+  .personal-word .translation,
+  .personal-word .edit-translation {
     grid-column: 1 / -1;
   }
 }

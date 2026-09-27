@@ -55,6 +55,12 @@ One private `Dictionary` per user (`IsPersonal`), created on first use by `GET /
 Its words are `WordPair` rows with `OwnerId` set — unique on `(Word, OwnerId)` with
 `NULLS NOT DISTINCT` — shelved "don't know" on add.
 
+`PersonalDictionaryService.UpdateTranslationAsync` corrects the meaning of a word already added
+and marks it `Manual`; the word text itself is not editable, since it is what the uniqueness is
+built on. The shelf and the `WordProgress` row survive the edit, and a training session already
+running shows the new text on its next question — `TrainingQuestion` stores word ids, never the
+words themselves.
+
 **Shared vocabulary is `OwnerId IS NULL`, and any lookup by word text must filter on it.**
 
 ## Translation

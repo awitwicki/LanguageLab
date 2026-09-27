@@ -87,8 +87,8 @@ A Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictio
 ### Dictionaries and sorting
 
 - `/api/dictionaries`, `/api/sorting`.
-- `GET /api/dictionaries/personal`, `POST|DELETE /api/dictionaries/personal/words[/{id}]` — the
-  personal dictionary.
+- `GET /api/dictionaries/personal`, `POST|PUT|DELETE /api/dictionaries/personal/words[/{id}]` — the
+  personal dictionary; the `PUT` corrects a word's translation and nothing else.
 - `GET /api/translate?word=` — a translation suggestion.
 - `POST|DELETE /api/dictionaries/{id}/publication` — the owner offers a dictionary for publication
   or withdraws the offer.

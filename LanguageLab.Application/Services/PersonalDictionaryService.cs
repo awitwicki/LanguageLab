@@ -180,6 +180,42 @@ public class PersonalDictionaryService
     }
 
     /// <summary>
+    /// Corrects the meaning of a word already added. Null unless the word is this user's own;
+    /// ArgumentException for an empty translation. Only the text changes — the shelf, the
+    /// Leitner progress and any running session keep the word exactly where it is, and a
+    /// session in flight reads the new text on its next question (TrainingQuestion stores ids,
+    /// never the words themselves).
+    /// </summary>
+    public async Task<PersonalWord?> UpdateTranslationAsync(long userId, long wordPairId, string rawTranslation)
+    {
+        var translation = rawTranslation.Trim();
+
+        if (translation.Length == 0)
+        {
+            throw new ArgumentException("The translation cannot be empty.");
+        }
+
+        var pair = await _dbContext.Words.FirstOrDefaultAsync(w => w.Id == wordPairId && w.OwnerId == userId);
+
+        if (pair == null)
+        {
+            return null;
+        }
+
+        pair.Translation = translation;
+        // Typed by a person, whatever a provider may have left here.
+        pair.TranslationOrigin = TranslationOrigin.Manual;
+        await _dbContext.SaveChangesAsync();
+
+        var progress = await _dbContext.WordProgresses
+            .Where(p => p.UserId == userId && p.WordPairId == pair.Id)
+            .Select(p => new { p.Box, p.IsLearned })
+            .FirstOrDefaultAsync();
+
+        return new PersonalWord(pair.Id, pair.Word, pair.Translation, progress?.Box, progress?.IsLearned ?? false);
+    }
+
+    /// <summary>
     /// False unless the word is this user's own. The same teardown as
     /// TrainingSessionService.DeleteWordAsync — only the FK from DictionaryWords cascades in
     /// the database, and the InMemory provider cascades nothing, so everything goes by hand.

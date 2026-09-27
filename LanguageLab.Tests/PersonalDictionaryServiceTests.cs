@@ -162,6 +162,86 @@ public class PersonalDictionaryServiceTests
         Assert.False(await Service(db).RemoveAsync(UserId, 999));
     }
 
+    /// <summary>
+    /// A correction of the meaning, not a new word: the shelf and the Leitner progress the word
+    /// already earned stay exactly where they were.
+    /// </summary>
+    [Fact]
+    public async Task UpdateTranslation_rewrites_the_translation_and_keeps_the_shelf_and_progress()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+        var added = (await service.AddAsync(UserId, "apple", "яблуко", Now))!;
+
+        db.WordProgresses.Add(new WordProgress
+        {
+            Id = 1, UserId = UserId, WordPairId = added.WordPairId, Box = 2, DueAt = Now.AddDays(3), LastSeenAt = Now,
+        });
+        await db.SaveChangesAsync();
+
+        var updated = await service.UpdateTranslationAsync(UserId, added.WordPairId, "  яблуко, яблуня  ");
+
+        Assert.NotNull(updated);
+        Assert.Equal(added.WordPairId, updated.WordPairId);
+        Assert.Equal("apple", updated.Word);
+        Assert.Equal("яблуко, яблуня", updated.Translation);
+        Assert.Equal(2, updated.Box);
+        Assert.False(updated.IsLearned);
+
+        Assert.Equal("яблуко, яблуня", (await db.Words.SingleAsync()).Translation);
+        Assert.True(await db.UnknownWords.AnyAsync(u => u.UserId == UserId && u.WordPairId == added.WordPairId));
+        Assert.Equal(2, (await db.WordProgresses.SingleAsync()).Box);
+    }
+
+    /// <summary>A translation the user typed is Manual, whatever a provider had left on the row.</summary>
+    [Fact]
+    public async Task UpdateTranslation_marks_the_translation_manual()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+        var added = (await service.AddAsync(UserId, "apple", "яблуко", Now))!;
+
+        var pair = await db.Words.SingleAsync();
+        pair.TranslationOrigin = TranslationOrigin.Machine;
+        await db.SaveChangesAsync();
+
+        await service.UpdateTranslationAsync(UserId, added.WordPairId, "яблуня");
+
+        Assert.Equal(TranslationOrigin.Manual, (await db.Words.SingleAsync()).TranslationOrigin);
+    }
+
+    [Fact]
+    public async Task UpdateTranslation_refuses_an_empty_translation()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+        var added = (await service.AddAsync(UserId, "apple", "яблуко", Now))!;
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => service.UpdateTranslationAsync(UserId, added.WordPairId, "   "));
+
+        Assert.Equal("яблуко", (await db.Words.SingleAsync()).Translation);
+    }
+
+    [Fact]
+    public async Task UpdateTranslation_refuses_another_users_word()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+        var theirs = (await service.AddAsync(OtherId, "apple", "яблуко", Now))!;
+
+        Assert.Null(await service.UpdateTranslationAsync(UserId, theirs.WordPairId, "не моє"));
+        Assert.Equal("яблуко", (await db.Words.SingleAsync()).Translation);
+    }
+
+    [Fact]
+    public async Task UpdateTranslation_of_an_unknown_id_is_null()
+    {
+        await using var db = await NewContextAsync();
+
+        Assert.Null(await Service(db).UpdateTranslationAsync(UserId, 999, "яблуко"));
+    }
+
     [Fact]
     public async Task Get_lists_newest_first_with_learning_state()
     {

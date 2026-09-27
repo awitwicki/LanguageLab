@@ -34,6 +34,12 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
   const [reviewNotice, setReviewNotice] = useState<string | null>(null)
   const [removeError, setRemoveError] = useState<string | null>(null)
 
+  // One open editor at a time, by word id; null means the list is all read-only.
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editText, setEditText] = useState('')
+  const [editBusy, setEditBusy] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
   const wordInput = useRef<HTMLInputElement>(null)
   // What the last lookup put into the translation field. A later lookup may replace exactly
   // that (or an empty field) — never something the user typed by hand.
@@ -154,6 +160,53 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
       setBulkError(e instanceof Error ? e.message : String(e))
     } finally {
       setBulkBusy(false)
+    }
+  }
+
+  const startEdit = (item: PersonalWord) => {
+    setEditingId(item.wordPairId)
+    setEditText(item.translation)
+    setEditError(null)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditError(null)
+  }
+
+  const canSaveEdit = editText.trim() !== '' && !editBusy
+
+  /// Only this row's translation changed, so the row is patched in place: the word count and
+  /// the learning progress are the same as before, and nothing else on the screen reads it.
+  const saveEdit = async (wordPairId: number) => {
+    if (!canSaveEdit) return
+
+    setEditBusy(true)
+    setEditError(null)
+
+    try {
+      const updated = await api.updatePersonalWordTranslation(wordPairId, editText.trim())
+
+      setDetail((current) =>
+        current === null
+          ? current
+          : { ...current, words: current.words.map((w) => (w.wordPairId === wordPairId ? updated : w)) },
+      )
+      setEditingId(null)
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setEditBusy(false)
+    }
+  }
+
+  const onEditKey = (event: React.KeyboardEvent<HTMLInputElement>, wordPairId: number) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      void saveEdit(wordPairId)
+    } else if (event.key === 'Escape') {
+      event.preventDefault()
+      cancelEdit()
     }
   }
 
@@ -325,21 +378,63 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
           <p className="footnote">Nothing here yet — add your first word above.</p>
         ) : (
           <ul className="personal-words">
-            {detail.words.map((item) => (
-              <li key={item.wordPairId} className="personal-word">
-                <span className="word">{item.word}</span>
-                <span className="translation">{item.translation}</span>
-                <span className="state footnote">{wordState(item)}</span>
-                <button
-                  type="button"
-                  className="btn btn-quiet"
-                  aria-label={`Remove ${item.word}`}
-                  onClick={() => void remove(item)}
-                >
-                  Remove
-                </button>
-              </li>
-            ))}
+            {detail.words.map((item) =>
+              item.wordPairId === editingId ? (
+                <li key={item.wordPairId} className="personal-word">
+                  <span className="word">{item.word}</span>
+                  <label className="field edit-translation">
+                    <input
+                      name="edit-translation"
+                      value={editText}
+                      aria-label={`Translation of ${item.word}`}
+                      autoComplete="off"
+                      autoFocus
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => onEditKey(e, item.wordPairId)}
+                    />
+                  </label>
+                  <span className="state footnote">{wordState(item)}</span>
+                  <span className="actions">
+                    <button
+                      type="button"
+                      className="btn btn-quiet"
+                      disabled={!canSaveEdit}
+                      onClick={() => void saveEdit(item.wordPairId)}
+                    >
+                      Save
+                    </button>
+                    <button type="button" className="btn btn-quiet" onClick={cancelEdit}>
+                      Cancel
+                    </button>
+                  </span>
+                  {editError && <p className="footnote error edit-error">{editError}</p>}
+                </li>
+              ) : (
+                <li key={item.wordPairId} className="personal-word">
+                  <span className="word">{item.word}</span>
+                  <span className="translation">{item.translation}</span>
+                  <span className="state footnote">{wordState(item)}</span>
+                  <span className="actions">
+                    <button
+                      type="button"
+                      className="btn btn-quiet"
+                      aria-label={`Edit ${item.word}`}
+                      onClick={() => startEdit(item)}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-quiet"
+                      aria-label={`Remove ${item.word}`}
+                      onClick={() => void remove(item)}
+                    >
+                      Remove
+                    </button>
+                  </span>
+                </li>
+              ),
+            )}
           </ul>
         )}
         {removeError && <p className="footnote error">{removeError}</p>}

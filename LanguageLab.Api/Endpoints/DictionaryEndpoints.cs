@@ -15,6 +15,8 @@ public sealed record BulkWordEntryRequest(string? Word, string? Translation);
 
 public sealed record AddPersonalWordsRequest(IReadOnlyList<BulkWordEntryRequest>? Words);
 
+public sealed record UpdatePersonalWordRequest(string? Translation);
+
 /// <summary>A refusal written for the user; the client shows Message instead of the status code.</summary>
 public sealed record DictionaryError(string Message);
 
@@ -112,6 +114,29 @@ public static class DictionaryEndpoints
             }
         }).WithMetadata(new RequestSizeLimitAttribute(1L * 1024 * 1024))
           .RequireRateLimiting(UserRateLimits.BulkWords);
+
+        // The translation only: the word itself is what the (Word, OwnerId) index is built on,
+        // so changing it would be an add and a remove, not an edit.
+        group.MapPut("/personal/words/{wordPairId:long}", async (
+            long wordPairId,
+            UpdatePersonalWordRequest request,
+            PersonalDictionaryService personal,
+            ICurrentUser currentUser) =>
+        {
+            PersonalWord? updated;
+
+            try
+            {
+                updated = await personal.UpdateTranslationAsync(
+                    await currentUser.GetIdAsync(), wordPairId, request.Translation ?? string.Empty);
+            }
+            catch (ArgumentException e)
+            {
+                return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            return updated == null ? Results.NotFound() : Results.Ok(updated);
+        });
 
         group.MapDelete("/personal/words/{wordPairId:long}", async (
             long wordPairId, PersonalDictionaryService personal, ICurrentUser currentUser) =>

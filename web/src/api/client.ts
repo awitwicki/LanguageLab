@@ -765,6 +765,13 @@ export const api = {
       body: JSON.stringify({ word, translation }),
     }) as Promise<PersonalWord>,
 
+  /** Corrects the meaning only; the word, its shelf and its progress stay as they are. */
+  updatePersonalWordTranslation: (wordPairId: number, translation: string) =>
+    request<PersonalWord>(`/api/dictionaries/personal/words/${wordPairId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ translation }),
+    }) as Promise<PersonalWord>,
+
   removePersonalWord: (wordPairId: number) =>
     request<null>(`/api/dictionaries/personal/words/${wordPairId}`, { method: 'DELETE' }),
 
