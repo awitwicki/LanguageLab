@@ -89,25 +89,54 @@ function textWithBreaks(node: Node): string {
   return PARAGRAPH_TAGS.has(nameOf(element)) ? ` ${inner} ` : inner
 }
 
-function collectParagraphs(element: Element, into: string[]) {
+/**
+ * A document in reading order: a paragraph's text, or the place where an element with one of the
+ * TOC's fragment ids starts — the only way a TOC says where a chapter inside a document begins.
+ */
+type Block = { text: string } | { cut: string }
+
+/**
+ * The fragment ids of `element` that the TOC points at, pushed as cuts. `deep` also takes its
+ * descendants', for an element the walk does not descend into: an anchor inside a paragraph cuts
+ * before that paragraph, and one on a skipped heading (the usual place for it) still counts.
+ */
+function markCuts(element: Element, cuts: ReadonlySet<string>, into: Block[], deep: boolean) {
+  if (cuts.size === 0) {
+    return
+  }
+
+  for (const candidate of deep ? [element, ...elements(element)] : [element]) {
+    const id = candidate.getAttribute('id')
+
+    if (id && cuts.has(id)) {
+      into.push({ cut: id })
+    }
+  }
+}
+
+function collectParagraphs(element: Element, cuts: ReadonlySet<string>, into: Block[]) {
   for (const child of Array.from(element.children)) {
     if (skipped(child)) {
+      markCuts(child, cuts, into, true)
       continue
     }
 
     if (PARAGRAPH_TAGS.has(nameOf(child))) {
-      into.push(textWithBreaks(child))
+      markCuts(child, cuts, into, true)
+      into.push({ text: textWithBreaks(child) })
       continue
     }
 
-    collectParagraphs(child, into)
+    markCuts(child, cuts, into, false)
+    collectParagraphs(child, cuts, into)
   }
 }
 
 /** Some books use a <div> per paragraph and no <p> at all: take every element holding its own text. */
-function collectTextBlocks(element: Element, into: string[]) {
+function collectTextBlocks(element: Element, cuts: ReadonlySet<string>, into: Block[]) {
   for (const child of Array.from(element.children)) {
     if (skipped(child)) {
+      markCuts(child, cuts, into, true)
       continue
     }
 
@@ -116,38 +145,51 @@ function collectTextBlocks(element: Element, into: string[]) {
     )
 
     if (ownText) {
-      into.push(textWithBreaks(child))
+      markCuts(child, cuts, into, true)
+      into.push({ text: textWithBreaks(child) })
     } else {
-      collectTextBlocks(child, into)
+      markCuts(child, cuts, into, false)
+      collectTextBlocks(child, cuts, into)
     }
   }
 }
 
-function collected(body: Element, collect: (element: Element, into: string[]) => void): string[] {
-  const raw: string[] = []
+type Collector = (element: Element, cuts: ReadonlySet<string>, into: Block[]) => void
 
-  collect(body, raw)
+function collected(body: Element, cuts: ReadonlySet<string>, collect: Collector): Block[] {
+  const raw: Block[] = []
 
-  return raw.map((text) => text.replace(/\s+/g, ' ').trim()).filter((text) => text !== '')
+  collect(body, cuts, raw)
+
+  return raw
+    .map((block) => ('text' in block ? { text: block.text.replace(/\s+/g, ' ').trim() } : block))
+    .filter((block) => !('text' in block) || block.text !== '')
 }
 
-function paragraphsOf(doc: Document): string[] {
+function blocksOf(doc: Document, cuts: ReadonlySet<string>): Block[] {
   const body = bodyOf(doc)
   // The fallback is decided on what is left after trimming: a document of empty <p> elements
   // has paragraph tags but no text, and is as good as a document that has none.
-  const paragraphs = collected(body, collectParagraphs)
+  const blocks = collected(body, cuts, collectParagraphs)
 
-  return paragraphs.length > 0 ? paragraphs : collected(body, collectTextBlocks)
+  return blocks.some((block) => 'text' in block) ? blocks : collected(body, cuts, collectTextBlocks)
+}
+
+function textsOf(blocks: Block[]): string[] {
+  return blocks.flatMap((block) => ('text' in block ? [block.text] : []))
 }
 
 /** One XHTML document's paragraphs. Exported for its tests; parseEpub works on the parsed document. */
 export function documentParagraphs(xhtml: string): string[] {
   const doc = parseDocument(xhtml)
 
-  return doc ? paragraphsOf(doc) : []
+  return doc ? textsOf(blocksOf(doc, new Set())) : []
 }
 
-/** One chapter: an XHTML document of the spine. */
+/**
+ * One chapter: an XHTML document of the spine, or the part of one between two places its TOC
+ * points at.
+ */
 export interface EpubDocument {
   /** Empty when neither the TOC nor a heading names it — shown as an ordinal, as for fb2. */
   title: string
@@ -185,17 +227,18 @@ function dirOf(path: string): string {
   return slash < 0 ? '' : path.slice(0, slash + 1)
 }
 
-/** An href inside the archive: the fragment dropped, percent-decoded, "." and ".." collapsed. */
-function resolvePath(base: string, href: string): string {
-  const raw = href.split('#')[0]
-  let decoded = raw
-
+function percentDecoded(raw: string): string {
   try {
-    decoded = decodeURIComponent(raw)
+    return decodeURIComponent(raw)
   } catch {
     // A malformed % sequence: the href stands as written.
+    return raw
   }
+}
 
+/** An href inside the archive: the fragment dropped, percent-decoded, "." and ".." collapsed. */
+function resolvePath(base: string, href: string): string {
+  const decoded = percentDecoded(href.split('#')[0])
   const segments: string[] = []
 
   for (const segment of `${base}${decoded}`.split('/')) {
@@ -244,16 +287,23 @@ function isApparatus(doc: Document): boolean {
   )
 }
 
+/** A TOC entry: a label, and the fragment id it points at inside its document ('' for none). */
+interface TocEntry {
+  fragment: string
+  label: string
+}
+
+type TocEntries = Map<string, TocEntry[]>
+
 /**
- * Chapter titles by document path. An epub 3 navigation document first, an epub 2 toc.ncx second;
- * a fragment is dropped, so a TOC listing several places inside one document names it by its first
- * entry. Hrefs resolve against the TOC's own directory, which is not always the package's.
+ * TOC entries by document path, in TOC order. An epub 3 navigation document first, an epub 2
+ * toc.ncx second. Hrefs resolve against the TOC's own directory, which is not always the package's.
  */
-function tocTitles(entries: ZipEntries, opf: Document, manifest: Map<string, ManifestItem>): Map<string, string> {
+function tocEntries(entries: ZipEntries, opf: Document, manifest: Map<string, ManifestItem>): TocEntries {
   const nav = [...manifest.values()].find((item) => item.properties.includes('nav'))
 
   if (nav) {
-    const titles = navTitles(entries, nav.path)
+    const titles = navEntries(entries, nav.path)
 
     if (titles.size > 0) {
       return titles
@@ -265,11 +315,11 @@ function tocTitles(entries: ZipEntries, opf: Document, manifest: Map<string, Man
     (tocId ? manifest.get(tocId) : undefined) ??
     [...manifest.values()].find((item) => item.mediaType === 'application/x-dtbncx+xml')
 
-  return ncx ? ncxTitles(entries, ncx.path) : new Map()
+  return ncx ? ncxEntries(entries, ncx.path) : new Map()
 }
 
-function navTitles(entries: ZipEntries, path: string): Map<string, string> {
-  const titles = new Map<string, string>()
+function navEntries(entries: ZipEntries, path: string): TocEntries {
+  const titles: TocEntries = new Map()
   const doc = documentOf(entries, path)
 
   if (!doc) {
@@ -288,15 +338,15 @@ function navTitles(entries: ZipEntries, path: string): Map<string, string> {
     const label = textOf(link)
 
     if (href && label !== '') {
-      remember(titles, resolvePath(dirOf(path), href), label)
+      remember(titles, dirOf(path), href, label)
     }
   }
 
   return titles
 }
 
-function ncxTitles(entries: ZipEntries, path: string): Map<string, string> {
-  const titles = new Map<string, string>()
+function ncxEntries(entries: ZipEntries, path: string): TocEntries {
+  const titles: TocEntries = new Map()
   const doc = documentOf(entries, path)
 
   if (!doc) {
@@ -309,17 +359,57 @@ function ncxTitles(entries: ZipEntries, path: string): Map<string, string> {
     const label = textOf(firstByName(point, 'text'))
 
     if (src && label !== '') {
-      remember(titles, resolvePath(dirOf(path), src), label)
+      remember(titles, dirOf(path), src, label)
     }
   }
 
   return titles
 }
 
-function remember(titles: Map<string, string>, path: string, label: string) {
-  if (!titles.has(path)) {
-    titles.set(path, label)
+/** The first entry for a place wins: a second entry pointing at the same spot must not rename it. */
+function remember(titles: TocEntries, base: string, href: string, label: string) {
+  const path = resolvePath(base, href)
+  const hash = href.indexOf('#')
+  const fragment = hash < 0 ? '' : percentDecoded(href.slice(hash + 1))
+  const known = titles.get(path) ?? []
+
+  if (!known.some((entry) => entry.fragment === fragment)) {
+    titles.set(path, [...known, { fragment, label }])
   }
+}
+
+/**
+ * One spine document → its chapters. Every TOC fragment found in the document starts a chapter
+ * named by its label; what comes before the first of them is named by the document's other TOC
+ * entry (a bare href, or a fragment the document does not have), and when the TOC cuts nothing,
+ * by its first heading. A chapter left with no text — a part title right before its first
+ * chapter — is dropped.
+ */
+function chaptersOf(doc: Document, toc: TocEntry[]): EpubDocument[] {
+  const labels = new Map<string, string>()
+
+  for (const entry of toc) {
+    if (entry.fragment !== '') {
+      labels.set(entry.fragment, entry.label)
+    }
+  }
+
+  const blocks = blocksOf(doc, new Set(labels.keys()))
+  const found = new Set(blocks.flatMap((block) => ('cut' in block ? [block.cut] : [])))
+  const opening = toc.find((entry) => !found.has(entry.fragment))?.label
+  let current: EpubDocument = { title: opening ?? (found.size === 0 ? headingOf(doc) : ''), paragraphs: [] }
+  const chapters = [current]
+
+  for (const block of blocks) {
+    if ('cut' in block) {
+      current = { title: labels.get(block.cut) ?? '', paragraphs: [] }
+      chapters.push(current)
+    } else {
+      current.paragraphs.push(block.text)
+    }
+  }
+
+  return chapters.filter((chapter) => chapter.paragraphs.length > 0)
 }
 
 function readManifest(opf: Document, base: string): Map<string, ManifestItem> {
@@ -344,7 +434,8 @@ function readManifest(opf: Document, base: string): Map<string, ManifestItem> {
 }
 
 /**
- * An epub → the book. Chapters are the spine's XHTML documents in the spine's own order; the
+ * An epub → the book. Chapters are the spine's XHTML documents in the spine's own order, each cut
+ * further wherever the TOC points inside it (`chaptersOf`); the
  * navigation document, apparatus, non-XHTML items, `linear="no"` items, items whose file or
  * manifest entry is missing, and a document listed a second time are all left out.
  */
@@ -360,7 +451,7 @@ export function parseEpub(entries: ZipEntries, fallbackTitle: string): EpubBook 
   const base = dirOf(resolvePath('', opfPath))
   const metadata = firstByName(opf, 'metadata')
   const manifest = readManifest(opf, base)
-  const titles = tocTitles(entries, opf, manifest)
+  const toc = tocEntries(entries, opf, manifest)
   const spine = firstByName(opf, 'spine')
   const seen = new Set<string>()
   const docs: EpubDocument[] = []
@@ -384,13 +475,7 @@ export function parseEpub(entries: ZipEntries, fallbackTitle: string): EpubBook 
       continue
     }
 
-    const paragraphs = paragraphsOf(doc)
-
-    if (paragraphs.length === 0) {
-      continue
-    }
-
-    docs.push({ title: titles.get(item.path) ?? headingOf(doc), paragraphs })
+    docs.push(...chaptersOf(doc, toc.get(item.path) ?? []))
   }
 
   if (docs.length === 0) {

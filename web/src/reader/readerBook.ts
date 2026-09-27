@@ -69,7 +69,7 @@ export function readBookFile(buffer: ArrayBuffer, fileName: string): ReaderBook 
   return source.format === 'fb2' ? parseReaderBook(source.xml, source.fallbackTitle) : readerBookFromEpub(source.book)
 }
 
-/** An epub's documents are its chapters; sentence splitting is the same for both formats. */
+/** An epub's chapters come from `parseEpub`; sentence splitting is the same for both formats. */
 function readerBookFromEpub(epub: EpubBook): ReaderBook {
   const chapters: ReaderChapter[] = []
 

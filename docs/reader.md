@@ -79,7 +79,8 @@ Everything format-dependent, and the only place that branches on format:
 - **`decode.ts`** — `decodeXml`, honouring the declared encoding, since fb2 books are often
   windows-1251.
 - **`epub.ts`** — container → OPF → spine; one XHTML document per chapter, titles from the book's
-  own TOC.
+  own TOC. A TOC entry pointing inside a document (`ch.xhtml#id`) cuts it into a chapter of its own
+  where that id sits, so a book shipped as one document still gets the chapters its TOC lists.
 - **`formatError.ts`** — `BookFormatError`: `invalid` or `encrypted` (DRM).
 - **`format.ts`** — `readBookSource`: the bytes decide the format, never the extension.
 - **`toParsedBook.ts`** — produces the import's `ParsedBook`. The reader's own shape is built in

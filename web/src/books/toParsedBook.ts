@@ -3,8 +3,8 @@ import type { EpubBook } from './epub'
 import type { BookSource } from './format'
 
 /**
- * A book file → the import pipeline's section tree. An epub's spine is flat, so every document
- * becomes one depth-1 section: `flattenChapters` then yields one chapter per document at any
+ * A book file → the import pipeline's section tree. An epub's chapters are flat, so every one
+ * becomes one depth-1 section: `flattenChapters` then yields them one for one at any
  * level, and the whole pipeline below (the word extractor, the upload) is unchanged.
  */
 export function toParsedBook(source: BookSource): ParsedBook {

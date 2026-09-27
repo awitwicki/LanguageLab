@@ -172,3 +172,71 @@ describe('parseEpub', () => {
     expect(moved.docs[0].title).toBe('The Swordholder')
   })
 })
+
+describe('parseEpub with a TOC pointing inside one document', () => {
+  function singleDocument(body: string, nav: string): ReturnType<typeof parseEpub> {
+    const opf = (EPUB3_FILES['OEBPS/content.opf'] as string)
+      .replace('<itemref idref="c2"/>', '')
+      .replace('<itemref idref="c3"/>', '')
+
+    return parseEpub(
+      readZip(
+        epub3Bytes({
+          'OEBPS/content.opf': opf,
+          'OEBPS/nav.xhtml': xhtmlDoc(`<nav epub:type="toc"><ol>${nav}</ol></nav>`),
+          'OEBPS/text/ch01.xhtml': xhtmlDoc(body),
+        }),
+      ),
+      'x',
+    )
+  }
+
+  it('cuts the document into a chapter at every TOC fragment, named by its TOC label', () => {
+    const book = singleDocument(
+      '<p>Front matter.</p><h2 id="one">One</h2><p>First text.</p><p>More first text.</p>' +
+        '<section id="two"><h2>Two</h2><p>Second text.</p></section>',
+      '<li><a href="text/ch01.xhtml">Contents</a></li>' +
+        '<li><a href="text/ch01.xhtml#one">Chapter One</a></li>' +
+        '<li><a href="text/ch01.xhtml#two">Chapter Two</a></li>',
+    )
+
+    expect(book.docs).toEqual([
+      { title: 'Contents', paragraphs: ['Front matter.'] },
+      { title: 'Chapter One', paragraphs: ['First text.', 'More first text.'] },
+      { title: 'Chapter Two', paragraphs: ['Second text.'] },
+    ])
+  })
+
+  it('cuts in document order, before the paragraph an anchor sits inside', () => {
+    const book = singleDocument(
+      '<p>Start.</p><p><a id="b"/>Bravo text.</p><p>Also bravo.</p><div><p id="a">Alpha text.</p></div>',
+      '<li><a href="text/ch01.xhtml#a">Alpha</a></li><li><a href="text/ch01.xhtml#b">Bravo</a></li>',
+    )
+
+    expect(book.docs).toEqual([
+      { title: '', paragraphs: ['Start.'] },
+      { title: 'Bravo', paragraphs: ['Bravo text.', 'Also bravo.'] },
+      { title: 'Alpha', paragraphs: ['Alpha text.'] },
+    ])
+  })
+
+  it('drops a TOC entry with no text before the next one, and ignores a fragment the document lacks', () => {
+    const book = singleDocument(
+      '<h1 id="part">Part One</h1><h2 id="c1">1</h2><p>Only text.</p>',
+      '<li><a href="text/ch01.xhtml#part">Part One</a></li>' +
+        '<li><a href="text/ch01.xhtml#c1">Chapter 1</a></li>' +
+        '<li><a href="text/ch01.xhtml#missing">Nowhere</a></li>',
+    )
+
+    expect(book.docs).toEqual([{ title: 'Chapter 1', paragraphs: ['Only text.'] }])
+  })
+
+  it('cuts a book whose paragraphs are divs as well', () => {
+    const book = singleDocument(
+      '<div><div>Opening line.</div><div id="next">Next line.</div></div>',
+      '<li><a href="text/ch01.xhtml">Opening</a></li><li><a href="text/ch01.xhtml#next">Next</a></li>',
+    )
+
+    expect(book.docs.map((doc) => doc.title)).toEqual(['Opening', 'Next'])
+  })
+})
