@@ -9,6 +9,7 @@ public enum BookFormatError
     Encrypted,
 }
 
+/// <summary>The file is the uploader's book: <see cref="Exception.Message"/> must not embed raw file content.</summary>
 public sealed class BookFormatException : Exception
 {
     public BookFormatException(BookFormatError error, string message)
