@@ -50,6 +50,11 @@ ASP.NET Core Minimal API that also serves the SPA, and runs the DB migrations on
 holds the claims, the session validation and the OIDC event handlers — see [auth.md](auth.md).
 The endpoints are inventoried below.
 
+`SpaHosting` serves the SPA. `index.html` goes out with `Cache-Control: no-cache` and the hashed
+`assets/*` as immutable, so no WebView runs last release's client against this release's API. An
+unknown `/api/...` path answers 404 rather than the page; everything else no file matches gets
+`index.html`.
+
 ### `LanguageLab.TgBot/`
 
 The Telegram bot: a Generic Host console app on `Telegram.Bot` (long polling), with no database

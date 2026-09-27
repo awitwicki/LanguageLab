@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DrillQuery, SessionVerb, VerbSession } from '../api/client'
 import { RetryDelayMs } from './outbox'
+import { readSavedSession, writeSavedSession } from './savedSession'
 import { PassStreak } from './session'
 import { useVerbSession } from './useVerbSession'
 
@@ -349,5 +350,182 @@ describe('useVerbSession, a free run', () => {
 
     expect(result.current.card!.verb.v1).toBe('b')
     expect(result.current.busy).toBe(false)
+  })
+})
+
+describe('useVerbSession, picking up after a reload', () => {
+  const UserId = 7
+  const Title = 'All three forms differ'
+
+  async function arrange(session: VerbSession | null, query = BatchQuery) {
+    apiMock.getVerbSession.mockResolvedValue(session)
+    const result = await renderHook(() => useVerbSession(query, { userId: UserId, title: Title }))
+    await flush()
+
+    return result
+  }
+
+  async function resume(query = BatchQuery) {
+    const saved = readSavedSession(UserId)
+    expect(saved).not.toBeNull()
+    apiMock.getVerbSession.mockClear()
+    apiMock.postVerbAnswers.mockClear()
+
+    const result = await renderHook(() => useVerbSession(query, { userId: UserId, title: Title, resume: saved }))
+    await flush()
+
+    return result
+  }
+
+  it('saves nothing on the start screen', async () => {
+    await arrange(batch([verb('a'), verb('b'), verb('c')]))
+
+    expect(readSavedSession(UserId)).toBeNull()
+  })
+
+  it('saves the drill round as it is played', async () => {
+    const result = await arrange(batch([verb('a'), verb('b'), verb('c')]))
+    await act(async () => result.current.skipIntro())
+    await act(async () => result.current.answer(true))
+    await flush()
+
+    const saved = readSavedSession(UserId)!
+
+    expect(saved.phase).toBe('drill')
+    expect(saved.title).toBe(Title)
+    expect(saved.query).toEqual(BatchQuery)
+    expect(saved.drill!.current!.verb.v1).toBe(result.current.card!.verb.v1)
+    // Sent already, so a resume must not post it again.
+    expect(saved.pending).toEqual([])
+  })
+
+  /// A miss is recorded the moment it is pressed; a reload while its answer is on screen must
+  /// not deal the same card to be answered twice.
+  it('saves the card after a missed one while its answer is on screen', async () => {
+    const result = await arrange(batch([verb('a'), verb('b'), verb('c')]))
+    await act(async () => result.current.skipIntro())
+    await act(async () => result.current.answer(false))
+
+    expect(result.current.card!.verb.v1).toBe('a')
+    expect(readSavedSession(UserId)!.drill!.current!.verb.v1).not.toBe('a')
+  })
+
+  it('resumes the drill round where it stopped without asking the server for words', async () => {
+    const first = await arrange(batch([verb('a'), verb('b'), verb('c')]))
+    await act(async () => first.current.skipIntro())
+    await act(async () => first.current.answer(true))
+    await act(async () => first.current.answer(false))
+    const next = readSavedSession(UserId)!.drill!.current!.verb.v1
+
+    const result = await resume()
+
+    expect(apiMock.getVerbSession).not.toHaveBeenCalled()
+    expect(result.current.phase).toBe('drill')
+    expect(result.current.revealed).toBe(false)
+    expect(result.current.card!.verb.v1).toBe(next)
+    expect(result.current.scope).toEqual({ passed: 2, total: 27 })
+  })
+
+  it('resumes the introduction on its next card and then drills the words taken', async () => {
+    const first = await arrange(batch([verb('a'), verb('b'), verb('c')]))
+    await act(async () => first.current.setWords(2))
+    await act(async () => first.current.setRounds(1))
+    await act(async () => first.current.startIntro())
+    await act(async () => first.current.next())
+
+    const result = await resume()
+
+    expect(result.current.phase).toBe('intro')
+    expect(result.current.intro).toEqual({ step: 2, total: 2 })
+    expect(result.current.card!.verb.v1).toBe('b')
+
+    await act(async () => result.current.next())
+
+    expect(result.current.phase).toBe('drill')
+
+    // Only the two words taken are drilled: four "I know" each pass them both.
+    for (let i = 0; i < PassStreak * 2; i++) {
+      await act(async () => result.current.answer(true))
+    }
+
+    expect(result.current.phase).toBe('done')
+  })
+
+  it('resumes a free run on its next card', async () => {
+    const first = await arrange(free([verb('a'), verb('b'), verb('c')], 20), FreeQuery)
+    await act(async () => first.current.answer(true))
+    await act(async () => first.current.answer(false))
+
+    const result = await resume(FreeQuery)
+
+    expect(result.current.phase).toBe('drill')
+    expect(result.current.card!.verb.v1).toBe('c')
+  })
+
+  it('sends the answers that had not left before the reload', async () => {
+    apiMock.postVerbAnswers.mockRejectedValue(new Error('offline'))
+    vi.useFakeTimers()
+
+    try {
+      apiMock.getVerbSession.mockResolvedValue(batch([verb('a'), verb('b'), verb('c')]))
+      const first = await renderHook(() => useVerbSession(BatchQuery, { userId: UserId, title: Title }))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      await act(async () => first.current.skipIntro())
+      await act(async () => first.current.answer(true))
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(RetryDelayMs * 2)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    expect(readSavedSession(UserId)!.pending).toHaveLength(1)
+
+    apiMock.postVerbAnswers.mockResolvedValue({ results: [] })
+    await resume()
+
+    expect(apiMock.postVerbAnswers).toHaveBeenCalledWith([expect.objectContaining({ verb: 'a', known: true })])
+    expect(readSavedSession(UserId)!.pending).toEqual([])
+  })
+
+  it('forgets the round once it has passed and its answers are in', async () => {
+    const result = await arrange(batch([verb('a')]))
+    await act(async () => result.current.skipIntro())
+
+    for (let i = 0; i < PassStreak; i++) {
+      await act(async () => result.current.answer(true))
+    }
+
+    await flush()
+
+    expect(result.current.phase).toBe('done')
+    expect(readSavedSession(UserId)).toBeNull()
+  })
+
+  it('forgets the round the learner walked away from', async () => {
+    const result = await arrange(batch([verb('a'), verb('b'), verb('c')]))
+    await act(async () => result.current.skipIntro())
+    await act(async () => result.current.answer(true))
+
+    await act(async () => result.current.discard())
+    await flush()
+
+    expect(readSavedSession(UserId)).toBeNull()
+  })
+
+  /// A fresh round started over a saved one takes over what the saved one never sent.
+  it('sends a forgotten round\'s answers when a new one starts', async () => {
+    const first = await arrange(batch([verb('a'), verb('b'), verb('c')]))
+    await act(async () => first.current.skipIntro())
+    const saved = readSavedSession(UserId)!
+    writeSavedSession({ ...saved, pending: [{ verb: 'z', promptForm: 'v1', known: false, responseMs: 1, mode: 'batch', group: 4 }] })
+    apiMock.postVerbAnswers.mockClear()
+
+    await arrange(batch([verb('a')]))
+
+    expect(apiMock.postVerbAnswers).toHaveBeenCalledWith([expect.objectContaining({ verb: 'z' })])
+    expect(readSavedSession(UserId)).toBeNull()
   })
 })

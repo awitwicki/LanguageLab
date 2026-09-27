@@ -13,6 +13,13 @@ export interface Card {
   promptForm: PromptForm
 }
 
+/** The introduction round, and a free run's queue: a fixed list played in order. */
+export interface Played {
+  kind: 'intro' | 'queue'
+  cards: Card[]
+  index: number
+}
+
 /**
  * The introduction round's cards. The words go round-robin, so a word's repeats are spaced
  * apart by the others rather than piled up — the gap is what makes it stick. Each pass takes

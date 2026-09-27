@@ -283,8 +283,7 @@ forwardedHeaders.KnownProxies.Clear();
 app.UseForwardedHeaders(forwardedHeaders);
 
 app.UseRequestDecompression();
-app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseSpaFiles();
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -302,7 +301,6 @@ app.MapPronunciationEndpoints();
 app.MapTranslationEndpoints();
 app.MapReaderEndpoints();
 
-// The SPA has its own routing: anything that is not /api and not a file gets index.html.
-app.MapFallbackToFile("index.html");
+app.MapSpaFallback();
 
 app.Run();
