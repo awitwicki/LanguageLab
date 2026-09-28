@@ -22,8 +22,8 @@ public sealed class LlmQuotaException : LlmException
 }
 
 /// <summary>
-/// No answer for any other reason: no credentials configured, network failure, timeout, or an
-/// answer that is not valid JSON for the requested schema.
+/// No answer for any other reason: no credentials configured, network failure, timeout, a status
+/// or finish reason that is not success, or an answer that is not a JSON object.
 /// </summary>
 public sealed class LlmUnavailableException : LlmException
 {

@@ -138,7 +138,10 @@ Where they live: `LanguageLab.Application/Translation` (`ILlmClient`, `LlmReques
 `LlmExceptions.cs`, `IWordBatchTranslator`, `ITranslationQueue`),
 `LanguageLab.Application/Books` (`IBookParser`, `ParsedBook`, `BookFormatException`),
 `LanguageLab.Domain/Lexicon` (`IEnglishLexicon`). Shared test fakes are in
-`LanguageLab.Tests/Fakes/` — use them rather than writing private ones.
+`LanguageLab.Tests/Fakes/` — use them rather than writing private ones. A1 added
+`StubHttpHandler` (a scripted `HttpMessageHandler`) and `ListLogger<T>` (captures log lines)
+there for testing HTTP clients; A2/A3 reuse them. A1's implementations live in
+`LanguageLab.Application/Translation/Llm/`; `AddLlmClient` registers the scoped `ILlmClient`.
 
 Contract changes pending in Wave 1 specs — each lands with its stream; until then the code on
 `dev` still has the W0 shapes:
@@ -150,8 +153,6 @@ Contract changes pending in Wave 1 specs — each lands with its stream; until t
   yields the `ParsedChapter` list; `ChapterMode(int? Depth)`, null = leaf. The chapter-level picker
   stays on the import screen and its choice rides the upload (C3/C4 HTTP contract gains
   `chapterMode`). New packages `AngleSharp`, `AngleSharp.Xml`.
-- **A1**: `LlmRequest` doc-comment — the client guarantees a JSON object, the consumer checks
-  its shape.
 
 Three points the final W0 review surfaced, settled here so A1/A2/B1 don't each answer them
 differently (also written into the affected interfaces' XML doc-comments):
@@ -285,3 +286,7 @@ Wave 3  └────────────── merge to dev, D1 docs, end
 
 - 2026-09-27 — Roadmap written; Q1–Q7 settled (see Decisions).
 - 2026-09-27 — W0 landed on dev. IBookParser.Parse takes byte[] (ZipArchive/XmlReader need a Stream).
+- 2026-09-28 — A1 landed on dev: `GeminiLlmClient`, `OpenAiCompatibleLlmClient`, `LlmClientSelector`
+  via `AddLlmClient` (`LanguageLab.Application/Translation/Llm/`); `LlmRequest`'s doc-comment
+  amended (the client guarantees a JSON object, the consumer checks its shape). Live Gemini check:
+  confirmed on 2026-09-28 (x-goog-api-key header, thinkingLevel "minimal", candidates[0].content.parts[].text).

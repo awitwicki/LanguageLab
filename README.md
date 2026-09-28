@@ -110,6 +110,15 @@ spelling:
   themselves (2 000 characters a day without this email, 20 000 with it)
 * `Translation__DeepLApiKey` - optional; a DeepL API Free key for sentence translation in the
   reader. Without it MyMemory translates sentences as well.
+* `Translation__Provider` - optional; the language model behind the coming LLM translator:
+  `Gemini` (the default) or `OpenAiCompatible`. Any other value stops the API at startup. Nothing
+  translates through it yet — MyMemory and DeepL above still do.
+* `Translation__Gemini__ApiKey` - the Gemini API key (Google AI Studio). Without the selected
+  provider's key the API still starts, logs a warning, and LLM translation is off.
+* `Translation__Gemini__Model` - optional; `gemini-3.5-flash-lite` by default.
+* `Translation__OpenAi__BaseUrl` / `Translation__OpenAi__ApiKey` / `Translation__OpenAi__Model` -
+  the OpenAI-compatible provider, used when `Translation__Provider=OpenAiCompatible`. The defaults
+  are DeepSeek's (`https://api.deepseek.com/`, `deepseek-flash`), so DeepSeek needs only the key.
 
 **Docker compose:** create `.env` file and fill it with those variables.
 
@@ -136,11 +145,24 @@ spelling:
 * `Translation:DeepLApiKey` - optional. A DeepL API Free key (ends in `:fx`), for the reader's
   sentence translation — 500 000 characters a month for the whole app, 20 000 characters a day
   per user. Without it MyMemory translates sentences as well.
+* `Translation:Provider` - optional. `Gemini` (default) or `OpenAiCompatible`; any other value
+  stops startup. Picks the language model for the coming LLM translator — nothing calls it yet,
+  MyMemory and DeepL above still translate.
+* `Translation:Gemini:ApiKey` / `Translation:Gemini:Model` - the Gemini key and model
+  (`gemini-3.5-flash-lite` by default). The key is sent in a header, never in the URL.
+* `Translation:OpenAi:BaseUrl` / `Translation:OpenAi:ApiKey` / `Translation:OpenAi:Model` - an
+  OpenAI-compatible chat-completions endpoint; DeepSeek (`https://api.deepseek.com/`,
+  `deepseek-flash`) by default. A base URL with a path (`https://host/v1`) keeps it.
+
+  Without the selected provider's key the API still starts — in Production too — and logs
+  "Translation provider … has no API key; translation is disabled". Leave `Model` and `BaseUrl`
+  out rather than empty: an empty value stops startup.
 
 For a local run, fill in `LanguageLab.Api/appsettings.Development.json` (see the example
 below). In Docker the same values are passed via env vars using the standard
 ASP.NET Core convention (`__` instead of `:`): `ConnectionStrings__DefaultConnection`,
-`Telegram__ClientId`, `Telegram__ClientSecret`, `Telegram__BotToken`.
+`Telegram__ClientId`, `Telegram__ClientSecret`, `Telegram__BotToken`,
+`Translation__Gemini__ApiKey`.
 
 ### LanguageLab.TgBot
 
@@ -320,6 +342,11 @@ not committed to git):
     "ClientId": "{your bot's OpenID Connect client id}",
     "ClientSecret": "{your bot's OpenID Connect client secret}",
     "BotToken": "{your bot token}"
+  },
+  "Translation": {
+    "Gemini": {
+      "ApiKey": "{your Gemini API key, optional}"
+    }
   }
 }
 ```

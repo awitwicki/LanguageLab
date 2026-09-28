@@ -5,6 +5,7 @@ using LanguageLab.Api.Auth;
 using LanguageLab.Api.Endpoints;
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
+using LanguageLab.Application.Translation.Llm;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -207,6 +208,10 @@ builder.Services.AddScoped<VerbSessionService>();
 builder.Services.AddScoped<PronunciationProgressService>();
 builder.Services.AddScoped<DictionaryDeletionService>();
 builder.Services.AddScoped<DictionaryPublicationService>();
+
+// The language model behind translation, picked by Translation:Provider (Gemini by default).
+// Without that provider's key the app still starts and LlmStartupCheck logs a warning.
+builder.Services.AddLlmClient(builder.Configuration);
 
 // MyMemory is keyless; the optional contact email only raises its daily quota.
 builder.Services.Configure<TranslationOptions>(builder.Configuration.GetSection(TranslationOptions.SectionName));
