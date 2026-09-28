@@ -179,7 +179,7 @@ differently (also written into the affected interfaces' XML doc-comments):
 
 ### A. LLM translator
 
-- [~] **A1. LLM clients** (spec: `2026-09-28-llm-a1-clients-design.md`; wt: llm-a1) — `GeminiLlmClient` (structured output via `responseSchema`),
+- [x] **A1. LLM clients** (spec: `2026-09-28-llm-a1-clients-design.md`; wt: llm-a1) — `GeminiLlmClient` (structured output via `responseSchema`),
   `OpenAiCompatibleLlmClient` (DeepSeek, `response_format: json_object`), config + DI selection
   per Q7, `StubHandler` tests like `DeepLTranslatorTests`. *Needs:* W0.
 - [ ] **A2. Word translation** — `LlmWordBatchTranslator` (batches of ~200, output accepted only
