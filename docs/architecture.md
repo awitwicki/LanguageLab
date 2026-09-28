@@ -42,6 +42,13 @@ The services on top of the domain:
   [vocabulary-and-training.md](vocabulary-and-training.md).
 - **Books and chapters** — `ChapterStatsService` (the per-chapter rows of a book, also for a
   subset of it) and `StarredChapterService` (a user's starred chapters).
+- **Book parsing** — `Books/`: `BookParser : IBookParser` turns fb2 or epub bytes into a `ParsedBook`
+  section tree, and `BookChapters.Flatten` cuts it into chapters by the `ChapterMode` the uploader
+  picked. A port of the SPA's `web/src/books/` and `web/src/fb2/chapters.ts` (see
+  [reader.md](reader.md#websrcbooks)); fb2 goes through `System.Xml`, epub documents through the NuGet
+  packages `AngleSharp` (1.8.2) and `AngleSharp.Xml` (1.2.0). The input is untrusted: zip limits
+  (5,000 entries, 32 MB per entry, 64 MB in total), no DTDs or external entities, element nesting
+  capped at 256, 30 seconds per book.
 - **The home screen's recent work** — `RecentActivityService`: the last finished session per scope,
   and the scopes still being sorted. Both drop what the caller can no longer open.
 - **The personal dictionary** — `PersonalDictionaryService`, the user's own word list.

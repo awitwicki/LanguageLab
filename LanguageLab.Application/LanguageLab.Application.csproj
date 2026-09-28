@@ -17,4 +17,9 @@
       <ProjectReference Include="..\LanguageLab.Infrastructure\LanguageLab.Infrastructure.csproj" />
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="AngleSharp" Version="1.8.2" />
+      <PackageReference Include="AngleSharp.Xml" Version="1.2.0" />
+    </ItemGroup>
+
 </Project>

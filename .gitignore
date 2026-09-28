@@ -234,6 +234,7 @@ web/dist/
 !/docs/superpowers/specs/2026-09-27-llm-translation-roadmap.md
 result/import-sorted-words.sql
 /.superpowers/brainstorm
+/.superpowers/sdd
 
 # The English lexicon: its generated data, licence notices and hand-kept overrides are tracked
 # despite the *.txt rule above; the upstream downloads behind them are not.

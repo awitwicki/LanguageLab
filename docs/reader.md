@@ -88,6 +88,13 @@ Everything format-dependent, and the only place that branches on format:
 - **`toParsedBook.ts`** — produces the import's `ParsedBook`. The reader's own shape is built in
   `reader/readerBook.ts` instead.
 
+The server has a .NET twin of these parsers in `LanguageLab.Application/Books/` — `BookParser`
+(`format.ts` and `toParsedBook.ts`), `SafeZip`, `XmlDecoding`, `Fb2Parser` (`fb2/chapters.ts`'s
+`parseBook`), the epub files (`epub.ts`) and `BookChapters.Flatten` (`flattenChapters`) — which the
+import uses. Each .NET file names the TS it ports. A change to a parsing rule (what counts as a
+paragraph, where a chapter is cut, where a title comes from) is made on both sides, together with the
+ported tests in `LanguageLab.Tests/Books/`.
+
 ## Sentence translation
 
 `POST /api/translate/sentence` translates into the learner's language, using DeepL when

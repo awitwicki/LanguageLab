@@ -60,11 +60,25 @@ public class BookAndLexiconContractsTests
     }
 
     [Fact]
-    public void Parsed_books_and_chapters_are_value_records()
+    public void Book_format_exception_can_wrap_the_library_exception_behind_it()
     {
-        IReadOnlyList<ParsedChapter> chapters = [new(0, "One", "It was a dark night.")];
+        var inner = new InvalidDataException("bad zip");
 
-        Assert.Equal(new ParsedBook("Title", null, chapters), new ParsedBook("Title", null, chapters));
-        Assert.Equal(new ParsedChapter(0, "One", "It was a dark night."), chapters[0]);
+        var error = new BookFormatException(BookFormatError.Invalid, "not a readable zip archive", inner);
+
+        Assert.Equal(BookFormatError.Invalid, error.Error);
+        Assert.Same(inner, error.InnerException);
+    }
+
+    [Fact]
+    public void Parsed_books_sections_and_chapters_are_value_records()
+    {
+        IReadOnlyList<BookSection> children = [];
+        IReadOnlyList<BookSection> sections = [new("One", 1, "It was a dark night.", children)];
+
+        Assert.Equal(new ParsedBook("Title", null, sections, 1), new ParsedBook("Title", null, sections, 1));
+        Assert.Equal(new BookSection("One", 1, "It was a dark night.", children), sections[0]);
+        Assert.Equal(new ParsedChapter(0, "One", "It was a dark night."), new ParsedChapter(0, "One", "It was a dark night."));
+        Assert.Equal(ChapterMode.Leaf, new ChapterMode(null));
     }
 }

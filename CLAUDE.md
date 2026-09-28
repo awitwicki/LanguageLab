@@ -17,7 +17,7 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 |---|---|
 | `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation and IPA catalogs and the `LearnerLanguages` language catalog. No dependencies on infrastructure. |
 | `LanguageLab.Infrastructure/` | EF Core `ApplicationDbContext`, PostgreSQL provider, migrations. |
-| `LanguageLab.Application/` | Services on top of the domain: word selection, training sessions, book import, sorting, Leitner progress, translation, the reader's services, the two trainers. |
+| `LanguageLab.Application/` | Services on top of the domain: word selection, training sessions, book import and the fb2/epub parsers behind it (`Books/`), sorting, Leitner progress, translation, the reader's services, the two trainers. |
 | `LanguageLab.Api/` | ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. `Auth/` holds the claims, session validation and OIDC handlers. |
 | `LanguageLab.TgBot/` | The Telegram bot: a long-polling Generic Host console app, no database, no project references. |
 | `web/` | React + Vite SPA: book import in the browser, dictionary stats, word sorting, Reading mode (`src/reader/`, `src/books/`). |
@@ -46,6 +46,9 @@ These hold wherever you are working, whatever you are changing:
 - **`english-lexicon.txt` is generated.** It has two copies, `LanguageLab.Domain/Lexicon/` and
   `web/public/lexicon/`, written by `scripts/build_lexicon.py` — never edit it by hand; fix a lemma
   in `scripts/lexicon-overrides.txt` and rerun; a test keeps the two copies identical.
+- **Book parsing exists twice** — `web/src/books/` + `web/src/fb2/chapters.ts` (the reader and the
+  import preview) and `LanguageLab.Application/Books/` (the server's import) — and both must agree
+  on chapters and text; change them together.
 - **`GET /api/auth/dev-login` is fenced off from production three times over** — `#if DEBUG` plus a
   Release publish, `IsDevelopment()`, and `import.meta.env.DEV`
   (`LanguageLab.Api/Auth/DevLogin.cs`). Weakening any fence is a security change.

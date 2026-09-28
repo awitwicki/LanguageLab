@@ -151,7 +151,13 @@ public interface IBookParser                      // C2 implements (fb2 + epub)
 {
     ParsedBook Parse(byte[] file);                // throws BookFormatException(Invalid|Encrypted)
 }
-public sealed record ParsedBook(string Title, string? Author, IReadOnlyList<ParsedChapter> Chapters);
+public sealed record ParsedBook(string Title, string? Author, IReadOnlyList<BookSection> Sections, int MaxDepth);
+public sealed record BookSection(string Title, int Depth, string OwnText, IReadOnlyList<BookSection> Children);
+public readonly record struct ChapterMode(int? Depth);   // null = leaf chapters; ChapterMode.Leaf
+public static class BookChapters                        // the import preview's chapter rule (C2)
+{
+    public static IReadOnlyList<ParsedChapter> Flatten(IReadOnlyList<BookSection> sections, ChapterMode mode);
+}
 public sealed record ParsedChapter(int Order, string Title, string Text);
 ```
 
@@ -161,21 +167,14 @@ HTTP contract for C3/C4: `POST /api/dictionaries/import` becomes `multipart/form
 
 Where they live: `LanguageLab.Application/Translation` (`ILlmClient`, `LlmRequest`,
 `LlmExceptions.cs`, `IWordBatchTranslator`, `ITranslationQueue`),
-`LanguageLab.Application/Books` (`IBookParser`, `ParsedBook`, `BookFormatException`),
+`LanguageLab.Application/Books` (`IBookParser`, `ParsedBook`, `BookChapters`, `BookFormatException`),
 `LanguageLab.Domain/Lexicon` (`IEnglishLexicon`). Shared test fakes are in
 `LanguageLab.Tests/Fakes/` — use them rather than writing private ones. A1 added
 `StubHttpHandler` (a scripted `HttpMessageHandler`) and `ListLogger<T>` (captures log lines)
 there for testing HTTP clients; A2/A3 reuse them. A1's implementations live in
 `LanguageLab.Application/Translation/Llm/`; `AddLlmClient` registers the scoped `ILlmClient`.
 
-Contract changes pending in Wave 1 specs — each lands with its stream; until then the code on
-`dev` still has the W0 shapes:
-
-- **C2**: `ParsedBook(Title, Author, Sections, MaxDepth)` becomes a tree of
-  `BookSection(Title, Depth, OwnText, Children)`; `BookChapters.Flatten(sections, ChapterMode)`
-  yields the `ParsedChapter` list; `ChapterMode(int? Depth)`, null = leaf. The chapter-level picker
-  stays on the import screen and its choice rides the upload (C3/C4 HTTP contract gains
-  `chapterMode`). New packages `AngleSharp`, `AngleSharp.Xml`.
+All Wave 1 streams (A1, B1, C1, C2) have landed, so none of the W0 shapes are pending anymore.
 
 Three points the final W0 review surfaced, settled here so A1/A2/B1 don't each answer them
 differently (also written into the affected interfaces' XML doc-comments):
@@ -319,3 +318,9 @@ Wave 3  └────────────── merge to dev, D1 docs, end
   served at `/lexicon/english-lexicon.txt` (`web/src/lexicon/lexicon.ts`). `IEnglishLexicon`
   gained `LemmasOf`; 21 overrides (`lay` plus 20 common-word primaries the final review found
   buried behind a rarer AGID-generated comparative/superlative, e.g. `number`, `interest`).
+- 2026-09-28 — C2 merged into dev: `BookParser : IBookParser` (fb2 on System.Xml, epub on AngleSharp +
+  AngleSharp.Xml). `ParsedBook` is now a section tree; `BookChapters.Flatten(sections, ChapterMode)`
+  yields the chapters, so the C3/C4 upload carries the picker's `chapterMode` (null = leaf). Every
+  refusal is `BookFormatException(Invalid|Encrypted)`, including the parser's limits: zip 5,000
+  entries / 32 MB per entry / 64 MB total, nesting 256, 30 s per book. No file-name fallback: `Title`
+  is "" when the book names none (C3's job).

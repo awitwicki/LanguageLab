@@ -15,5 +15,9 @@ public sealed class BookFormatException : Exception
     public BookFormatException(BookFormatError error, string message)
         : base(message) => Error = error;
 
+    /// <summary>Wraps a library's exception; <paramref name="message"/> still names the problem only.</summary>
+    public BookFormatException(BookFormatError error, string message, Exception? innerException)
+        : base(message, innerException) => Error = error;
+
     public BookFormatError Error { get; }
 }
