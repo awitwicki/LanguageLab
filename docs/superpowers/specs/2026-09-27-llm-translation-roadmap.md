@@ -72,6 +72,15 @@ respect, the contracts that let them run in parallel, and progress.
   its shape against `LlmRequest.ResponseSchema` is the consumer's job (A2/A3 read specific fields
   anyway); Gemini enforces the schema natively, the OpenAI-compatible client passes it to the
   model as text in the system prompt. A1 amends `LlmRequest`'s doc-comment to say so.
+- 2026-09-28 (C1) — Lexicon primary lemma: an inflection wins (`found → find`, `left → leave`),
+  the form itself comes last when it is a lemma too; a hand-kept `scripts/lexicon-overrides.txt`
+  fixes known exceptions (`lay`). `IEnglishLexicon` gains `LemmasOf` (all lemmas, primary first);
+  `LemmaOf` stays as the primary.
+- 2026-09-28 (C1 → C3, C4) — Two-letter lemmas the lexicon knows (`go`, `ox`) are importable:
+  now that the lexicon is the junk filter, `ImportWordText`'s 3-letter minimum becomes 2 for a
+  word that is a lexicon lemma. The stop-word filter still applies (`be`, `do` stay out). C3
+  changes `ImportWordText` and the `CLAUDE.md` import invariant; C4 aligns the reader's
+  `isRejected` length rule.
 
 No open questions remain at roadmap level; each workstream's spec settles its own details and
 adds a decision here only when it changes something another workstream relies on.
@@ -131,6 +140,19 @@ Where they live: `LanguageLab.Application/Translation` (`ILlmClient`, `LlmReques
 `LanguageLab.Domain/Lexicon` (`IEnglishLexicon`). Shared test fakes are in
 `LanguageLab.Tests/Fakes/` — use them rather than writing private ones.
 
+Contract changes pending in Wave 1 specs — each lands with its stream; until then the code on
+`dev` still has the W0 shapes:
+
+- **B1**: `ITranslationQueue.EnqueueAsync(long dictionaryId, …)` — `Dictionary.Id` is `long`.
+- **C1**: `IEnglishLexicon.LemmasOf(form)` — all lemmas, primary first; `LemmaOf` stays.
+- **C2**: `ParsedBook(Title, Author, Sections, MaxDepth)` becomes a tree of
+  `BookSection(Title, Depth, OwnText, Children)`; `BookChapters.Flatten(sections, ChapterMode)`
+  yields the `ParsedChapter` list; `ChapterMode(int? Depth)`, null = leaf. The chapter-level picker
+  stays on the import screen and its choice rides the upload (C3/C4 HTTP contract gains
+  `chapterMode`). New packages `AngleSharp`, `AngleSharp.Xml`.
+- **A1**: `LlmRequest` doc-comment — the client guarantees a JSON object, the consumer checks
+  its shape.
+
 Three points the final W0 review surfaced, settled here so A1/A2/B1 don't each answer them
 differently (also written into the affected interfaces' XML doc-comments):
 
@@ -156,7 +178,7 @@ differently (also written into the affected interfaces' XML doc-comments):
 
 ### A. LLM translator
 
-- [~] **A1. LLM clients** (brainstorming, main checkout; wt: llm-a1 at implementation) — `GeminiLlmClient` (structured output via `responseSchema`),
+- [~] **A1. LLM clients** (spec: `2026-09-28-llm-a1-clients-design.md`; wt: llm-a1) — `GeminiLlmClient` (structured output via `responseSchema`),
   `OpenAiCompatibleLlmClient` (DeepSeek, `response_format: json_object`), config + DI selection
   per Q7, `StubHandler` tests like `DeepLTranslatorTests`. *Needs:* W0.
 - [ ] **A2. Word translation** — `LlmWordBatchTranslator` (batches of ~200, output accepted only
@@ -172,7 +194,7 @@ differently (also written into the affected interfaces' XML doc-comments):
 
 ### B. Background dictionary translation
 
-- [ ] **B1. Queue + worker** — `TranslationJob` table (`DictionaryId`, `Language`, status,
+- [~] **B1. Queue + worker** (spec: `2026-09-28-llm-b1-translation-queue-design.md`; wt: llm-b1) — `TranslationJob` table (`DictionaryId`, `Language`, status,
   progress, attempts, unique on the pair) + migration; `ITranslationQueue`; a `BackgroundService`
   that picks a job, selects the dictionary's shared words with no `WordTranslation` in that
   language, translates them through `IWordBatchTranslator` in batches, writes `Machine` rows,
@@ -185,10 +207,13 @@ differently (also written into the affected interfaces' XML doc-comments):
 
 ### C. Server-side import
 
-- [ ] **C1. English lexicon** — build script under `scripts/` (SCOWL/AGID, size 60 per Q3), the
+- [~] **C1. English lexicon** (spec: `2026-09-28-llm-c1-english-lexicon-design.md`; wt: llm-c1) — build script under `scripts/` (SCOWL/AGID, size 60 per Q3), the
   data file as an embedded resource, `EnglishLexicon : IEnglishLexicon`, and the same table as a
-  static SPA asset with a small TS `lemmaOf` loader + tests. *Needs:* W0.
-- [ ] **C2. Book parsers on .NET** — port `web/src/books/` (`format.ts` sniffing, `decode.ts`
+  static SPA asset with a small TS `lemmaOf` loader + tests. The data is generated: C1 documents
+  `scripts/build_lexicon.py` in `CLAUDE.md` (Project layout, plus an invariant: never edit
+  `english-lexicon.txt` by hand — change `scripts/lexicon-overrides.txt` and rerun), README and
+  `docs/architecture.md`. *Needs:* W0.
+- [~] **C2. Book parsers on .NET** (spec: `2026-09-28-llm-c2-book-parsers-design.md`; wt: llm-c2) — port `web/src/books/` (`format.ts` sniffing, `decode.ts`
   encodings incl. windows-1251, fb2, `epub.ts` spine + TOC `#id` cuts, `splitLongChapters`,
   DRM → `Encrypted`) to `IBookParser`. Port the frontend's test books as fixtures. *Needs:* W0.
 - [ ] **C3. Import endpoint** — multipart upload, server SHA-256 as `FileHash` (drop the
