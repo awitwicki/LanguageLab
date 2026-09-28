@@ -81,6 +81,26 @@ respect, the contracts that let them run in parallel, and progress.
   word that is a lexicon lemma. The stop-word filter still applies (`be`, `do` stay out). C3
   changes `ImportWordText` and the `CLAUDE.md` import invariant; C4 aligns the reader's
   `isRejected` length rule.
+- 2026-09-28 (C1, implementation) — The lexicon reads SCOWL's `english-words` lists as well as
+  `american-words`/`british-words`: the latter two hold only the variety-specific spellings.
+  SCOWL's lists also carry inflected forms, so "the form itself, if it is a lemma" means: in the
+  lists and either an AGID headword or no AGID inflection of one — `went → go`,
+  `houses → house`, still `found → find found`. C3/C4 can rely on every lemma named in the
+  file having a line of its own. AGID's `infl.txt` marker syntax differs from the spec's
+  assumed table in two ways future streams should know: a variant level is space-separated from
+  the word and may be a decimal (`dreamt 1`, `waked 0.1`; only the whole-number part is compared
+  to the drop threshold), and `!` marks a form as likely an inflection of a *different* word and
+  is dropped rather than kept (its README: "likely an inflection of a similar word ... and not
+  the current word").
+- 2026-09-28 (C1, final review) — AGID auto-generates a comparative/superlative for many obscure
+  adjective headwords, and some of those generated forms coincidentally spell far more common,
+  unrelated English words (`numb → number`, `inter → interest`); "an inflection wins" then buries
+  the common word behind the obscure one. ~20 clear cases (`number`, `interest`, `morning`,
+  `customer`, `priest`, …) are fixed via `scripts/lexicon-overrides.txt`; a broader signal (~679
+  SCOWL-size-≤-20 forms listing themselves last behind another lemma) was not exhaustively
+  audited. C3, when wiring `LemmaOf` into import, should expect occasional wrong primaries on
+  size-≤-20 words derived from an `A`-POS or `?`-POS AGID line, and treat a lexicon-overrides.txt
+  addition as the fix, not a code change.
 - 2026-09-28 (B1 → A2) — `AddTranslationQueue()` registers `NullWordBatchTranslator` with
   `TryAddScoped` and `TimeProvider.System` with `TryAddSingleton`. A2 registers its
   `IWordBatchTranslator` with a plain `AddScoped` (or a typed `AddHttpClient`) in its own
@@ -120,9 +140,10 @@ public interface ITranslationQueue                // B1 implements
 }
 
 // LanguageLab.Domain
-public interface IEnglishLexicon                  // C1 implements
+public interface IEnglishLexicon                  // C1 implements: EnglishLexicon
 {
-    string? LemmaOf(string lowercaseForm);        // null = not an English word → drop
+    IReadOnlyList<string> LemmasOf(string lowercaseForm); // all lemmas, primary first; [] = not English
+    string? LemmaOf(string lowercaseForm);        // the primary; null = not an English word → drop
 }
 
 // LanguageLab.Application/Books
@@ -150,7 +171,6 @@ there for testing HTTP clients; A2/A3 reuse them. A1's implementations live in
 Contract changes pending in Wave 1 specs — each lands with its stream; until then the code on
 `dev` still has the W0 shapes:
 
-- **C1**: `IEnglishLexicon.LemmasOf(form)` — all lemmas, primary first; `LemmaOf` stays.
 - **C2**: `ParsedBook(Title, Author, Sections, MaxDepth)` becomes a tree of
   `BookSection(Title, Depth, OwnText, Children)`; `BookChapters.Flatten(sections, ChapterMode)`
   yields the `ParsedChapter` list; `ChapterMode(int? Depth)`, null = leaf. The chapter-level picker
@@ -294,3 +314,8 @@ Wave 3  └────────────── merge to dev, D1 docs, end
   amended (the client guarantees a JSON object, the consumer checks its shape). Live Gemini check:
   confirmed on 2026-09-28 (x-goog-api-key header, thinkingLevel "minimal", candidates[0].content.parts[].text).
 - 2026-09-28 — B1 ready on llm-b1: ITranslationQueue.EnqueueAsync takes a long id; TranslationJobs table (migration AddTranslationJobs), TranslationQueue, TranslationJobProcessor, hosted TranslationWorker, NullWordBatchTranslator until A2. An unavailable batch pauses the worker 1 min (spec amended). The live enqueue-and-race check waits for A2.
+- 2026-09-28 — C1 landed on dev: `english-lexicon.txt` (92823 forms, 1.37 MB) from SCOWL
+  2020.12.07 size 60 + AGID @ b22230cc5250, embedded (`EnglishLexicon`, `AddEnglishLexicon`) and
+  served at `/lexicon/english-lexicon.txt` (`web/src/lexicon/lexicon.ts`). `IEnglishLexicon`
+  gained `LemmasOf`; 21 overrides (`lay` plus 20 common-word primaries the final review found
+  buried behind a rarer AGID-generated comparative/superlative, e.g. `number`, `interest`).

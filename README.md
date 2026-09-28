@@ -388,3 +388,21 @@ uv run sort_words.py
 ```
 
 `extract.py` - extract words in base from fb2 file and save to txt file
+
+### Rebuilding the English lexicon
+
+`LanguageLab.Domain/Lexicon/english-lexicon.txt` and its identical copy
+`web/public/lexicon/english-lexicon.txt` map every English word form to its lemmas, primary first
+(`went go`, `found find found`). Both are generated — never edit them by hand:
+
+```bash
+uv run scripts/build_lexicon.py                          # --size 70 takes in rarer words
+uv run python -m unittest scripts/test_build_lexicon.py
+```
+
+The first run needs network access: it downloads SCOWL 2020.12.07 from SourceForge and AGID's
+`infl.txt` and README from github.com/en-wl/wordlist at a pinned commit into `scripts/.cache/`
+(gitignored), and refuses to build if a download does not match the SHA-256 pinned in the script.
+A wrong lemma is fixed in `scripts/lexicon-overrides.txt` (one line per form, the output's own
+syntax), then rerun. SCOWL's and AGID's notices travel next to both copies as `LICENSE-SCOWL.txt`
+and `LICENSE-AGID.txt`.

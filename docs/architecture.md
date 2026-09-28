@@ -24,6 +24,11 @@ catalog of learner languages (see [auth.md](auth.md#learner-language)), and the 
 guard imported text (`ImportWordText`, `WordText`, `TitleText`) and the role predicate
 `Entities/UserRoles.CanPublishDirectly`.
 
+`Lexicon/` is the English lexicon: `IEnglishLexicon` and `EnglishLexicon`, which reads the
+generated `english-lexicon.txt` embedded in the assembly (see
+[`scripts/build_lexicon.py`](#scriptsbuild_lexiconpy) below) on first use.
+`LanguageLab.Application/Lexicon`'s `AddEnglishLexicon()` registers it as a singleton.
+
 ### `LanguageLab.Infrastructure/`
 
 EF Core `ApplicationDbContext`, the PostgreSQL provider, and the migrations.
@@ -86,6 +91,9 @@ sorting.
   [reader.md](reader.md).
 - `src/fb2/wordExtractor.ts` — the word-extraction worker behind a promise, shared by the import
   screen and the reader.
+- `src/lexicon/lexicon.ts` — `loadLexicon()`: the English lexicon, fetched once per page load
+  from `/lexicon/english-lexicon.txt` (a copy of the server's file) and parsed into
+  `lemmasOf`/`lemmaOf`.
 - Tests are `*.test.ts(x)` next to the code they cover (vitest + jsdom, helper
   `src/test/render.ts`).
 
@@ -95,6 +103,27 @@ More detail in [web/README.md](../web/README.md).
 
 A Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictionaries under
 `dictionaries/`.
+
+### `scripts/build_lexicon.py`
+
+Builds the English lexicon — every word form mapped to its lemmas, primary first (`went go`,
+`found find found`) — from SCOWL 2020.12.07 (the `english`, `american` and `british` word lists
+up to size 60) and AGID's `infl.txt` (github.com/en-wl/wordlist at `b22230cc5250`). An inflection
+wins the primary slot; the form itself comes last when it is a lemma too, which means it is in
+the SCOWL lists and is an AGID headword or no inflection of one (`houses house`, but
+`found find found`). Hand-kept fixes are in `scripts/lexicon-overrides.txt` — 21 entries: `lay`
+plus 20 common words the final review found buried behind a rarer AGID-generated
+comparative/superlative (`number`, `interest`, `morning`, …).
+
+The output is 92823 lines, 1.37 MB (290 KB gzipped), 2891 of them forms with more
+than one lemma. It is written twice and a test keeps the copies byte-identical:
+`LanguageLab.Domain/Lexicon/english-lexicon.txt` (embedded, read by `EnglishLexicon`) and
+`web/public/lexicon/english-lexicon.txt` (a static asset, read by `src/lexicon/lexicon.ts`).
+SCOWL's and AGID's notices sit next to both as `LICENSE-SCOWL.txt` / `LICENSE-AGID.txt`.
+
+Nothing uses it yet: the server-side book import will lemmatize and whitelist with it (C3 of
+the [LLM roadmap](superpowers/specs/2026-09-27-llm-translation-roadmap.md)), and the reader's
+highlights and word panel will switch to the SPA loader (C4).
 
 ## API surface
 

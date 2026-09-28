@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using LanguageLab.Api;
 using LanguageLab.Api.Auth;
 using LanguageLab.Api.Endpoints;
+using LanguageLab.Application.Lexicon;
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
 using LanguageLab.Application.Translation.Llm;
@@ -248,6 +249,7 @@ builder.Services.AddScoped<PersonalDictionaryService>();
 builder.Services.AddScoped<ReaderBookService>();
 builder.Services.AddScoped<ReaderWordStatusService>();
 builder.Services.AddScoped<ReaderWordService>();
+builder.Services.AddEnglishLexicon();
 
 builder.Services.AddRequestDecompression();
 

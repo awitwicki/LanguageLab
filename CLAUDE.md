@@ -22,6 +22,7 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 | `LanguageLab.TgBot/` | The Telegram bot: a long-polling Generic Host console app, no database, no project references. |
 | `web/` | React + Vite SPA: book import in the browser, dictionary stats, word sorting, Reading mode (`src/reader/`, `src/books/`). |
 | `extract.py` | Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictionaries under `dictionaries/`. |
+| `scripts/build_lexicon.py` | Generates the English lexicon (`english-lexicon.txt`, form → lemmas) from SCOWL + AGID; `scripts/lexicon-overrides.txt` holds the hand-kept fixes. Stdlib-only Python, run with `uv`. |
 
 The full map — every service's responsibility and the whole endpoint inventory — is in
 [docs/architecture.md](docs/architecture.md).
@@ -42,6 +43,9 @@ These hold wherever you are working, whatever you are changing:
   distinct words are invalid is refused outright. Caps: 50,000 distinct words, 2,000 chapters,
   300-character names and chapter titles (`TitleText.MaxLength`), a 16 MB request body, and 500
   entries per bulk personal-word import.
+- **`english-lexicon.txt` is generated.** It has two copies, `LanguageLab.Domain/Lexicon/` and
+  `web/public/lexicon/`, written by `scripts/build_lexicon.py` — never edit it by hand; fix a lemma
+  in `scripts/lexicon-overrides.txt` and rerun; a test keeps the two copies identical.
 - **`GET /api/auth/dev-login` is fenced off from production three times over** — `#if DEBUG` plus a
   Release publish, `IsDevelopment()`, and `import.meta.env.DEV`
   (`LanguageLab.Api/Auth/DevLogin.cs`). Weakening any fence is a security change.

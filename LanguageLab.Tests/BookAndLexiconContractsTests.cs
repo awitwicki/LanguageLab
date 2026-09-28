@@ -28,6 +28,29 @@ public class BookAndLexiconContractsTests
     }
 
     [Fact]
+    public void Lexicon_lists_every_lemma_primary_first()
+    {
+        var lexicon = new FakeEnglishLexicon(new Dictionary<string, IReadOnlyList<string>>
+        {
+            ["found"] = new[] { "find", "found" },
+            ["find"] = new[] { "find" },
+        });
+
+        Assert.Equal(new[] { "find", "found" }, lexicon.LemmasOf("found"));
+        Assert.Equal("find", lexicon.LemmaOf("found"));
+        Assert.Empty(lexicon.LemmasOf("aargh"));
+        Assert.Empty(lexicon.LemmasOf("Found"));
+    }
+
+    [Fact]
+    public void Lexicon_built_from_single_lemmas_lists_that_one_lemma()
+    {
+        var lexicon = new FakeEnglishLexicon(new Dictionary<string, string> { ["went"] = "go" });
+
+        Assert.Equal(new[] { "go" }, lexicon.LemmasOf("went"));
+    }
+
+    [Fact]
     public void Book_format_exception_carries_its_error_kind()
     {
         var error = new BookFormatException(BookFormatError.Encrypted, "DRM-protected epub.");
