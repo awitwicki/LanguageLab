@@ -44,6 +44,11 @@ The services on top of the domain:
   `TranslationService` trying the shared vocabulary first and the provider after;
   `ISentenceTranslator` → `FallbackSentenceTranslator`, which uses DeepL when a key is set and
   `MyMemorySentenceTranslator` otherwise.
+- **Background translation** — `Translation/Queue/`: `TranslationQueue` (`ITranslationQueue`)
+  keeps one `TranslationJob` per dictionary and language, and the hosted `TranslationWorker` fills
+  the missing translations through `IWordBatchTranslator`, one batch of one job per iteration
+  (`TranslationJobProcessor`). `AddTranslationQueue()` registers all of it; see
+  [vocabulary-and-training.md](vocabulary-and-training.md#background-translation-queue).
 - **The irregular-verbs trainer** — `VerbKnowledgeService`, `VerbSessionService`.
 - **The reader** — `ReaderBookService`, `ReaderWordStatusService`, `ReaderWordService`. What each
   one owns is in [reader.md](reader.md).

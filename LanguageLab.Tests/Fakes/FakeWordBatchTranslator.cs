@@ -18,7 +18,13 @@ public sealed class FakeWordBatchTranslator : IWordBatchTranslator
     public List<IReadOnlyList<string>> Batches { get; } = [];
     public List<LearnerLanguage> Targets { get; } = [];
 
-    public Task<IReadOnlyDictionary<string, string>> TranslateAsync(
+    /// <summary>
+    /// Runs after the batch is recorded and any queued failure thrown, before the answer — a test
+    /// uses it to change the database "while the provider is thinking", or to throw.
+    /// </summary>
+    public Func<IReadOnlyList<string>, Task>? BeforeAnswer { get; set; }
+
+    public async Task<IReadOnlyDictionary<string, string>> TranslateAsync(
         IReadOnlyList<string> lemmas, LearnerLanguage target, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -30,10 +36,12 @@ public sealed class FakeWordBatchTranslator : IWordBatchTranslator
         if (Failures.TryDequeue(out var failure))
             throw failure;
 
-        IReadOnlyDictionary<string, string> answer = lemmas
+        if (BeforeAnswer != null)
+            await BeforeAnswer(lemmas);
+
+        return lemmas
             .Distinct()
             .Where(_table.ContainsKey)
             .ToDictionary(lemma => lemma, lemma => _table[lemma]);
-        return Task.FromResult(answer);
     }
 }

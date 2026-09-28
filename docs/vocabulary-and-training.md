@@ -96,6 +96,26 @@ dictionary of the book being read when it can, and falls back to "My words" othe
 carried over from the old `TranslationOrigin` column), then dropped the two old columns. Every
 account that predates the language picker was set to `uk` at the same time.
 
+### Background translation queue
+
+`ITranslationQueue.EnqueueAsync(dictionaryId, language)` (`TranslationQueue`, in
+`LanguageLab.Application/Translation/Queue/`) asks for a dictionary's shared words that have no
+`WordTranslation` in that language to be translated in the background. There is one
+`TranslationJob` row per (dictionary, language), unique in the database: enqueueing is a no-op
+while the job is pending and starts a fresh pass once it has completed or failed. Personal
+dictionaries are never queued.
+
+The hosted `TranslationWorker` takes one batch of one job at a time (`TranslationJobProcessor`),
+round-robin — the pending job processed longest ago goes next — so a large book never holds up a
+small one. A batch is up to 200 of the job's words, most frequent first, sent through
+`IWordBatchTranslator`; each answer becomes a `Machine` `WordTranslation`, unless a translation in
+that language appeared meanwhile. A pass walks the words once: a word the model gave nothing for
+is passed over until the next enqueue. A quota refusal pauses the whole worker (the provider's
+`Retry-After`, otherwise 1 minute doubling up to an hour); an unavailable batch waits a minute,
+and five in a row mark the job `Failed`. Without a configured translator (`NullWordBatchTranslator`
+until the LLM translator lands) the worker idles. What enqueues a dictionary — import, opening it
+in another language, "don't know" — is roadmap workstream B2.
+
 ### Budgets
 
 Without `Translation:DeepLApiKey`, MyMemory translates sentences too, capped by

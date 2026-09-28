@@ -99,9 +99,26 @@ public class TranslationFakesTests
     {
         var queue = new FakeTranslationQueue();
 
-        await queue.EnqueueAsync(7, Uk, CancellationToken.None);
-        await queue.EnqueueAsync(7, Uk, CancellationToken.None);
+        await queue.EnqueueAsync(7L, Uk, CancellationToken.None);
+        await queue.EnqueueAsync(7L, Uk, CancellationToken.None);
 
-        Assert.Equal(new[] { (7, "uk"), (7, "uk") }, queue.Enqueued);
+        Assert.Equal(new[] { (7L, "uk"), (7L, "uk") }, queue.Enqueued);
+    }
+
+    [Fact]
+    public async Task Word_batch_translator_runs_the_hook_before_answering()
+    {
+        var translator = new FakeWordBatchTranslator(new Dictionary<string, string> { ["house"] = "будинок" });
+        IReadOnlyList<string>? seen = null;
+        translator.BeforeAnswer = lemmas =>
+        {
+            seen = lemmas;
+            return Task.CompletedTask;
+        };
+
+        var result = await translator.TranslateAsync(["house"], Uk, CancellationToken.None);
+
+        Assert.Equal(new[] { "house" }, seen);
+        Assert.Equal("будинок", result["house"]);
     }
 }

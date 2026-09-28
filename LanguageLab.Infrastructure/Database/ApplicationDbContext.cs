@@ -28,6 +28,7 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<StarredChapter> StarredChapters { get; set; }
     public DbSet<SortingVisit> SortingVisits { get; set; }
     public DbSet<ReaderBook> ReaderBooks { get; set; }
+    public DbSet<TranslationJob> TranslationJobs { get; set; }
 
     /// <summary>
     /// The keys the session cookie is encrypted with. Kept in the database, not in the
@@ -258,5 +259,24 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
         // The library links a book to the dictionary imported from the same file.
         builder.Entity<Dictionary>()
             .HasIndex(d => d.FileHash);
+
+        // The background translation queue: one job per dictionary and language, which is what
+        // makes enqueueing idempotent when two requests race.
+        builder.Entity<TranslationJob>()
+            .HasIndex(j => new { j.DictionaryId, j.Language })
+            .IsUnique();
+
+        // The worker's pick: pending jobs, the one processed longest ago first.
+        builder.Entity<TranslationJob>()
+            .HasIndex(j => new { j.Status, j.LastProcessedAt });
+
+        // A job has no meaning without its dictionary.
+        builder.Entity<TranslationJob>()
+            .HasOne(j => j.Dictionary)
+            .WithMany()
+            .HasForeignKey(j => j.DictionaryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<TranslationJob>().Property(j => j.Language).HasMaxLength(LearnerLanguages.CodeMaxLength);
     }
 }

@@ -6,6 +6,7 @@ using LanguageLab.Api.Endpoints;
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
 using LanguageLab.Application.Translation.Llm;
+using LanguageLab.Application.Translation.Queue;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -241,6 +242,8 @@ builder.Services.AddSingleton<MyMemorySentenceBudget>();
 builder.Services.AddScoped<ISentenceTranslator, FallbackSentenceTranslator>();
 builder.Services.AddSingleton(new SentenceQuota());
 builder.Services.AddScoped<TranslationService>();
+// A dictionary's missing translations, filled in the background per learner language.
+builder.Services.AddTranslationQueue();
 builder.Services.AddScoped<PersonalDictionaryService>();
 builder.Services.AddScoped<ReaderBookService>();
 builder.Services.AddScoped<ReaderWordStatusService>();

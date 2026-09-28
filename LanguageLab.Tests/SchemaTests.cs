@@ -419,5 +419,61 @@ public class SchemaTests
             db.Model.FindEntityType(typeof(TelegramUser))!.FindProperty("Language")!.GetMaxLength());
         Assert.Equal(LearnerLanguages.CodeMaxLength,
             db.Model.FindEntityType(typeof(Training))!.FindProperty("Language")!.GetMaxLength());
+        Assert.Equal(LearnerLanguages.CodeMaxLength,
+            db.Model.FindEntityType(typeof(TranslationJob))!.FindProperty("Language")!.GetMaxLength());
+    }
+
+    /// <summary>
+    /// The queue is idempotent per (dictionary, language) and relies on the database for it when
+    /// two enqueues race. InMemory enforces no index, so the model is the evidence.
+    /// </summary>
+    [Fact]
+    public void A_dictionary_has_one_translation_job_per_language()
+    {
+        using var db = NewContext();
+
+        var index = db.Model.FindEntityType(typeof(TranslationJob))!.GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(new[] { "DictionaryId", "Language" }));
+
+        Assert.True(index.IsUnique);
+    }
+
+    /// <summary>The worker's pick filters on Status and orders by LastProcessedAt.</summary>
+    [Fact]
+    public void Translation_jobs_are_indexed_for_the_workers_pick()
+    {
+        using var db = NewContext();
+
+        var index = db.Model.FindEntityType(typeof(TranslationJob))!.GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(new[] { "Status", "LastProcessedAt" }));
+
+        Assert.False(index.IsUnique);
+    }
+
+    /// <summary>A deleted dictionary takes its translation jobs with it.</summary>
+    [Fact]
+    public void A_translation_job_goes_with_its_dictionary()
+    {
+        using var db = NewContext();
+
+        var fk = db.Model.FindEntityType(typeof(TranslationJob))!.GetForeignKeys()
+            .Single(f => f.PrincipalEntityType.ClrType == typeof(Domain.Entities.Dictionary));
+
+        Assert.Equal(DeleteBehavior.Cascade, fk.DeleteBehavior);
+    }
+
+    /// <summary>
+    /// The migrations and their snapshot describe the model exactly — the same check
+    /// MigrateAsync makes at startup, where a mismatch would stop the app. Needs no database:
+    /// the Npgsql provider only compares the model with the snapshot.
+    /// </summary>
+    [Fact]
+    public void The_migrations_cover_the_model()
+    {
+        using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseNpgsql("Host=localhost;Database=model-check")
+            .Options);
+
+        Assert.False(db.Database.HasPendingModelChanges());
     }
 }

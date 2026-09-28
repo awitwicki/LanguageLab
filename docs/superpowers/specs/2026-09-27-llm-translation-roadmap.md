@@ -81,6 +81,10 @@ respect, the contracts that let them run in parallel, and progress.
   word that is a lexicon lemma. The stop-word filter still applies (`be`, `do` stay out). C3
   changes `ImportWordText` and the `CLAUDE.md` import invariant; C4 aligns the reader's
   `isRejected` length rule.
+- 2026-09-28 (B1 → A2) — `AddTranslationQueue()` registers `NullWordBatchTranslator` with
+  `TryAddScoped` and `TimeProvider.System` with `TryAddSingleton`. A2 registers its
+  `IWordBatchTranslator` with a plain `AddScoped` (or a typed `AddHttpClient`) in its own
+  `Add…` method and wins in either order; a stream that needs a clock injects `TimeProvider`.
 
 No open questions remain at roadmap level; each workstream's spec settles its own details and
 adds a decision here only when it changes something another workstream relies on.
@@ -112,7 +116,7 @@ public interface IWordBatchTranslator            // A2 implements on top of ILlm
 
 public interface ITranslationQueue                // B1 implements
 {
-    Task EnqueueAsync(int dictionaryId, LearnerLanguage language, CancellationToken ct);
+    Task EnqueueAsync(long dictionaryId, LearnerLanguage language, CancellationToken ct);
 }
 
 // LanguageLab.Domain
@@ -146,7 +150,6 @@ there for testing HTTP clients; A2/A3 reuse them. A1's implementations live in
 Contract changes pending in Wave 1 specs — each lands with its stream; until then the code on
 `dev` still has the W0 shapes:
 
-- **B1**: `ITranslationQueue.EnqueueAsync(long dictionaryId, …)` — `Dictionary.Id` is `long`.
 - **C1**: `IEnglishLexicon.LemmasOf(form)` — all lemmas, primary first; `LemmaOf` stays.
 - **C2**: `ParsedBook(Title, Author, Sections, MaxDepth)` becomes a tree of
   `BookSection(Title, Depth, OwnText, Children)`; `BookChapters.Flatten(sections, ChapterMode)`
@@ -290,3 +293,4 @@ Wave 3  └────────────── merge to dev, D1 docs, end
   via `AddLlmClient` (`LanguageLab.Application/Translation/Llm/`); `LlmRequest`'s doc-comment
   amended (the client guarantees a JSON object, the consumer checks its shape). Live Gemini check:
   confirmed on 2026-09-28 (x-goog-api-key header, thinkingLevel "minimal", candidates[0].content.parts[].text).
+- 2026-09-28 — B1 ready on llm-b1: ITranslationQueue.EnqueueAsync takes a long id; TranslationJobs table (migration AddTranslationJobs), TranslationQueue, TranslationJobProcessor, hosted TranslationWorker, NullWordBatchTranslator until A2. An unavailable batch pauses the worker 1 min (spec amended). The live enqueue-and-race check waits for A2.
