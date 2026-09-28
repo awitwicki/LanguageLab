@@ -236,8 +236,8 @@ differently (also written into the affected interfaces' XML doc-comments):
   `scripts/build_lexicon.py` in `CLAUDE.md` (Project layout, plus an invariant: never edit
   `english-lexicon.txt` by hand — change `scripts/lexicon-overrides.txt` and rerun), README and
   `docs/architecture.md`. *Needs:* W0.
-- [~] **C2. Book parsers on .NET** (spec: `2026-09-28-llm-c2-book-parsers-design.md`; wt: llm-c2) — port `web/src/books/` (`format.ts` sniffing, `decode.ts`
-  encodings incl. windows-1251, fb2, `epub.ts` spine + TOC `#id` cuts, `splitLongChapters`,
+- [x] **C2. Book parsers on .NET** (spec: `2026-09-28-llm-c2-book-parsers-design.md`; wt: llm-c2) — port `web/src/books/` (`format.ts` sniffing, `decode.ts`
+  encodings incl. windows-1251, fb2, `epub.ts` spine + TOC `#id` cuts,
   DRM → `Encrypted`) to `IBookParser`. Port the frontend's test books as fixtures. *Needs:* W0.
 - [ ] **C3. Import endpoint** — multipart upload, server SHA-256 as `FileHash` (drop the
   `ReaderBook`-must-exist check, since the hash is now proven), tokenize → `IEnglishLexicon` →
