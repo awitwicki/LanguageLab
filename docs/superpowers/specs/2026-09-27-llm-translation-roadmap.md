@@ -105,6 +105,14 @@ respect, the contracts that let them run in parallel, and progress.
   `TryAddScoped` and `TimeProvider.System` with `TryAddSingleton`. A2 registers its
   `IWordBatchTranslator` with a plain `AddScoped` (or a typed `AddHttpClient`) in its own
   `Add…` method and wins in either order; a stream that needs a clock injects `TimeProvider`.
+- 2026-09-29 (Q8, amends C3) — The 1-import/day quota now counts only a *successful* import, not
+  every attempt: a wrong file, a non-English book or DRM is immediately retryable, not a ~24h
+  lockout. C3's declarative `UserRateLimits.Import` (`SlidingWindowRateLimiter` middleware, which
+  consumes its permit before the handler runs and cannot see the outcome) is replaced by C4 with an
+  in-memory `ImportQuota` the service asks itself — same "a restart forgives everybody" style as
+  `SentenceQuota` — recording success only after `BookImportService.ImportAsync` returns without
+  throwing. `ReaderCapabilities` gains `ImportRetryAfterSeconds` so the reader's Build dictionary
+  button can show its wait without a click. See `2026-09-29-llm-c4-frontend-import-design.md`.
 
 No open questions remain at roadmap level; each workstream's spec settles its own details and
 adds a decision here only when it changes something another workstream relies on.
