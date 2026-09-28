@@ -52,4 +52,33 @@ public class UserRateLimitsTests
         Assert.Equal("anonymous", UserRateLimits.PartitionKey(null));
         Assert.Equal("anonymous", UserRateLimits.PartitionKey(new ClaimsPrincipal(new ClaimsIdentity())));
     }
+
+    // Q5: admins are exempt from the import cap; every other limit still applies to them.
+    [Fact]
+    public void An_admin_is_exempt_from_the_import_limit()
+    {
+        Assert.True(UserRateLimits.IsImportExempt(PrincipalFactory.Create(7, UserRole.Admin)));
+    }
+
+    [Fact]
+    public void Ordinary_users_and_anonymous_requests_are_not_exempt()
+    {
+        Assert.False(UserRateLimits.IsImportExempt(PrincipalFactory.Create(7, UserRole.User)));
+        Assert.False(UserRateLimits.IsImportExempt(null));
+    }
+
+    [Fact]
+    public void A_refused_lease_names_the_wait()
+    {
+        // With permits: 1, the only permit does not free up until the segment holding it leaves
+        // the window — 23-24 hours away for a fresh window, not "the next segment" (1 hour). A
+        // fallback below the actual wait would tell the caller to retry far too early.
+        using var limiter = UserRateLimits.CreateLimiter(permits: 1);
+        using var spent = limiter.AttemptAcquire("user:1");
+        using var refused = limiter.AttemptAcquire("user:1");
+
+        Assert.False(refused.IsAcquired);
+        Assert.True(UserRateLimits.TryGetRetryAfter(refused, out var retryAfter));
+        Assert.True(retryAfter >= TimeSpan.FromHours(23), $"expected at least 23h, got {retryAfter}");
+    }
 }

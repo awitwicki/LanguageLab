@@ -38,11 +38,13 @@ These hold wherever you are working, whatever you are changing:
   distractors alike; a session renders in `Training.Language`.
 - **Russian is never a learner language**: it is absent from `LearnerLanguages`, and the
   irregular-verbs trainer is Ukrainian-only.
-- **Import validation** (`BookImportService`, `LanguageLab.Domain`): a word must be lowercase ASCII
-  letters, 3-64 characters (`ImportWordText`) or it is dropped; an import where more than 20% of its
-  distinct words are invalid is refused outright. Caps: 50,000 distinct words, 2,000 chapters,
-  300-character names and chapter titles (`TitleText.MaxLength`), a 16 MB request body, and 500
-  entries per bulk personal-word import.
+- **Import validation** (`BookFileImportService`, `ImportTokenizer`, `BookImportService`,
+  `LanguageLab.Domain`): the server parses the uploaded file itself (`IBookParser`), tokenizes it
+  and keeps only lemmas the English lexicon knows (`IEnglishLexicon`) — a stored word is lowercase
+  ASCII letters, 2-64 characters (`ImportWordText`), and an upload whose text is less than half
+  lexicon-known occurrences is refused as not English. Caps: 50,000 distinct words, 2,000
+  chapters, 300-character names and chapter titles (`TitleText.MaxLength`), a 16 MB upload,
+  1 import/day (admins exempt), and 500 entries per bulk personal-word import.
 - **`english-lexicon.txt` is generated.** It has two copies, `LanguageLab.Domain/Lexicon/` and
   `web/public/lexicon/`, written by `scripts/build_lexicon.py` — never edit it by hand; fix a lemma
   in `scripts/lexicon-overrides.txt` and rerun; a test keeps the two copies identical.

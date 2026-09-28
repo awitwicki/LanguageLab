@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 using LanguageLab.Api;
 using LanguageLab.Api.Auth;
 using LanguageLab.Api.Endpoints;
+using LanguageLab.Application.Books;
+using LanguageLab.Application.Import;
 using LanguageLab.Application.Lexicon;
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
@@ -250,6 +252,10 @@ builder.Services.AddScoped<ReaderBookService>();
 builder.Services.AddScoped<ReaderWordStatusService>();
 builder.Services.AddScoped<ReaderWordService>();
 builder.Services.AddEnglishLexicon();
+
+// The C2 book parsers behind the server-side import, and the pipeline that drives them.
+builder.Services.AddBookParser();
+builder.Services.AddScoped<BookFileImportService>();
 
 builder.Services.AddRequestDecompression();
 

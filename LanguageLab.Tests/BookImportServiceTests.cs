@@ -174,21 +174,11 @@ public class BookImportServiceTests
     public async Task The_file_hash_is_kept_lowercase()
     {
         await using var db = NewContext();
-        var hash = new string('a', 64);
-
-        // The caller must have opened this exact file before the hash is trusted; the
-        // ReaderBook row proves that, and it is stored already-normalized (lowercase).
-        db.ReaderBooks.Add(new ReaderBook
-        {
-            UserId = 1, FileHash = hash, Title = "Wool", ChaptersCount = 2,
-            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
-        });
-        await db.SaveChangesAsync();
 
         var result = await new BookImportService(db).ImportAsync(
             TwoChapterBook() with { FileHash = new string('A', 64) }, ownerId: 1, status: PublicationStatus.Published);
 
-        Assert.Equal(hash, (await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId)).FileHash);
+        Assert.Equal(new string('a', 64), (await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId)).FileHash);
     }
 
     [Fact]
@@ -200,6 +190,31 @@ public class BookImportServiceTests
             TwoChapterBook() with { FileHash = "nope" }, ownerId: 1, status: PublicationStatus.Published);
 
         Assert.Null((await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId)).FileHash);
+    }
+
+    [Fact]
+    public async Task A_file_hash_is_stored_without_any_reader_book_row()
+    {
+        // Since C3 the hash is the server's own SHA-256 of the uploaded bytes — nothing vouches
+        // for it because nothing needs to.
+        await using var db = NewContext();
+        var hash = new string('a', 64);
+
+        var result = await new BookImportService(db).ImportAsync(
+            TwoChapterBook() with { FileHash = hash }, ownerId: 1, status: PublicationStatus.Published);
+
+        Assert.Equal(hash, (await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId)).FileHash);
+    }
+
+    [Fact]
+    public async Task The_core_import_never_reports_translation_queued()
+    {
+        await using var db = NewContext();
+
+        var result = await new BookImportService(db).ImportAsync(
+            TwoChapterBook(), ownerId: 1, status: PublicationStatus.Published);
+
+        Assert.False(result.TranslationQueued);
     }
 
     [Fact]
@@ -319,19 +334,6 @@ public class BookImportServiceTests
     }
 
     [Fact]
-    public async Task A_file_hash_the_caller_has_never_opened_is_dropped()
-    {
-        await using var db = NewContext();
-        var service = new BookImportService(db);
-
-        var request = TwoChapterBook() with { FileHash = new string('a', 64) };
-        var result = await service.ImportAsync(request, ownerId: 1, status: PublicationStatus.Published);
-
-        var dictionary = await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId);
-        Assert.Null(dictionary.FileHash);
-    }
-
-    [Fact]
     public async Task A_file_hash_from_the_callers_own_library_is_kept()
     {
         await using var db = NewContext();
@@ -349,26 +351,6 @@ public class BookImportServiceTests
 
         var dictionary = await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId);
         Assert.Equal(hash, dictionary.FileHash);
-    }
-
-    [Fact]
-    public async Task Another_users_library_does_not_vouch_for_a_hash()
-    {
-        await using var db = NewContext();
-        var hash = new string('a', 64);
-
-        db.ReaderBooks.Add(new ReaderBook
-        {
-            UserId = 2, FileHash = hash, Title = "Wool", ChaptersCount = 2,
-            CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
-        });
-        await db.SaveChangesAsync();
-
-        var service = new BookImportService(db);
-        var result = await service.ImportAsync(TwoChapterBook() with { FileHash = hash }, ownerId: 1, status: PublicationStatus.Published);
-
-        var dictionary = await db.Dictionaries.SingleAsync(d => d.Id == result.DictionaryId);
-        Assert.Null(dictionary.FileHash);
     }
 
     [Fact]

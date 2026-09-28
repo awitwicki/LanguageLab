@@ -30,24 +30,27 @@ bulk-deletes a user's dictionaries the same way, for use alongside a ban.
 
 ## Import validation
 
-In `BookImportService` and `LanguageLab.Domain`:
+In `BookFileImportService`, `ImportTokenizer`, `BookImportService` and `LanguageLab.Domain`:
 
-- A word must be lowercase ASCII letters, 3–64 characters (`ImportWordText`), or it is dropped from
-  the import.
-- An import where more than 20% of its distinct words are invalid is refused outright.
+- `POST /api/dictionaries/import` is `multipart/form-data`: `file` (the fb2/epub/zip bytes),
+  `requestPublication` and `chapterMode` (chapter depth; absent = leaf, the same rule as the
+  import screen's preview). The server hashes the bytes (SHA-256 → `Dictionary.FileHash` — the
+  hash is now the server's own, so nothing vouches for it), parses them with `IBookParser`, cuts
+  chapters with `BookChapters.Flatten`, and tokenizes each chapter: clean a-z tokens go through
+  the English lexicon, and only known lemmas are kept — names, gibberish and non-English words
+  are dropped.
+- A stored word is lowercase ASCII letters, 2–64 characters (`ImportWordText`); two-letter words
+  are importable only because the lexicon vouches for them (`go`, `ox`).
+- An upload whose text is less than half lexicon-known occurrences (stop words count as known)
+  is refused as `not_english`; an unreadable or DRM-protected file is `invalid_book` /
+  `encrypted_book` (`DictionaryError.Error` — the SPA words these for the user).
+- On success the response is `ImportResult` plus `translationQueued`: the dictionary is queued
+  for background translation into the importer's language (a learner with no language picked
+  imports fine, just unqueued).
 - Limits: 50,000 distinct words and 2,000 chapters per import
   (`BookImportService.MaxWords`/`MaxChapters`); names and chapter titles truncated at 300
-  characters (`TitleText.MaxLength`); a 16 MB request-body cap on `/api/dictionaries/import`
-  itself; bulk personal-word import capped at 500 entries
-  (`PersonalDictionaryService.MaxBulkEntries`).
-
-`Dictionary.FileHash` — set on import, a SHA-256 of the book file, see [reader.md](reader.md) — is
-kept only when the importer's own `ReaderBook` library already holds that hash; otherwise it is
-dropped even if the client sent one. This is not proof the hash is genuine, since a client can
-register any hash first, but it raises the bar past a casual collision or a drive-by import with no
-`ReaderBook` at all. The real backstop against a stranger's junk import reaching other readers is
-publication review, not this check: an unreviewed import is `Private`, invisible to everyone but
-its owner and admins regardless of what hash it claims.
+  characters (`TitleText.MaxLength`); a 16 MB request cap on the upload; bulk personal-word
+  import capped at 500 entries (`PersonalDictionaryService.MaxBulkEntries`).
 
 ## The personal dictionary
 
@@ -132,9 +135,11 @@ endpoints one account could otherwise make expensive for everybody, per day:
 
 | Endpoint | Limit |
 |---|---|
-| `POST /api/dictionaries/import` | 20 requests |
+| `POST /api/dictionaries/import` | 1 request (admins exempt) |
 | `GET /api/translate` | 500 lookups |
 | bulk personal-word import | 20 requests |
+
+A refused request answers 429 with a `Retry-After` header naming the wait in seconds.
 
 ## Training
 

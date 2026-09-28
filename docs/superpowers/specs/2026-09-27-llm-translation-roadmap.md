@@ -161,9 +161,12 @@ public static class BookChapters                        // the import preview's 
 public sealed record ParsedChapter(int Order, string Title, string Text);
 ```
 
-HTTP contract for C3/C4: `POST /api/dictionaries/import` becomes `multipart/form-data` with
-`file` (≤16 MB) and `requestPublication`; the name comes from the book's own title. Response:
-`ImportResult` as today plus `translationQueued: bool`. 429 carries `Retry-After`.
+HTTP contract for C4 (landed with C3): `POST /api/dictionaries/import` is `multipart/form-data`
+with `file` (≤16 MB), `requestPublication` and `chapterMode` (int; absent = leaf); the name
+comes from the book's own title, else the file name. Response: `ImportResult` plus
+`translationQueued: bool`. 429 carries `Retry-After`. A refusal is
+`DictionaryError{message, error?}` with `error` ∈ `invalid_book` | `encrypted_book` |
+`not_english` for the cases the SPA words itself.
 
 Where they live: `LanguageLab.Application/Translation` (`ILlmClient`, `LlmRequest`,
 `LlmExceptions.cs`, `IWordBatchTranslator`, `ITranslationQueue`),
@@ -324,3 +327,10 @@ Wave 3  └────────────── merge to dev, D1 docs, end
   refusal is `BookFormatException(Invalid|Encrypted)`, including the parser's limits: zip 5,000
   entries / 32 MB per entry / 64 MB total, nesting 256, 30 s per book. No file-name fallback: `Title`
   is "" when the book names none (C3's job).
+- 2026-09-29 — C3 merged into dev: `POST /api/dictionaries/import` takes the file itself
+  (multipart + `chapterMode`); server SHA-256 is the `FileHash` (ReaderBook vouching dropped);
+  `ImportTokenizer` keeps only lexicon lemmas and refuses < 50 % known occurrences as
+  `not_english` (`DictionaryError.Error` codes for C4); `ImportResult` + `translationQueued`;
+  enqueue for the importer's language on import; 1 import/day (admins exempt), 429s carry
+  `Retry-After`; `ImportWordText.MinLength` 3 → 2. The SPA still sends the old JSON until C4 —
+  import in the UI is down on dev until then (accepted).

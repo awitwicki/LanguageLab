@@ -49,6 +49,11 @@ The services on top of the domain:
   packages `AngleSharp` (1.8.2) and `AngleSharp.Xml` (1.2.0). The input is untrusted: zip limits
   (5,000 entries, 32 MB per entry, 64 MB in total), no DTDs or external entities, element nesting
   capped at 256, 30 seconds per book.
+- **Server-side import** — `Import/`: `BookFileImportService` drives bytes → SHA-256 →
+  `IBookParser` → `BookChapters.Flatten` → `ImportTokenizer` (clean, stop-word and number-word
+  drop, lexicon lemmas, the ≥50 % English-coverage gate) → `BookImportService`, then queues
+  background translation for the importer's language. The file is parsed in memory and never
+  stored.
 - **The home screen's recent work** — `RecentActivityService`: the last finished session per scope,
   and the scopes still being sorted. Both drop what the caller can no longer open.
 - **The personal dictionary** — `PersonalDictionaryService`, the user's own word list.
@@ -128,9 +133,9 @@ than one lemma. It is written twice and a test keeps the copies byte-identical:
 `web/public/lexicon/english-lexicon.txt` (a static asset, read by `src/lexicon/lexicon.ts`).
 SCOWL's and AGID's notices sit next to both as `LICENSE-SCOWL.txt` / `LICENSE-AGID.txt`.
 
-Nothing uses it yet: the server-side book import will lemmatize and whitelist with it (C3 of
-the [LLM roadmap](superpowers/specs/2026-09-27-llm-translation-roadmap.md)), and the reader's
-highlights and word panel will switch to the SPA loader (C4).
+The server-side book import lemmatizes and whitelists with it (`ImportTokenizer` in
+`LanguageLab.Application/Import/`); the reader's highlights and word panel switch to the SPA
+loader with C4 of the [LLM roadmap](superpowers/specs/2026-09-27-llm-translation-roadmap.md).
 
 ## API surface
 

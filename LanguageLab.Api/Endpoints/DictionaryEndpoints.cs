@@ -1,4 +1,6 @@
 using LanguageLab.Api.Auth;
+using LanguageLab.Application.Books;
+using LanguageLab.Application.Import;
 using LanguageLab.Application.Services;
 using LanguageLab.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -17,8 +19,12 @@ public sealed record AddPersonalWordsRequest(IReadOnlyList<BulkWordEntryRequest>
 
 public sealed record UpdatePersonalWordRequest(string? Translation);
 
-/// <summary>A refusal written for the user; the client shows Message instead of the status code.</summary>
-public sealed record DictionaryError(string Message);
+/// <summary>
+/// A refusal written for the user; the client shows Message instead of the status code.
+/// Error is a machine code for refusals the SPA words itself (C4): "invalid_book",
+/// "encrypted_book" or "not_english"; null for plain validation messages.
+/// </summary>
+public sealed record DictionaryError(string Message, string? Error = null);
 
 public sealed record DictionaryDetail(
     long Id,
@@ -199,17 +205,52 @@ public static class DictionaryEndpoints
                 dictionary.PublicationStatus));
         });
 
+        // Since C3 the import takes the book file itself: the server hashes, parses, tokenizes
+        // against the lexicon and imports — the client never sends word lists (the C4 SPA
+        // switch-over consumes this contract).
         group.MapPost("/import", async (
-            ImportRequest request, BookImportService import, ICurrentUserContext currentUser) =>
+            [FromForm] IFormFile? file,
+            [FromForm] int? chapterMode,
+            BookFileImportService import,
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language,
+            CancellationToken cancellationToken,
+            [FromForm] bool requestPublication = false) =>
         {
             var (userId, role) = currentUser.Require();
+
+            if (file is null || file.Length == 0)
+            {
+                return Results.Json(
+                    new DictionaryError("The upload has no book file."),
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            byte[] bytes;
+
+            using (var buffer = new MemoryStream((int)file.Length))
+            {
+                await file.CopyToAsync(buffer, cancellationToken);
+                bytes = buffer.ToArray();
+            }
 
             try
             {
                 var result = await import.ImportAsync(
-                    request, userId, BookImportService.StatusFor(role, request.RequestPublication));
+                    bytes, file.FileName, new ChapterMode(chapterMode), requestPublication,
+                    userId, role, language.Get(), cancellationToken);
 
                 return Results.Ok(result);
+            }
+            catch (BookFormatException e)
+            {
+                var code = e.Error == BookFormatError.Encrypted ? "encrypted_book" : "invalid_book";
+
+                return Results.Json(new DictionaryError(e.Message, code), statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (NotEnglishBookException e)
+            {
+                return Results.Json(new DictionaryError(e.Message, "not_english"), statusCode: StatusCodes.Status400BadRequest);
             }
             catch (ArgumentException e)
             {
@@ -218,8 +259,11 @@ public static class DictionaryEndpoints
                 return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status400BadRequest);
             }
         })
-          // A 50 000-word book is a few megabytes of JSON; the global 64 MB is headroom this
-          // endpoint does not need, and it is the only one a stranger can make large.
+          // Form binding demands antiforgery or an explicit opt-out; the API's CSRF story is the
+          // SameSite session cookie, same as every other endpoint here (docs/auth.md).
+          .DisableAntiforgery()
+          // A book file is a few megabytes; the global 64 MB is headroom this endpoint does not
+          // need, and it is the only one a stranger can make large.
           .WithMetadata(new RequestSizeLimitAttribute(16L * 1024 * 1024))
           .RequireRateLimiting(UserRateLimits.Import);
 
