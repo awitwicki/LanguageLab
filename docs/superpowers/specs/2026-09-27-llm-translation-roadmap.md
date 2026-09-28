@@ -218,7 +218,7 @@ differently (also written into the affected interfaces' XML doc-comments):
 
 ### B. Background dictionary translation
 
-- [~] **B1. Queue + worker** (spec: `2026-09-28-llm-b1-translation-queue-design.md`; wt: llm-b1) — `TranslationJob` table (`DictionaryId`, `Language`, status,
+- [x] **B1. Queue + worker** (spec: `2026-09-28-llm-b1-translation-queue-design.md`) — `TranslationJob` table (`DictionaryId`, `Language`, status,
   progress, attempts, unique on the pair) + migration; `ITranslationQueue`; a `BackgroundService`
   that picks a job, selects the dictionary's shared words with no `WordTranslation` in that
   language, translates them through `IWordBatchTranslator` in batches, writes `Machine` rows,
@@ -231,7 +231,7 @@ differently (also written into the affected interfaces' XML doc-comments):
 
 ### C. Server-side import
 
-- [~] **C1. English lexicon** (spec: `2026-09-28-llm-c1-english-lexicon-design.md`; wt: llm-c1) — build script under `scripts/` (SCOWL/AGID, size 60 per Q3), the
+- [x] **C1. English lexicon** (spec: `2026-09-28-llm-c1-english-lexicon-design.md`; wt: llm-c1) — build script under `scripts/` (SCOWL/AGID, size 60 per Q3), the
   data file as an embedded resource, `EnglishLexicon : IEnglishLexicon`, and the same table as a
   static SPA asset with a small TS `lemmaOf` loader + tests. The data is generated: C1 documents
   `scripts/build_lexicon.py` in `CLAUDE.md` (Project layout, plus an invariant: never edit
