@@ -31,10 +31,14 @@ public class BookFileImportServiceTests
     ];
 
     private static (BookFileImportService Service, FakeTranslationQueue Queue) Make(
-        ApplicationDbContext db, FakeEnglishLexicon lexicon)
+        ApplicationDbContext db, FakeEnglishLexicon lexicon) =>
+        Make(db, lexicon, new ImportQuota(TimeProvider.System));
+
+    private static (BookFileImportService Service, FakeTranslationQueue Queue) Make(
+        ApplicationDbContext db, FakeEnglishLexicon lexicon, ImportQuota quota)
     {
         var queue = new FakeTranslationQueue();
-        var service = new BookFileImportService(new BookParser(), lexicon, new BookImportService(db), queue);
+        var service = new BookFileImportService(new BookParser(), lexicon, new BookImportService(db), queue, quota);
 
         return (service, queue);
     }
@@ -42,9 +46,10 @@ public class BookFileImportServiceTests
     // default(ChapterMode) is Depth null — exactly ChapterMode.Leaf.
     private static Task<ImportResult> Import(
         BookFileImportService service, byte[] file, string fileName = "book.fb2",
-        ChapterMode mode = default, bool requestPublication = false, LearnerLanguage? language = null) =>
+        ChapterMode mode = default, bool requestPublication = false, LearnerLanguage? language = null,
+        UserRole role = UserRole.User) =>
         service.ImportAsync(
-            file, fileName, mode, requestPublication, ownerId: 1, UserRole.User, language, CancellationToken.None);
+            file, fileName, mode, requestPublication, ownerId: 1, role, language, CancellationToken.None);
 
     private const string FrenchFb2 = """
         <FictionBook><description><title-info><book-title>Jardin</book-title></title-info></description>
@@ -238,5 +243,51 @@ public class BookFileImportServiceTests
         Assert.Equal("Death's End", dictionary.Name);
         Assert.Equal(3, await db.Chapters.CountAsync(c => c.DictionaryId == result.DictionaryId));
         Assert.Equal((result.DictionaryId, "pl"), Assert.Single(queue.Enqueued));
+    }
+
+    // Review Focus: a failed import must not spend the day's slot.
+    [Fact]
+    public async Task A_refused_book_does_not_spend_the_quota()
+    {
+        await using var db = NewContext();
+        var quota = new ImportQuota(new ManualTimeProvider(DateTimeOffset.UtcNow));
+        var (service, _) = Make(db, Lexicon(ReaderBookWords), quota);
+
+        await Assert.ThrowsAsync<NotEnglishBookException>(() => Import(service, BookFixtures.Utf8(FrenchFb2)));
+
+        // Immediately retryable: the refusal above did not spend the day's slot.
+        var result = await Import(service, BookFixtures.Utf8(BookFixtures.ReaderBookXml));
+
+        Assert.True(result.DictionaryId > 0);
+    }
+
+    [Fact]
+    public async Task A_second_import_today_is_refused_after_a_successful_one()
+    {
+        await using var db = NewContext();
+        var quota = new ImportQuota(new ManualTimeProvider(DateTimeOffset.UtcNow));
+        var (service, _) = Make(db, Lexicon(ReaderBookWords), quota);
+
+        await Import(service, BookFixtures.Utf8(BookFixtures.ReaderBookXml));
+
+        var refused = await Assert.ThrowsAsync<ImportQuotaExceededException>(
+            () => Import(service, BookFixtures.Utf8(BookFixtures.ReaderBookXml)));
+
+        Assert.Equal(ImportQuota.Window, refused.RetryAfter);
+    }
+
+    // Review Focus: an admin stays exempt even after a success of their own, not only before it.
+    [Fact]
+    public async Task An_admin_bypasses_the_quota_even_after_a_success()
+    {
+        await using var db = NewContext();
+        var quota = new ImportQuota(new ManualTimeProvider(DateTimeOffset.UtcNow));
+        var (service, _) = Make(db, Lexicon(ReaderBookWords), quota);
+
+        await Import(service, BookFixtures.Utf8(BookFixtures.ReaderBookXml), role: UserRole.Admin);
+
+        var second = await Import(service, BookFixtures.Utf8(BookFixtures.ReaderBookXml), role: UserRole.Admin);
+
+        Assert.True(second.DictionaryId > 0);
     }
 }

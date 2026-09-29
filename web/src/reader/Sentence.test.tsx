@@ -1,14 +1,28 @@
 import { describe, expect, it, vi } from 'vitest'
 import { click, render } from '../test/render'
+import type { Lexicon } from '../lexicon/lexicon'
 import { splitSentences, type ReaderSentence } from './readerBook'
 import { Sentence, type SentenceTranslation } from './Sentence'
 import { toStatusMap } from './wordStatus'
 
+function fakeLexicon(entries: Record<string, string[]>): Lexicon {
+  return {
+    lemmasOf: (form) => entries[form] ?? [],
+    lemmaOf: (form) => entries[form]?.[0] ?? null,
+  }
+}
+
+const lexicon = fakeLexicon({ tried: ['try'], try: ['try'], adjust: ['adjust'], man: ['man'] })
 const [sentence] = splitSentences('Most men tried to adjust quickly.')
 const statuses = toStatusMap({ learning: ['adjust'], known: ['man'] })
 
 function renderSentence(
-  overrides: { canTranslate?: boolean; translation?: SentenceTranslation; sentence?: ReaderSentence } = {},
+  overrides: {
+    canTranslate?: boolean
+    translation?: SentenceTranslation
+    sentence?: ReaderSentence
+    lexicon?: Lexicon | null
+  } = {},
 ) {
   const onWordTap = vi.fn()
   const onToggleTranslation = vi.fn()
@@ -19,6 +33,7 @@ function renderSentence(
       positionKey="0.0.0"
       paragraphStart={false}
       statuses={statuses}
+      lexicon={overrides.lexicon === undefined ? lexicon : overrides.lexicon}
       selectedToken={null}
       canTranslate={overrides.canTranslate ?? true}
       translation={overrides.translation}

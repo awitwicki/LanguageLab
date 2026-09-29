@@ -71,3 +71,23 @@ export function formatDue(dueAt: string | null, isLearned: boolean, now: Date): 
   const mm = String(due.getUTCMonth() + 1).padStart(2, '0')
   return `${dd}.${mm}`
 }
+
+/**
+ * A rough wait, for "try again in ~X" copy — never claims more precision than a sliding
+ * day-window quota actually has.
+ */
+export function formatWait(seconds: number): string {
+  if (seconds < 60) {
+    return 'less than a minute'
+  }
+
+  const minutes = Math.round(seconds / 60)
+
+  if (minutes < 60) {
+    return `about ${minutes} ${plural(minutes, 'minute', 'minutes')}`
+  }
+
+  const hours = Math.round(seconds / 3600)
+
+  return `about ${hours} ${plural(hours, 'hour', 'hours')}`
+}

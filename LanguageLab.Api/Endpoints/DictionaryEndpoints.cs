@@ -1,3 +1,4 @@
+using System.Globalization;
 using LanguageLab.Api.Auth;
 using LanguageLab.Application.Books;
 using LanguageLab.Application.Import;
@@ -251,6 +252,7 @@ public static class DictionaryEndpoints
             BookFileImportService import,
             ICurrentUserContext currentUser,
             ICurrentLanguage language,
+            HttpContext httpContext,
             CancellationToken cancellationToken,
             [FromForm] bool requestPublication = false) =>
         {
@@ -279,6 +281,13 @@ public static class DictionaryEndpoints
 
                 return Results.Ok(result);
             }
+            catch (ImportQuotaExceededException e)
+            {
+                httpContext.Response.Headers.RetryAfter =
+                    ((int)Math.Ceiling(e.RetryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+
+                return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status429TooManyRequests);
+            }
             catch (BookFormatException e)
             {
                 var code = e.Error == BookFormatError.Encrypted ? "encrypted_book" : "invalid_book";
@@ -302,7 +311,10 @@ public static class DictionaryEndpoints
           // A book file is a few megabytes; the global 64 MB is headroom this endpoint does not
           // need, and it is the only one a stranger can make large.
           .WithMetadata(new RequestSizeLimitAttribute(16L * 1024 * 1024))
-          .RequireRateLimiting(UserRateLimits.Import);
+          // A loose attempts ceiling, independent of ImportQuota's 1-success/day: the middleware
+          // rejects before the body is even read, so a spent-quota or repeatedly-wrong-file
+          // caller cannot make the server buffer and parse an unbounded number of uploads.
+          .RequireRateLimiting(UserRateLimits.ImportAttempts);
 
         // A personal dictionary is invisible to everyone but its owner, even an admin — same
         // rule as the read paths (DictionaryAccessService.Visible); DictionaryDeletionService

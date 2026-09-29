@@ -1,3 +1,4 @@
+using LanguageLab.Application.Import;
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
 using LanguageLab.Domain;
@@ -5,7 +6,7 @@ using LanguageLab.Domain.Languages;
 
 namespace LanguageLab.Api.Endpoints;
 
-public sealed record ReaderCapabilities(bool SentenceTranslation);
+public sealed record ReaderCapabilities(bool SentenceTranslation, int? ImportRetryAfterSeconds);
 
 public sealed record RegisterReaderBookRequest(string? Title, string? Author, int ChaptersCount);
 
@@ -25,8 +26,15 @@ public static class ReaderEndpoints
     {
         var group = app.MapGroup("/api/reader").RequireAuthorization();
 
-        group.MapGet("/capabilities", (ISentenceTranslator sentences) =>
-            Results.Ok(new ReaderCapabilities(sentences.IsConfigured)));
+        group.MapGet("/capabilities", (ISentenceTranslator sentences, ImportQuota quota, ICurrentUserContext currentUser) =>
+        {
+            var (userId, role) = currentUser.Require();
+            var retryAfter = quota.RetryAfter(userId, role);
+
+            return Results.Ok(new ReaderCapabilities(
+                sentences.IsConfigured,
+                retryAfter is { } wait ? (int)Math.Ceiling(wait.TotalSeconds) : null));
+        });
 
         group.MapGet("/books", async (ReaderBookService books, ICurrentUserContext currentUser) =>
         {

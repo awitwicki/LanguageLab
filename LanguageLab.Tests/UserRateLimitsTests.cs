@@ -53,20 +53,6 @@ public class UserRateLimitsTests
         Assert.Equal("anonymous", UserRateLimits.PartitionKey(new ClaimsPrincipal(new ClaimsIdentity())));
     }
 
-    // Q5: admins are exempt from the import cap; every other limit still applies to them.
-    [Fact]
-    public void An_admin_is_exempt_from_the_import_limit()
-    {
-        Assert.True(UserRateLimits.IsImportExempt(PrincipalFactory.Create(7, UserRole.Admin)));
-    }
-
-    [Fact]
-    public void Ordinary_users_and_anonymous_requests_are_not_exempt()
-    {
-        Assert.False(UserRateLimits.IsImportExempt(PrincipalFactory.Create(7, UserRole.User)));
-        Assert.False(UserRateLimits.IsImportExempt(null));
-    }
-
     [Fact]
     public void A_refused_lease_names_the_wait()
     {

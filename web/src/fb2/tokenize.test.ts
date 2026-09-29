@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanWord, consolidateIngForms, isRejected, splitCompoundWord } from './tokenize'
+import { cleanWord, isRejected } from './tokenize'
 
 describe('cleanWord', () => {
   it('lowercases and strips punctuation but keeps hyphens', () => {
@@ -19,23 +19,9 @@ describe('cleanWord', () => {
   })
 })
 
-describe('splitCompoundWord', () => {
-  it('splits on hyphens and keeps parts longer than two letters', () => {
-    expect(splitCompoundWord('well-known').sort()).toEqual(['known', 'well'])
-  })
-
-  it('drops parts that are too short', () => {
-    expect(splitCompoundWord('x-ray')).toEqual(['ray'])
-  })
-})
-
 describe('isRejected', () => {
   it('rejects stopwords', () => {
     expect(isRejected('the')).toBe(true)
-  })
-
-  it('rejects words shorter than three letters', () => {
-    expect(isRejected('go')).toBe(true)
   })
 
   it('rejects anything with digits', () => {
@@ -51,29 +37,13 @@ describe('isRejected', () => {
     expect(isRejected('silo')).toBe(false)
   })
 
+  it('no longer rejects by length alone — that now depends on the lexicon (wordStatus.ts)', () => {
+    expect(isRejected('go')).toBe(false)
+  })
+
   it('rejects contractions instead of leaking a stripped-apostrophe form', () => {
     expect(isRejected(cleanWord('wasn’t'))).toBe(true)
     expect(isRejected(cleanWord('you’re'))).toBe(true)
     expect(isRejected(cleanWord("that's"))).toBe(true)
-  })
-})
-
-describe('consolidateIngForms', () => {
-  it('drops an -ing form when its verb base is present', () => {
-    const vocabulary = new Set(['surround', 'surrounding', 'silo'])
-
-    expect([...consolidateIngForms(vocabulary)].sort()).toEqual(['silo', 'surround'])
-  })
-
-  it('keeps an -ing form when the base is absent', () => {
-    const vocabulary = new Set(['surrounding'])
-
-    expect([...consolidateIngForms(vocabulary)]).toEqual(['surrounding'])
-  })
-
-  it('keeps homographs that are nouns in their own right', () => {
-    const vocabulary = new Set(['building', 'build'])
-
-    expect([...consolidateIngForms(vocabulary)].sort()).toEqual(['build', 'building'])
   })
 })

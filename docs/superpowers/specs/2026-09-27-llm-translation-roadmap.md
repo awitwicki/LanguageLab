@@ -111,6 +111,19 @@ respect, the contracts that let them run in parallel, and progress.
   loanwords unchanged), so `LlmWordBatchTranslator` keeps any non-empty string answer instead of
   filtering echoes. A3's sentence prompt should rely on the same "omit what you can't answer"
   instruction rather than add an echo check of its own.
+- 2026-09-29 (Q8, amends C3) — The 1-import/day quota now counts only a *successful* import, not
+  every attempt: a wrong file, a non-English book or DRM is immediately retryable, not a ~24h
+  lockout. C3's declarative `UserRateLimits.Import` (`SlidingWindowRateLimiter` middleware, which
+  consumes its permit before the handler runs and cannot see the outcome) is replaced by C4 with an
+  in-memory `ImportQuota` the service asks itself — same "a restart forgives everybody" style as
+  `SentenceQuota`. `TryReserve`/`ReleaseReservation` check and reserve the slot in one atomic step
+  (a separate check-then-record pair let concurrent requests all pass the check before any of them
+  finished — final review finding); a failure releases the reservation. A loose,
+  success-independent `ImportAttempts` policy (20/day, `UserRateLimits`) stays on the endpoint so
+  it is not left fully unthrottled and a quota-spent request is rejected before its body is read.
+  `ReaderCapabilities` gains `ImportRetryAfterSeconds` (a read-only peek, `RetryAfter`, never
+  reserves) so the reader's Build dictionary button can show its wait without a click. See
+  `2026-09-29-llm-c4-frontend-import-design.md`.
 
 No open questions remain at roadmap level; each workstream's spec settles its own details and
 adds a decision here only when it changes something another workstream relies on.
@@ -252,7 +265,7 @@ differently (also written into the affected interfaces' XML doc-comments):
   `ReaderBook`-must-exist check, since the hash is now proven), tokenize → `IEnglishLexicon` →
   counts per chapter → existing `BookImportService` core; 1 import/day, admins exempt (Q5);
   enqueue B. *Needs:* C1, C2, B1.
-- [~] **C4. Frontend** (wt: llm-c4) — `ImportScreen` uploads the file with progress; delete
+- [x] **C4. Frontend** (wt: llm-c4) — `ImportScreen` uploads the file with progress; delete
   `parseBook.worker.ts`, `web/src/fb2/aggregate.ts`/`lemmatize.ts`, `useAutoImport.ts` and the
   `compromise` / `wink-lemmatizer` deps; switch the reader's highlights and word panel to the C1
   `lemmaOf` loader; the reader's **Build dictionary** button (Q4); re-enable import inside the
@@ -306,8 +319,8 @@ Wave 3  └────────────── merge to dev, D1 docs, end
 ## README TODO items this closes
 
 - [x] Auto-translate on book import and on "don't know" — B1 + B2
-- [ ] Book import inside the Telegram Mini App — C3 + C4
-- [ ] Flaky `ImportScreen.test.tsx` worker-parse previews — C4 (the worker goes away)
+- [x] Book import inside the Telegram Mini App — C3 + C4
+- [x] Flaky `ImportScreen.test.tsx` worker-parse previews — C4 (the worker goes away)
 - [ ] One-off audit of shared `WordPair` rows that predate the import word rule — partially: C1
   gives the criterion; the cleanup itself stays a TODO
 - Not closed, more relevant: admin review of machine translations; FileHash collision in the
@@ -364,3 +377,18 @@ Wave 3  └────────────── merge to dev, D1 docs, end
   after already saving the shelf change. Known follow-up, not part of this merge: the mark
   endpoint's translate is synchronous and now inherits A2's LLM client's timeout rather than the
   old MyMemory one — see the README TODO next to "Auto-translate on book import…".
+- 2026-09-29 — C4 merged into dev: `ImportScreen` and the reader's new **Build dictionary** button
+  upload the file itself (multipart, with progress); the whole client-side lemmatization pipeline
+  (the parse worker, `aggregate.ts`/`lemmatize.ts`, `wordExtractor.ts`, `useAutoImport.ts`,
+  `compromise`, `wink-lemmatizer`) is deleted. Reader highlighting and the word panel resolve
+  lemmas through the C1 lexicon (`resolveWord`/`bookLemmaCounts` take a `Lexicon | null`; `null`
+  while it loads or on failure degrades like `statusesFailed`, never blocking reading). Import
+  works inside the Telegram Mini App again — the worker was the only thing that didn't start
+  there. Q8's quota change shipped as `ImportQuota.TryReserve`/`ReleaseReservation` (atomic
+  reserve-then-release, not a separate check-then-record pair — final review caught that the
+  latter let concurrent requests all pass the check before any of them finished) plus a restored
+  loose `ImportAttempts` policy (20/day, `UserRateLimits`) so removing the old declarative limiter
+  didn't leave the endpoint fully unthrottled. Final review also caught `resolveWord`'s "new word"
+  fallback picking the wrong lemma for a form that is its own primary but lists a rarer alternate
+  after it (e.g. `morning` → `morn`) — a wink-lemmatizer-era heuristic left over from before
+  `lemmasOf` became primary-first; fixed to use the first candidate.
