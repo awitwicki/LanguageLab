@@ -4,9 +4,8 @@ using System.Text;
 namespace LanguageLab.Tests.Fakes;
 
 /// <summary>
-/// An <see cref="HttpMessageHandler"/> that answers from a delegate and records what was sent — the
-/// shared form of the private StubHandler in DeepLTranslatorTests, for the LLM clients' tests and
-/// the translators built on them. The delegate may throw to simulate a network failure.
+/// An <see cref="HttpMessageHandler"/> that answers from a delegate and records what was sent, for
+/// the LLM clients' tests and the translators built on them. The delegate may throw to simulate a network failure.
 /// </summary>
 public sealed class StubHttpHandler : HttpMessageHandler
 {

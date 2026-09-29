@@ -171,13 +171,19 @@ describe('translateSentence', () => {
 
   it('names the two limits apart from other failures', async () => {
     answer(429)
-    expect(await api.translateSentence('Hello.')).toEqual({ status: 'limit' })
+    expect(await api.translateSentence('Hello.')).toEqual({ status: 'limit', retryAfterSeconds: null })
 
     answer(503, { reason: 'quota' })
     expect(await api.translateSentence('Hello.')).toEqual({ status: 'quota' })
 
     answer(502)
     expect(await api.translateSentence('Hello.')).toEqual({ status: 'failed' })
+  })
+
+  it('reads the wait of a 429 from Retry-After', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 429, headers: { 'Retry-After': '7' } })))
+
+    expect(await api.translateSentence('Hello.')).toEqual({ status: 'limit', retryAfterSeconds: 7 })
   })
 
   it('turns a network error into a failure', async () => {
@@ -196,5 +202,21 @@ describe('translateSentence', () => {
     answer(413)
 
     expect(await api.translateSentence('Hello.')).toEqual({ status: 'tooLong' })
+  })
+})
+
+describe('a 429 from a plain request', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('names the wait from Retry-After', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 429, headers: { 'Retry-After': '10' } })))
+
+    await expect(api.translate('apple')).rejects.toThrow('Too many requests. Try again in 10 seconds.')
+  })
+
+  it('still reads well without Retry-After', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('', { status: 429 })))
+
+    await expect(api.translate('apple')).rejects.toThrow('Too many requests. Try again later.')
   })
 })

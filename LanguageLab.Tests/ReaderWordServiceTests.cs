@@ -3,6 +3,7 @@ using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
+using LanguageLab.Tests.Fakes;
 using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Tests;
@@ -54,10 +55,12 @@ public class ReaderWordServiceTests
         return db;
     }
 
-    private static ReaderWordService Service(ApplicationDbContext db, string? providerAnswer = null) =>
+    private static ReaderWordService Service(
+        ApplicationDbContext db, string? providerAnswer = null, UncachedTranslationLimiter? limiter = null) =>
         new(
             db,
-            new TranslationService(db, new FakeTranslator(providerAnswer)),
+            new TranslationService(
+                db, new FakeTranslator(providerAnswer), limiter ?? new UncachedTranslationLimiter(TimeProvider.System)),
             new ReaderWordStatusService(db),
             new WordSortingService(db),
             new PersonalDictionaryService(db, new WordSelectionService(db), new LearningProgressService(db)),
@@ -339,5 +342,21 @@ public class ReaderWordServiceTests
         await Service(db).ResetAsync(User, "adjust");
 
         Assert.True(await db.KnownWords.AnyAsync(k => k.UserId == Other && k.WordPairId == 1));
+    }
+
+    [Fact]
+    public async Task A_rate_limited_lookup_still_answers_the_panel_without_a_translation()
+    {
+        await using var db = await ArrangeAsync();
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-09-29T12:00:00Z"));
+        var service = Service(db, "сирота", new UncachedTranslationLimiter(clock));
+
+        await service.GetAsync(User, UserRole.User, LearnerLanguages.Default, "orphan", 10, CancellationToken.None);
+        clock.Advance(TimeSpan.FromSeconds(3));
+        var view = await service.GetAsync(User, UserRole.User, LearnerLanguages.Default, "waif", 10, CancellationToken.None);
+
+        Assert.Equal(
+            new ReaderWordView("waif", null, TranslationSource.RateLimited, ReaderWordShelf.New, false, LearnTarget.Personal, 7),
+            view);
     }
 }

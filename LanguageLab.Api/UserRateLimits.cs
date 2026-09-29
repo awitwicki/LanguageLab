@@ -10,8 +10,8 @@ namespace LanguageLab.Api;
 /// Per-user daily caps on the endpoints a single account can make expensive for everybody:
 /// importing books (which now costs a parse and background translation), asking the translation
 /// provider, and bulk-adding personal words. Counted in requests, which is what the middleware
-/// counts. Held in memory like SentenceQuota: a restart forgives everybody, and no storage is
-/// introduced.
+/// counts. Held in memory like ImportQuota and UncachedTranslationLimiter: a restart forgives everybody,
+/// and no storage is introduced.
 /// </summary>
 public static class UserRateLimits
 {

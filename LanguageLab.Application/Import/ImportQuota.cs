@@ -6,9 +6,9 @@ namespace LanguageLab.Application.Import;
 /// <summary>
 /// The 1-import/day cap, counted only against a *successful* import (2026-09-29 roadmap decision):
 /// a wrong file, a non-English book or DRM must not spend the day's slot. A limiter the service
-/// asks itself, in memory — a restart forgives everybody — same style as SentenceQuota
-/// (LanguageLab.Api/SentenceQuota.cs), but keyed on outcome rather than on every request, which
-/// the declarative rate-limiter middleware cannot express.
+/// asks itself, in memory — a restart forgives everybody — same style as
+/// UncachedTranslationLimiter, but keyed on outcome rather than on every request, which the
+/// declarative rate-limiter middleware cannot express.
 ///
 /// TryReserve/ReleaseReservation, not RetryAfter alone, is what BookFileImportService gates on:
 /// checking and marking the slot spent must be one atomic step, or two concurrent imports for the

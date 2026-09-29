@@ -16,10 +16,12 @@ public enum LearnTarget
 /// <summary>
 /// CanReset: whether the panel may undo the button the word currently sits under. Off when there
 /// is nothing to undo, and off for a word with a Leitner row — undoing would throw progress away.
+/// RetryAfterSeconds: set only when Source is RateLimited — the panel still answers, without a
+/// translation, so its buttons keep working.
 /// </summary>
 public sealed record ReaderWordView(
     string Lemma, string? Translation, TranslationSource Source, ReaderWordShelf Shelf, bool CanReset,
-    LearnTarget LearnTarget);
+    LearnTarget LearnTarget, int? RetryAfterSeconds = null);
 
 public enum ResetOutcome
 {
@@ -78,12 +80,13 @@ public class ReaderWordService
         CancellationToken cancellationToken)
     {
         // First: the lookup may create the shared row, and the target check must see it.
-        var lookup = await _translation.LookupAsync(lemma, language, cancellationToken);
+        var lookup = await _translation.LookupAsync(userId, lemma, language, cancellationToken);
         var shelf = await _statuses.GetShelfAsync(userId, lemma);
         var target = await LearnTargetAsync(userId, role, language.Code, lemma, dictionaryId);
         var canReset = shelf.Shelf != ReaderWordShelf.New && !shelf.InTraining;
 
-        return new ReaderWordView(lemma, lookup.Translation, lookup.Source, shelf.Shelf, canReset, target);
+        return new ReaderWordView(
+            lemma, lookup.Translation, lookup.Source, shelf.Shelf, canReset, target, lookup.RetryAfterSeconds);
     }
 
     /// <summary>

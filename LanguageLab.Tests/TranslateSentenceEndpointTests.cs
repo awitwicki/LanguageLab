@@ -2,6 +2,7 @@ using LanguageLab.Api;
 using LanguageLab.Api.Endpoints;
 using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Languages;
+using LanguageLab.Tests.Fakes;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -34,9 +35,16 @@ public class TranslateSentenceEndpointTests
         }
     }
 
-    private static Task<IResult> Call(ISentenceTranslator translator, string? text, SentenceQuota? quota = null) =>
+    private static Task<IResult> Call(
+        ISentenceTranslator translator, string? text, UncachedTranslationLimiter? limiter = null, HttpContext? http = null) =>
         TranslationEndpoints.TranslateSentenceAsync(
-            new SentenceRequest(text), translator, quota ?? new SentenceQuota(), new FakeUser(), new FakeLanguage(), CancellationToken.None);
+            new SentenceRequest(text),
+            translator,
+            limiter ?? new UncachedTranslationLimiter(TimeProvider.System),
+            new FakeUser(),
+            new FakeLanguage(),
+            http ?? new DefaultHttpContext(),
+            CancellationToken.None);
 
     [Fact]
     public async Task A_translation_comes_back()
@@ -72,14 +80,42 @@ public class TranslateSentenceEndpointTests
     }
 
     [Fact]
-    public async Task A_spent_day_is_429_and_the_provider_is_not_asked()
+    public async Task A_second_sentence_inside_the_window_is_429_with_the_wait_and_the_provider_is_not_asked()
     {
         var translator = new FakeSentences(true, SentenceTranslation.Success("x"));
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-09-29T12:00:00Z"));
+        var limiter = new UncachedTranslationLimiter(clock);
+        await Call(translator, "Hello.", limiter);
 
-        var result = await Call(translator, "Hello there.", new SentenceQuota(characters: 5, window: TimeSpan.FromDays(1)));
+        clock.Advance(TimeSpan.FromSeconds(2.5));
+        var http = new DefaultHttpContext();
+        var result = await Call(translator, "Hello again.", limiter, http);
 
         Assert.Equal(429, Assert.IsType<StatusCodeHttpResult>(result).StatusCode);
-        Assert.Equal(0, translator.Calls);
+        Assert.Equal("8", http.Response.Headers.RetryAfter.ToString());
+        Assert.Equal(1, translator.Calls);
+    }
+
+    [Fact]
+    public async Task A_bad_request_does_not_spend_the_slot()
+    {
+        var translator = new FakeSentences(true, SentenceTranslation.Success("Привіт."));
+        var limiter = new UncachedTranslationLimiter(new ManualTimeProvider(DateTimeOffset.UnixEpoch));
+
+        Assert.IsType<BadRequest>(await Call(translator, "   ", limiter));
+        Assert.IsType<BadRequest>(await Call(translator, new string('a', TranslationEndpoints.MaxSentenceLength + 1), limiter));
+
+        Assert.IsType<Ok<SentenceTranslationResponse>>(await Call(translator, "Hello.", limiter));
+    }
+
+    [Fact]
+    public async Task Five_hundred_characters_are_accepted()
+    {
+        var result = await Call(
+            new FakeSentences(true, SentenceTranslation.Success("x")), new string('a', 500));
+
+        Assert.Equal(500, TranslationEndpoints.MaxSentenceLength);
+        Assert.IsType<Ok<SentenceTranslationResponse>>(result);
     }
 
     [Fact]

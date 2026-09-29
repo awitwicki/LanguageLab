@@ -88,7 +88,7 @@ export function PersonalDictionaryScreen({ onTrain, onReview, onChanged }: Props
         setLookupNote('Nothing found — type the translation yourself.')
       }
     } catch (e) {
-      setLookupNote(String(e))
+      setLookupNote(e instanceof Error ? e.message : String(e))
     } finally {
       setLookupBusy(false)
     }

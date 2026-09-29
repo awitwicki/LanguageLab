@@ -1,4 +1,4 @@
-import { formatWait } from '../lib/format'
+import { formatShortWait, formatWait } from '../lib/format'
 
 export type UserRole = 'user' | 'admin'
 
@@ -126,7 +126,8 @@ export interface PendingDictionaryPage {
   pageSize: number
 }
 
-export type TranslationSource = 'dictionary' | 'myMemory' | 'none'
+/** 'rateLimited' reaches the client only in the reader's word panel; GET /api/translate answers it with a 429. */
+export type TranslationSource = 'dictionary' | 'llm' | 'none' | 'rateLimited'
 
 export interface TranslationLookup {
   word: string
@@ -179,11 +180,13 @@ export interface ReaderWord {
   /** Whether tapping the marked button undoes it: off for a new word and for one in training. */
   canReset: boolean
   learnTarget: LearnTarget
+  /** Set only when source is 'rateLimited': seconds until a lookup may reach the translator again. */
+  retryAfterSeconds: number | null
 }
 
 export type SentenceTranslationResult =
   | { status: 'ok'; translation: string }
-  | { status: 'limit' }
+  | { status: 'limit'; retryAfterSeconds: number | null }
   | { status: 'quota' }
   | { status: 'tooLong' }
   | { status: 'failed' }
@@ -591,9 +594,24 @@ export function setUnauthorizedHandler(handler: () => void) {
   unauthorizedHandler = handler
 }
 
+/** A Retry-After header in seconds, or null when it is missing or not a number. */
+function retryAfterSeconds(header: string | null): number | null {
+  const seconds = header === null ? Number.NaN : Number(header)
+
+  return Number.isFinite(seconds) ? seconds : null
+}
+
 // Guarded actions answer 409 with { message }: the reason is written for the user, so show
 // it instead of the status code.
 async function errorMessage(response: Response, method: string, path: string) {
+  if (response.status === 429) {
+    const seconds = retryAfterSeconds(response.headers.get('Retry-After'))
+
+    return seconds === null
+      ? 'Too many requests. Try again later.'
+      : `Too many requests. Try again in ${formatShortWait(seconds)}.`
+  }
+
   try {
     const body = (await response.json()) as { message?: string }
 
@@ -677,11 +695,11 @@ function uploadForm<T>(path: string, form: FormData, onProgress?: UploadProgress
 
 function uploadErrorMessage(status: number, body: string, path: string, retryAfterHeader: string | null): string {
   if (status === 429) {
-    const seconds = retryAfterHeader === null ? Number.NaN : Number(retryAfterHeader)
+    const seconds = retryAfterSeconds(retryAfterHeader)
 
-    return Number.isFinite(seconds)
-      ? `You already imported a book today. Try again in ${formatWait(seconds)}.`
-      : 'You already imported a book today. Try again later.'
+    return seconds === null
+      ? 'You already imported a book today. Try again later.'
+      : `You already imported a book today. Try again in ${formatWait(seconds)}.`
   }
 
   try {
@@ -804,7 +822,7 @@ export const api = {
     }
 
     if (response.status === 429) {
-      return { status: 'limit' }
+      return { status: 'limit', retryAfterSeconds: retryAfterSeconds(response.headers.get('Retry-After')) }
     }
 
     if (response.status === 413) {

@@ -59,7 +59,7 @@ public static class SortingEndpoints
             if (marked)
             {
                 await TranslateIfUnknownAsync(
-                    sorting, translation, request.Status, request.WordPairId, language.Get(), cancellationToken);
+                    sorting, translation, request.Status, request.WordPairId, userId, language.Get(), cancellationToken);
             }
 
             // 404 rather than 403: an unknown id and someone else's private word look the
@@ -86,11 +86,12 @@ public static class SortingEndpoints
     /// <summary>
     /// On a fresh or repeated "don't know" mark, translates the shared word into language if it
     /// has none there yet — B2's Q6 "don't know" trigger. No-op for Known/Excluded, a personal
-    /// word, one already translated, or a caller with no language set yet.
+    /// word, one already translated, or a caller with no language set yet. A miss inside the
+    /// user's uncached-translation window leaves the word untranslated, like a model with no answer.
     /// </summary>
     public static async Task TranslateIfUnknownAsync(
         WordSortingService sorting, TranslationService translation, SortStatus status, long wordPairId,
-        LearnerLanguage? language, CancellationToken cancellationToken)
+        long userId, LearnerLanguage? language, CancellationToken cancellationToken)
     {
         if (status != SortStatus.Unknown || language is null)
         {
@@ -99,7 +100,7 @@ public static class SortingEndpoints
 
         if (await sorting.SharedWordNeedingTranslationAsync(wordPairId, language.Code) is { } word)
         {
-            await translation.LookupAsync(word, language, cancellationToken);
+            await translation.LookupAsync(userId, word, language, cancellationToken);
         }
     }
 }

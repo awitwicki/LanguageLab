@@ -5,7 +5,7 @@ namespace LanguageLab.Application.Translation;
 public enum SentenceTranslationStatus
 {
     Ok,
-    /// <summary>The provider's own quota is gone for this period — not the user's daily limit.</summary>
+    /// <summary>The provider's own quota is gone for now — not the user's own pacing limit.</summary>
     QuotaExceeded,
     /// <summary>The provider cannot take a text this long.</summary>
     TooLong,
@@ -27,7 +27,7 @@ public sealed record SentenceTranslation(SentenceTranslationStatus Status, strin
 /// </summary>
 public interface ISentenceTranslator
 {
-    /// <summary>False without credentials. FallbackSentenceTranslator, the registered one, is always configured.</summary>
+    /// <summary>False when no language model is configured (no Translation provider key).</summary>
     bool IsConfigured { get; }
 
     Task<SentenceTranslation> TranslateAsync(string text, LearnerLanguage target, CancellationToken cancellationToken);

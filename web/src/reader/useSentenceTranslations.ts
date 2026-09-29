@@ -1,15 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLearnerLanguage } from '../account/learnerLanguage'
 import { api } from '../api/client'
+import { formatShortWait } from '../lib/format'
 import type { BookStore } from './bookStore'
 import type { SentenceTranslation } from './Sentence'
 
 const MESSAGES = {
-  limit: 'Daily sentence translation limit reached',
   quota: 'Translation limit reached — try again later',
   tooLong: 'This sentence is too long to translate',
   failed: "Couldn't translate",
 } as const
+
+function limitMessage(retryAfterSeconds: number | null): string {
+  return retryAfterSeconds === null
+    ? 'Too many translations at once. Try again in a few seconds.'
+    : `Too many translations at once. Try again in ${formatShortWait(retryAfterSeconds)}.`
+}
 
 /**
  * Open, closed and failed sentence translations of one book. A translation comes from the
@@ -74,7 +80,10 @@ export function useSentenceTranslations(hash: string, store: BookStore) {
         return
       }
 
-      set(key, { state: 'error', message: MESSAGES[result.status] })
+      set(key, {
+        state: 'error',
+        message: result.status === 'limit' ? limitMessage(result.retryAfterSeconds) : MESSAGES[result.status],
+      })
     },
     [hash, store, language, set],
   )

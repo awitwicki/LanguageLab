@@ -20,7 +20,7 @@ public class LearnerLanguagesTests
     }
 
     [Fact]
-    public void Codes_are_unique_lowercase_short_and_every_provider_code_is_set()
+    public void Codes_are_unique_lowercase_and_short_and_every_name_is_set()
     {
         Assert.Equal(LearnerLanguages.All.Count, LearnerLanguages.All.Select(l => l.Code).Distinct().Count());
 
@@ -28,8 +28,7 @@ public class LearnerLanguagesTests
         {
             Assert.Equal(language.Code.ToLowerInvariant(), language.Code);
             Assert.InRange(language.Code.Length, 2, LearnerLanguages.CodeMaxLength);
-            Assert.False(string.IsNullOrWhiteSpace(language.DeepLCode));
-            Assert.False(string.IsNullOrWhiteSpace(language.MyMemoryCode));
+            Assert.False(string.IsNullOrWhiteSpace(language.EnglishName));
             Assert.False(string.IsNullOrWhiteSpace(language.NativeName));
         }
     }

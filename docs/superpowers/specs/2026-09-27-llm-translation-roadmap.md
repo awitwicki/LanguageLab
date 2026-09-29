@@ -124,6 +124,15 @@ respect, the contracts that let them run in parallel, and progress.
   `ReaderCapabilities` gains `ImportRetryAfterSeconds` (a read-only peek, `RetryAfter`, never
   reserves) so the reader's Build dictionary button can show its wait without a click. See
   `2026-09-29-llm-c4-frontend-import-design.md`.
+- 2026-09-29 (A3) — "1 uncached translation per 10 s" is one per-user budget shared by sentences
+  and word-lookup misses (`UncachedTranslationLimiter`: a per-user timestamp on `TimeProvider`,
+  claimed by compare-and-swap, exact wait). It is checked inside `TranslationService.LookupAsync`
+  at the cache-miss point, so it covers `GET /api/translate`, the reader's word panel and the
+  sorting "don't know" mark alike; `POST /api/translate/sentence` checks it before the model call.
+  `GET /api/translate` and the sentence endpoint answer 429 + `Retry-After`; the reader's
+  `GET /api/reader/words/{lemma}` stays 200 with `source: "rateLimited"` and `retryAfterSeconds`,
+  so the panel keeps its buttons. `UserRateLimits.Translate` (500/day) stays on `GET /api/translate`.
+  `TranslationSource.MyMemory` is now `Llm`.
 
 No open questions remain at roadmap level; each workstream's spec settles its own details and
 adds a decision here only when it changes something another workstream relies on.
@@ -230,7 +239,7 @@ differently (also written into the affected interfaces' XML doc-comments):
   for the lemmas requested), the single-word `ITranslator` lookup routed through it,
   `TranslationService.LookupAsync` unchanged on the cache side, 100-character word cap. Remove
   `MyMemoryTranslator`, `MyMemoryWordBudget`. *Needs:* A1.
-- [ ] **A3. Sentence translation + limits** — `LlmSentenceTranslator` with the hardened prompt,
+- [~] **A3. Sentence translation + limits** (branch: llm-translation-roadmap) — `LlmSentenceTranslator` with the hardened prompt,
   ~500-character cap; remove `DeepLTranslator`, `MyMemorySentenceTranslator`,
   `FallbackSentenceTranslator`, `DailyCharacterBudget`, `MyMemoryDailyLimits`, the sentence
   budget and `SentenceQuota`; "1 uncached translation per 10 s" per user in `UserRateLimits` for
@@ -392,3 +401,10 @@ Wave 3  └────────────── merge to dev, D1 docs, end
   fallback picking the wrong lemma for a form that is its own primary but lists a rarer alternate
   after it (e.g. `morning` → `morn`) — a wink-lemmatizer-era heuristic left over from before
   `lemmasOf` became primary-first; fixed to use the first candidate.
+- 2026-09-29 — A3 done on `llm-translation-roadmap`: `LlmSentenceTranslator` + `AddSentenceTranslation()`
+  (500-character cap, fixed instruction, sentence only as `UserContent`); `UncachedTranslationLimiter`
+  replaces `SentenceQuota`; DeepL, MyMemory, `FallbackSentenceTranslator`, `DailyCharacterBudget`,
+  `MyMemoryDailyLimits`, `MyMemorySentenceBudget`, `TranslationOptions` and `LearnerLanguage`'s
+  provider codes removed. The SPA reads the wait from `Retry-After` / `retryAfterSeconds`. The
+  README/`.env` cleanup of the removed `Translation:MyMemoryEmail` / `Translation:DeepLApiKey` keys
+  is D1's.

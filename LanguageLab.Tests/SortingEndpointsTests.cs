@@ -3,6 +3,7 @@ using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
+using LanguageLab.Tests.Fakes;
 using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Tests;
@@ -10,6 +11,10 @@ namespace LanguageLab.Tests;
 public class SortingEndpointsTests
 {
     private static readonly LearnerLanguage Uk = LearnerLanguages.Default;
+    private const long User = 5;
+
+    private static TranslationService Translation(ApplicationDbContext db, ITranslator translator) =>
+        new(db, translator, new UncachedTranslationLimiter(TimeProvider.System));
 
     private sealed class FakeTranslator : ITranslator
     {
@@ -39,7 +44,7 @@ public class SortingEndpointsTests
         var translator = new FakeTranslator("сирота");
 
         await SortingEndpoints.TranslateIfUnknownAsync(
-            new WordSortingService(db), new TranslationService(db, translator), SortStatus.Unknown, 1, Uk, CancellationToken.None);
+            new WordSortingService(db), Translation(db, translator), SortStatus.Unknown, 1, User, Uk, CancellationToken.None);
 
         Assert.Equal(1, translator.Calls);
         Assert.Equal("сирота", db.WordTranslations.Single(t => t.WordPairId == 1 && t.Language == "uk").Text);
@@ -54,7 +59,7 @@ public class SortingEndpointsTests
         var translator = new FakeTranslator("wrong");
 
         await SortingEndpoints.TranslateIfUnknownAsync(
-            new WordSortingService(db), new TranslationService(db, translator), SortStatus.Unknown, 1, Uk, CancellationToken.None);
+            new WordSortingService(db), Translation(db, translator), SortStatus.Unknown, 1, User, Uk, CancellationToken.None);
 
         Assert.Equal(0, translator.Calls);
     }
@@ -68,7 +73,7 @@ public class SortingEndpointsTests
         var translator = new FakeTranslator("сирота");
 
         await SortingEndpoints.TranslateIfUnknownAsync(
-            new WordSortingService(db), new TranslationService(db, translator), SortStatus.Unknown, 1, Uk, CancellationToken.None);
+            new WordSortingService(db), Translation(db, translator), SortStatus.Unknown, 1, User, Uk, CancellationToken.None);
 
         Assert.Equal(0, translator.Calls);
     }
@@ -84,7 +89,7 @@ public class SortingEndpointsTests
         var translator = new FakeTranslator("сирота");
 
         await SortingEndpoints.TranslateIfUnknownAsync(
-            new WordSortingService(db), new TranslationService(db, translator), status, 1, Uk, CancellationToken.None);
+            new WordSortingService(db), Translation(db, translator), status, 1, User, Uk, CancellationToken.None);
 
         Assert.Equal(0, translator.Calls);
     }
@@ -98,10 +103,10 @@ public class SortingEndpointsTests
         await db.SaveChangesAsync();
         var translator = new FakeTranslator("сирота");
         var sorting = new WordSortingService(db);
-        var translation = new TranslationService(db, translator);
+        var translation = Translation(db, translator);
 
-        await SortingEndpoints.TranslateIfUnknownAsync(sorting, translation, SortStatus.Unknown, 1, Uk, CancellationToken.None);
-        await SortingEndpoints.TranslateIfUnknownAsync(sorting, translation, SortStatus.Unknown, 1, Uk, CancellationToken.None);
+        await SortingEndpoints.TranslateIfUnknownAsync(sorting, translation, SortStatus.Unknown, 1, User, Uk, CancellationToken.None);
+        await SortingEndpoints.TranslateIfUnknownAsync(sorting, translation, SortStatus.Unknown, 1, User, Uk, CancellationToken.None);
 
         Assert.Equal(1, translator.Calls);
     }
@@ -115,7 +120,7 @@ public class SortingEndpointsTests
         await db.SaveChangesAsync();
 
         await SortingEndpoints.TranslateIfUnknownAsync(
-            new WordSortingService(db), new TranslationService(db, new FakeTranslator(null)), SortStatus.Unknown, 1, Uk, CancellationToken.None);
+            new WordSortingService(db), Translation(db, new FakeTranslator(null)), SortStatus.Unknown, 1, User, Uk, CancellationToken.None);
 
         Assert.False(await db.WordTranslations.AnyAsync(t => t.WordPairId == 1));
     }
@@ -134,8 +139,26 @@ public class SortingEndpointsTests
         var translator = new FakeTranslator("сирота");
 
         await SortingEndpoints.TranslateIfUnknownAsync(
-            new WordSortingService(db), new TranslationService(db, translator), SortStatus.Unknown, 1, null, CancellationToken.None);
+            new WordSortingService(db), Translation(db, translator), SortStatus.Unknown, 1, User, null, CancellationToken.None);
 
         Assert.Equal(0, translator.Calls);
+    }
+
+    [Fact]
+    public async Task A_rate_limited_mark_saves_no_translation_and_does_not_throw()
+    {
+        await using var db = NewContext();
+        db.Words.AddRange(TestWords.Pair(1, "orphan", null), TestWords.Pair(2, "waif", null));
+        await db.SaveChangesAsync();
+        var translator = new FakeTranslator("x");
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-09-29T12:00:00Z"));
+        var translation = new TranslationService(db, translator, new UncachedTranslationLimiter(clock));
+        var sorting = new WordSortingService(db);
+
+        await SortingEndpoints.TranslateIfUnknownAsync(sorting, translation, SortStatus.Unknown, 1, User, Uk, CancellationToken.None);
+        await SortingEndpoints.TranslateIfUnknownAsync(sorting, translation, SortStatus.Unknown, 2, User, Uk, CancellationToken.None);
+
+        Assert.Equal(1, translator.Calls);
+        Assert.False(await db.WordTranslations.AnyAsync(t => t.WordPairId == 2));
     }
 }

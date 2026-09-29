@@ -2,6 +2,7 @@ using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
+using LanguageLab.Tests.Fakes;
 using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Tests;
@@ -10,6 +11,12 @@ public class TranslationServiceTests
 {
     private static readonly LearnerLanguage Uk = LearnerLanguages.Default;
     private static readonly LearnerLanguage Pl = LearnerLanguages.Find("pl")!;
+    private const long User = 5;
+    private static readonly DateTimeOffset Start = DateTimeOffset.Parse("2026-09-29T12:00:00Z");
+
+    private static TranslationService Service(
+        ApplicationDbContext db, ITranslator translator, UncachedTranslationLimiter? limiter = null) =>
+        new(db, translator, limiter ?? new UncachedTranslationLimiter(TimeProvider.System));
 
     private sealed class FakeTranslator : ITranslator
     {
@@ -51,7 +58,7 @@ public class TranslationServiceTests
         await using var db = await SeedAsync();
         var provider = new FakeTranslator("wrong");
 
-        var result = await new TranslationService(db, provider).LookupAsync("apple", Uk, CancellationToken.None);
+        var result = await Service(db, provider).LookupAsync(User, "apple", Uk, CancellationToken.None);
 
         Assert.Equal(new TranslationLookup("apple", "яблуко", TranslationSource.Dictionary), result);
         Assert.Equal(0, provider.Calls);
@@ -63,9 +70,9 @@ public class TranslationServiceTests
         await using var db = await SeedAsync();
         var provider = new FakeTranslator("сирота");
 
-        var result = await new TranslationService(db, provider).LookupAsync("orphan", Uk, CancellationToken.None);
+        var result = await Service(db, provider).LookupAsync(User, "orphan", Uk, CancellationToken.None);
 
-        Assert.Equal(new TranslationLookup("orphan", "сирота", TranslationSource.MyMemory), result);
+        Assert.Equal(new TranslationLookup("orphan", "сирота", TranslationSource.Llm), result);
         Assert.Equal(1, provider.Calls);
     }
 
@@ -76,9 +83,9 @@ public class TranslationServiceTests
         await using var db = await SeedAsync();
         var provider = new FakeTranslator("бігти");
 
-        var result = await new TranslationService(db, provider).LookupAsync("run", Uk, CancellationToken.None);
+        var result = await Service(db, provider).LookupAsync(User, "run", Uk, CancellationToken.None);
 
-        Assert.Equal(new TranslationLookup("run", "бігти", TranslationSource.MyMemory), result);
+        Assert.Equal(new TranslationLookup("run", "бігти", TranslationSource.Llm), result);
     }
 
     [Fact]
@@ -86,7 +93,7 @@ public class TranslationServiceTests
     {
         await using var db = await SeedAsync();
 
-        var result = await new TranslationService(db, new FakeTranslator(null)).LookupAsync("zzz", Uk, CancellationToken.None);
+        var result = await Service(db, new FakeTranslator(null)).LookupAsync(User, "zzz", Uk, CancellationToken.None);
 
         Assert.Equal(new TranslationLookup("zzz", null, TranslationSource.None), result);
     }
@@ -96,7 +103,7 @@ public class TranslationServiceTests
     {
         await using var db = await SeedAsync();
 
-        await new TranslationService(db, new FakeTranslator("бездомна дитина")).LookupAsync("waif", Uk, CancellationToken.None);
+        await Service(db, new FakeTranslator("бездомна дитина")).LookupAsync(User, "waif", Uk, CancellationToken.None);
 
         var row = await db.Words.SingleAsync(w => w.Word == "waif");
         Assert.Null(row.OwnerId);
@@ -110,7 +117,7 @@ public class TranslationServiceTests
     {
         await using var db = await SeedAsync();
 
-        await new TranslationService(db, new FakeTranslator("сирота")).LookupAsync("orphan", Uk, CancellationToken.None);
+        await Service(db, new FakeTranslator("сирота")).LookupAsync(User, "orphan", Uk, CancellationToken.None);
 
         var row = await db.Words.SingleAsync(w => w.Word == "orphan");
         Assert.Equal(2, row.Id);
@@ -125,10 +132,10 @@ public class TranslationServiceTests
     {
         await using var db = await SeedAsync();
         var provider = new FakeTranslator("бездомна дитина");
-        var service = new TranslationService(db, provider);
+        var service = Service(db, provider);
 
-        await service.LookupAsync("waif", Uk, CancellationToken.None);
-        var second = await service.LookupAsync("waif", Uk, CancellationToken.None);
+        await service.LookupAsync(User, "waif", Uk, CancellationToken.None);
+        var second = await service.LookupAsync(User, "waif", Uk, CancellationToken.None);
 
         Assert.Equal(new TranslationLookup("waif", "бездомна дитина", TranslationSource.Dictionary), second);
         Assert.Equal(1, provider.Calls);
@@ -139,7 +146,7 @@ public class TranslationServiceTests
     {
         await using var db = await SeedAsync();
 
-        await new TranslationService(db, new FakeTranslator(null)).LookupAsync("zzz", Uk, CancellationToken.None);
+        await Service(db, new FakeTranslator(null)).LookupAsync(User, "zzz", Uk, CancellationToken.None);
 
         Assert.False(await db.Words.AnyAsync(w => w.Word == "zzz"));
     }
@@ -150,7 +157,7 @@ public class TranslationServiceTests
     {
         await using var db = await SeedAsync();
 
-        await new TranslationService(db, new FakeTranslator("бігти")).LookupAsync("run", Uk, CancellationToken.None);
+        await Service(db, new FakeTranslator("бігти")).LookupAsync(User, "run", Uk, CancellationToken.None);
 
         Assert.Equal("запускати", db.WordTranslations.Single(t => t.WordPairId == 3 && t.Language == "uk").Text);
         var sharedRun = await db.Words.SingleAsync(w => w.Word == "run" && w.OwnerId == null);
@@ -164,9 +171,9 @@ public class TranslationServiceTests
         await using var db = await SeedAsync();
         var provider = new FakeTranslator("jabłko");
 
-        var result = await new TranslationService(db, provider).LookupAsync("apple", Pl, CancellationToken.None);
+        var result = await Service(db, provider).LookupAsync(User, "apple", Pl, CancellationToken.None);
 
-        Assert.Equal(new TranslationLookup("apple", "jabłko", TranslationSource.MyMemory), result);
+        Assert.Equal(new TranslationLookup("apple", "jabłko", TranslationSource.Llm), result);
         Assert.Equal("pl", provider.LastTarget!.Code);
         Assert.Equal("jabłko", db.WordTranslations.Single(t => t.WordPairId == 1 && t.Language == "pl").Text);
         Assert.Equal("яблуко", db.WordTranslations.Single(t => t.WordPairId == 1 && t.Language == "uk").Text);
@@ -176,10 +183,10 @@ public class TranslationServiceTests
     public async Task A_cached_pl_translation_answers_the_next_pl_lookup_for_free()
     {
         await using var db = await SeedAsync();
-        await new TranslationService(db, new FakeTranslator("jabłko")).LookupAsync("apple", Pl, CancellationToken.None);
+        await Service(db, new FakeTranslator("jabłko")).LookupAsync(User, "apple", Pl, CancellationToken.None);
         var provider = new FakeTranslator("wrong");
 
-        var result = await new TranslationService(db, provider).LookupAsync("apple", Pl, CancellationToken.None);
+        var result = await Service(db, provider).LookupAsync(User, "apple", Pl, CancellationToken.None);
 
         Assert.Equal(TranslationSource.Dictionary, result.Source);
         Assert.Equal(0, provider.Calls);
@@ -191,9 +198,9 @@ public class TranslationServiceTests
         await using var db = await SeedAsync();
         var provider = new FakeTranslator("бігти");
 
-        var result = await new TranslationService(db, provider).LookupAsync("run", Uk, CancellationToken.None);
+        var result = await Service(db, provider).LookupAsync(User, "run", Uk, CancellationToken.None);
 
-        Assert.Equal(TranslationSource.MyMemory, result.Source);
+        Assert.Equal(TranslationSource.Llm, result.Source);
         Assert.Equal(1, provider.Calls);
     }
 
@@ -210,16 +217,74 @@ public class TranslationServiceTests
     public async Task A_uk_lookup_does_not_leak_into_a_later_pl_lookup_on_the_same_context()
     {
         await using var db = await SeedAsync();
-        var service = new TranslationService(db, new FakeTranslator("jabłko"));
+        var service = Service(db, new FakeTranslator("jabłko"));
 
-        var ukResult = await service.LookupAsync("apple", Uk, CancellationToken.None);
+        var ukResult = await service.LookupAsync(User, "apple", Uk, CancellationToken.None);
         Assert.Equal(TranslationSource.Dictionary, ukResult.Source);
         Assert.Equal("яблуко", ukResult.Translation);
 
-        var plResult = await service.LookupAsync("apple", Pl, CancellationToken.None);
+        var plResult = await service.LookupAsync(User, "apple", Pl, CancellationToken.None);
 
         Assert.NotEqual(TranslationSource.Dictionary, plResult.Source);
         Assert.NotEqual("яблуко", plResult.Translation);
         Assert.Equal("jabłko", plResult.Translation);
+    }
+
+    [Fact]
+    public async Task A_second_miss_inside_the_window_is_rate_limited_and_the_provider_is_not_asked()
+    {
+        await using var db = await SeedAsync();
+        var provider = new FakeTranslator(null);
+        var clock = new ManualTimeProvider(Start);
+        var service = Service(db, provider, new UncachedTranslationLimiter(clock));
+
+        await service.LookupAsync(User, "orphan", Uk, CancellationToken.None);
+        clock.Advance(TimeSpan.FromSeconds(4));
+        var second = await service.LookupAsync(User, "zzz", Uk, CancellationToken.None);
+
+        Assert.Equal(new TranslationLookup("zzz", null, TranslationSource.RateLimited, 6), second);
+        Assert.Equal(1, provider.Calls);
+    }
+
+    [Fact]
+    public async Task A_rate_limited_miss_writes_nothing()
+    {
+        await using var db = await SeedAsync();
+        var service = Service(db, new FakeTranslator("x"), new UncachedTranslationLimiter(new ManualTimeProvider(Start)));
+
+        await service.LookupAsync(User, "orphan", Uk, CancellationToken.None);
+        await service.LookupAsync(User, "waif", Uk, CancellationToken.None);
+
+        Assert.False(await db.Words.AnyAsync(w => w.Word == "waif"));
+    }
+
+    [Fact]
+    public async Task Cache_hits_right_after_a_miss_are_never_rate_limited()
+    {
+        await using var db = await SeedAsync();
+        var service = Service(db, new FakeTranslator("сирота"), new UncachedTranslationLimiter(new ManualTimeProvider(Start)));
+
+        await service.LookupAsync(User, "orphan", Uk, CancellationToken.None);
+        var hits = new List<TranslationLookup>();
+        for (var i = 0; i < 3; i++)
+        {
+            hits.Add(await service.LookupAsync(User, "apple", Uk, CancellationToken.None));
+        }
+
+        Assert.All(hits, hit => Assert.Equal(new TranslationLookup("apple", "яблуко", TranslationSource.Dictionary), hit));
+    }
+
+    [Fact]
+    public async Task Another_users_miss_does_not_spend_this_users_slot()
+    {
+        await using var db = await SeedAsync();
+        var provider = new FakeTranslator(null);
+        var service = Service(db, provider, new UncachedTranslationLimiter(new ManualTimeProvider(Start)));
+
+        await service.LookupAsync(User, "orphan", Uk, CancellationToken.None);
+        var other = await service.LookupAsync(User + 1, "zzz", Uk, CancellationToken.None);
+
+        Assert.Equal(TranslationSource.None, other.Source);
+        Assert.Equal(2, provider.Calls);
     }
 }

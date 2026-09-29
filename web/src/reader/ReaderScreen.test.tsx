@@ -164,6 +164,7 @@ beforeEach(() => {
     shelf: 'learning',
     canReset: true,
     learnTarget: 'personal',
+    retryAfterSeconds: null,
   })
   apiMock.resetWord.mockReset().mockResolvedValue(null)
   apiMock.translateSentence.mockReset().mockResolvedValue({ status: 'ok', translation: 'Більшість чоловіків намагалися пристосуватися.' })
@@ -262,15 +263,15 @@ describe('ReaderScreen', () => {
     expect(await store.getTranslation(HASH, 'uk', '1.2.0')).toBe('Більшість чоловіків намагалися пристосуватися.')
   })
 
-  it('names the daily limit when the server refuses', async () => {
-    apiMock.translateSentence.mockResolvedValue({ status: 'limit' })
+  it('names the wait when the server refuses a translation for now', async () => {
+    apiMock.translateSentence.mockResolvedValue({ status: 'limit', retryAfterSeconds: 10 })
     const { container } = await openReader()
 
     await click(container.querySelector('[data-pos="1.2.0"] .reader-strip')!)
     await flush()
 
     expect(container.querySelector('.reader-translation-error')!.textContent).toContain(
-      'Daily sentence translation limit reached',
+      'Too many translations at once. Try again in 10 seconds.',
     )
   })
 

@@ -217,31 +217,14 @@ builder.Services.AddScoped<DictionaryPublicationService>();
 // Without that provider's key the app still starts and LlmStartupCheck logs a warning.
 builder.Services.AddLlmClient(builder.Configuration);
 
-// MyMemory is keyless; the optional contact email only raises its daily quota (still read by
-// MyMemorySentenceTranslator below, until A3 removes it).
-builder.Services.Configure<TranslationOptions>(builder.Configuration.GetSection(TranslationOptions.SectionName));
 // The single-word ITranslator and the background queue's IWordBatchTranslator, both on ILlmClient.
 builder.Services.AddWordTranslation();
-
-// Sentence translation: DeepL when Translation:DeepLApiKey is set, MyMemory otherwise.
-builder.Services.AddHttpClient<DeepLTranslator>(client =>
-{
-    client.BaseAddress = new Uri(DeepLTranslator.BaseUrl);
-    client.Timeout = DeepLTranslator.Timeout;
-});
-builder.Services.AddHttpClient<MyMemorySentenceTranslator>(client =>
-{
-    // Inlined rather than borrowed from MyMemoryTranslator (removed by A2): same provider, same
-    // endpoint, but the word-lookup class it used to share these with is gone.
-    client.BaseAddress = new Uri("https://api.mymemory.translated.net/");
-    client.Timeout = TimeSpan.FromSeconds(5);
-});
-// Sentences translated through MyMemory get 40% of its daily quota, server-wide — see
-// MyMemorySentenceBudget — so one reader cannot exhaust the day's quota for everyone's word lookups.
-builder.Services.AddSingleton<MyMemorySentenceBudget>();
-builder.Services.AddScoped<ISentenceTranslator, FallbackSentenceTranslator>();
-builder.Services.AddSingleton(new SentenceQuota());
+// The reader's sentence translation, on ILlmClient too.
+builder.Services.AddSentenceTranslation();
 builder.Services.AddScoped<TranslationService>();
+// One uncached translation per user every 10 s — sentences and word-lookup misses alike. Its
+// TimeProvider comes from AddTranslationQueue below.
+builder.Services.AddSingleton<UncachedTranslationLimiter>();
 // A dictionary's missing translations, filled in the background per learner language.
 builder.Services.AddTranslationQueue();
 builder.Services.AddScoped<PersonalDictionaryService>();

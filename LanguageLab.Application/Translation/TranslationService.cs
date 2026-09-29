@@ -9,11 +9,17 @@ public enum TranslationSource
 {
     /// <summary>A shared word already carried this translation; the provider was not asked.</summary>
     Dictionary,
-    MyMemory,
+    /// <summary>The language model answered; the translation is now in the shared vocabulary.</summary>
+    Llm,
+    /// <summary>The model was asked and had no answer.</summary>
     None,
+    /// <summary>A miss inside the user's uncached-translation window: the model was not asked.</summary>
+    RateLimited,
 }
 
-public sealed record TranslationLookup(string Word, string? Translation, TranslationSource Source);
+/// <summary>RetryAfterSeconds is set only with RateLimited: the wait before a miss may reach the model again.</summary>
+public sealed record TranslationLookup(
+    string Word, string? Translation, TranslationSource Source, int? RetryAfterSeconds = null);
 
 /// <summary>
 /// Suggests a translation for a word: the shared vocabulary first (2 797 shelf words were
@@ -21,21 +27,25 @@ public sealed record TranslationLookup(string Word, string? Translation, Transla
 /// provider's answer is kept in the shared vocabulary as a Machine WordTranslation in the
 /// learner's language, so the next lookup of the same word in the same language by anyone costs
 /// nothing and the word becomes trainable. A translation already there is never replaced, so a
-/// hand-made one always wins.
+/// hand-made one always wins. Only a miss is paced — one per user every
+/// UncachedTranslationLimiter.Window; a hit is always free.
 /// </summary>
 public class TranslationService
 {
     private readonly ApplicationDbContext _dbContext;
     private readonly ITranslator _translator;
+    private readonly UncachedTranslationLimiter _limiter;
 
-    public TranslationService(ApplicationDbContext dbContext, ITranslator translator)
+    public TranslationService(ApplicationDbContext dbContext, ITranslator translator, UncachedTranslationLimiter limiter)
     {
         _dbContext = dbContext;
         _translator = translator;
+        _limiter = limiter;
     }
 
     /// <summary>Expects an already normalized, valid word (see WordText) — the same form the personal dictionary stores.</summary>
-    public async Task<TranslationLookup> LookupAsync(string word, LearnerLanguage language, CancellationToken cancellationToken)
+    public async Task<TranslationLookup> LookupAsync(
+        long userId, string word, LearnerLanguage language, CancellationToken cancellationToken)
     {
         var shared = await _dbContext.Words
             .Include(w => w.Translations.Where(t => t.Language == language.Code))
@@ -48,6 +58,11 @@ public class TranslationService
         if (shared?.Translations.FirstOrDefault(t => t.Language == language.Code) is { } known)
         {
             return new TranslationLookup(word, known.Text, TranslationSource.Dictionary);
+        }
+
+        if (!_limiter.TryConsume(userId, out var wait))
+        {
+            return new TranslationLookup(word, null, TranslationSource.RateLimited, UncachedTranslationLimiter.Seconds(wait));
         }
 
         var translated = await _translator.TranslateAsync(word, language, cancellationToken);
@@ -80,6 +95,6 @@ public class TranslationService
             }
         }
 
-        return new TranslationLookup(word, translated, TranslationSource.MyMemory);
+        return new TranslationLookup(word, translated, TranslationSource.Llm);
     }
 }

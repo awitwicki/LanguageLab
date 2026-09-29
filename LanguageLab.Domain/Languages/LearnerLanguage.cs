@@ -3,15 +3,14 @@ namespace LanguageLab.Domain.Languages;
 /// <summary>
 /// A language a learner can pick as their main one — the target of every translation they see.
 /// Code is what is stored (TelegramUser.Language, WordTranslation.Language, Training.Language);
-/// the two provider codes are what DeepL's target_lang and MyMemory's langpair expect.
+/// EnglishName is what the translation prompts name.
 /// </summary>
-public sealed record LearnerLanguage(
-    string Code, string EnglishName, string NativeName, string DeepLCode, string MyMemoryCode);
+public sealed record LearnerLanguage(string Code, string EnglishName, string NativeName);
 
 /// <summary>
-/// Code-only, like the verb and pronunciation catalogs: DeepL's classic target set plus
-/// Filipino, minus Russian by the product owner's decision, minus English (the source).
-/// Ukrainian first — it is the default, and every row that predates the catalog is Ukrainian.
+/// Code-only, like the verb and pronunciation catalogs: DeepL's classic target set (where the
+/// list started) plus Filipino, minus Russian by the product owner's decision, minus English (the
+/// source). Ukrainian first — it is the default, and every row that predates the catalog is Ukrainian.
 /// </summary>
 public static class LearnerLanguages
 {
@@ -20,38 +19,38 @@ public static class LearnerLanguages
 
     public static readonly IReadOnlyList<LearnerLanguage> All =
     [
-        new("uk", "Ukrainian", "Українська", "UK", "uk"),
-        new("ar", "Arabic", "العربية", "AR", "ar"),
-        new("bg", "Bulgarian", "Български", "BG", "bg"),
-        new("zh", "Chinese (Simplified)", "中文（简体）", "ZH-HANS", "zh-CN"),
-        new("cs", "Czech", "Čeština", "CS", "cs"),
-        new("da", "Danish", "Dansk", "DA", "da"),
-        new("nl", "Dutch", "Nederlands", "NL", "nl"),
-        new("et", "Estonian", "Eesti", "ET", "et"),
-        new("tl", "Filipino", "Filipino", "TL", "tl"),
-        new("fi", "Finnish", "Suomi", "FI", "fi"),
-        new("fr", "French", "Français", "FR", "fr"),
-        new("de", "German", "Deutsch", "DE", "de"),
-        new("el", "Greek", "Ελληνικά", "EL", "el"),
-        new("he", "Hebrew", "עברית", "HE", "he"),
-        new("hu", "Hungarian", "Magyar", "HU", "hu"),
-        new("id", "Indonesian", "Bahasa Indonesia", "ID", "id"),
-        new("it", "Italian", "Italiano", "IT", "it"),
-        new("ja", "Japanese", "日本語", "JA", "ja"),
-        new("ko", "Korean", "한국어", "KO", "ko"),
-        new("lv", "Latvian", "Latviešu", "LV", "lv"),
-        new("lt", "Lithuanian", "Lietuvių", "LT", "lt"),
-        new("nb", "Norwegian (Bokmål)", "Norsk bokmål", "NB", "no"),
-        new("pl", "Polish", "Polski", "PL", "pl"),
-        new("pt", "Portuguese (Brazil)", "Português (Brasil)", "PT-BR", "pt-BR"),
-        new("ro", "Romanian", "Română", "RO", "ro"),
-        new("sk", "Slovak", "Slovenčina", "SK", "sk"),
-        new("sl", "Slovenian", "Slovenščina", "SL", "sl"),
-        new("es", "Spanish", "Español", "ES", "es"),
-        new("sv", "Swedish", "Svenska", "SV", "sv"),
-        new("th", "Thai", "ไทย", "TH", "th"),
-        new("tr", "Turkish", "Türkçe", "TR", "tr"),
-        new("vi", "Vietnamese", "Tiếng Việt", "VI", "vi"),
+        new("uk", "Ukrainian", "Українська"),
+        new("ar", "Arabic", "العربية"),
+        new("bg", "Bulgarian", "Български"),
+        new("zh", "Chinese (Simplified)", "中文（简体）"),
+        new("cs", "Czech", "Čeština"),
+        new("da", "Danish", "Dansk"),
+        new("nl", "Dutch", "Nederlands"),
+        new("et", "Estonian", "Eesti"),
+        new("tl", "Filipino", "Filipino"),
+        new("fi", "Finnish", "Suomi"),
+        new("fr", "French", "Français"),
+        new("de", "German", "Deutsch"),
+        new("el", "Greek", "Ελληνικά"),
+        new("he", "Hebrew", "עברית"),
+        new("hu", "Hungarian", "Magyar"),
+        new("id", "Indonesian", "Bahasa Indonesia"),
+        new("it", "Italian", "Italiano"),
+        new("ja", "Japanese", "日本語"),
+        new("ko", "Korean", "한국어"),
+        new("lv", "Latvian", "Latviešu"),
+        new("lt", "Lithuanian", "Lietuvių"),
+        new("nb", "Norwegian (Bokmål)", "Norsk bokmål"),
+        new("pl", "Polish", "Polski"),
+        new("pt", "Portuguese (Brazil)", "Português (Brasil)"),
+        new("ro", "Romanian", "Română"),
+        new("sk", "Slovak", "Slovenčina"),
+        new("sl", "Slovenian", "Slovenščina"),
+        new("es", "Spanish", "Español"),
+        new("sv", "Swedish", "Svenska"),
+        new("th", "Thai", "ไทย"),
+        new("tr", "Turkish", "Türkçe"),
+        new("vi", "Vietnamese", "Tiếng Việt"),
     ];
 
     public static LearnerLanguage Default => All[0];

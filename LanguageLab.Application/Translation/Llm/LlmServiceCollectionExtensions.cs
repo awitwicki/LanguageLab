@@ -15,7 +15,7 @@ public static class LlmServiceCollectionExtensions
     public static IServiceCollection AddLlmClient(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<LlmOptions>()
-            .Bind(configuration.GetSection(TranslationOptions.SectionName))
+            .Bind(configuration.GetSection(LlmOptions.SectionName))
             .Validate(options => Enum.IsDefined(options.Provider),
                 "Translation:Provider must be Gemini or OpenAiCompatible.")
             .Validate(options => !string.IsNullOrWhiteSpace(options.Gemini.Model),

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLearnerLanguage } from '../account/learnerLanguage'
 import { api, type LearnTarget, type ReaderWord, type ReaderWordShelf } from '../api/client'
-import { formatInt } from '../lib/format'
+import { formatInt, formatShortWait } from '../lib/format'
 import './WordPanel.css'
 
 interface Props {
@@ -47,6 +47,15 @@ const SHELF_LABEL: Record<ReaderWordShelf, string> = {
 const TARGET_HINT: Record<LearnTarget, string> = {
   book: "Goes to this book's words",
   personal: 'Goes to My words',
+}
+
+/** The typed-translation row's caption: why there is no translation to show. */
+function missingTranslationCaption(word: ReaderWord): string {
+  if (word.source !== 'rateLimited') return 'No translation found'
+
+  const wait = word.retryAfterSeconds === null ? 'a few seconds' : formatShortWait(word.retryAfterSeconds)
+
+  return `Too many translations at once. Close this and tap the word again in ${wait}, or type one.`
 }
 
 /** A swipe down this far closes the panel. */
@@ -232,9 +241,9 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
         </p>
       )}
 
-      {needsTranslation && (
+      {word && needsTranslation && (
         <label className="word-panel-typed">
-          <span>No translation found</span>
+          <span>{missingTranslationCaption(word)}</span>
           <input
             className="word-panel-input"
             value={typed}

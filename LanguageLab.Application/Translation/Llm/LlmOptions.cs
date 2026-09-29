@@ -2,12 +2,14 @@ namespace LanguageLab.Application.Translation.Llm;
 
 /// <summary>
 /// Which language model answers <see cref="ILlmClient"/> calls, and how to reach it. Bound from the
-/// "Translation" section (<see cref="TranslationOptions.SectionName"/>, Translation__* in Docker)
-/// and validated at startup by <see cref="LlmServiceCollectionExtensions.AddLlmClient"/>: a typo in
+/// "Translation" section (<see cref="SectionName"/>, Translation__* in Docker) and validated at
+/// startup by <see cref="LlmServiceCollectionExtensions.AddLlmClient"/>: a typo in
 /// <see cref="Provider"/> stops the app rather than the first translation.
 /// </summary>
 public sealed class LlmOptions
 {
+    public const string SectionName = "Translation";
+
     public LlmProvider Provider { get; set; } = LlmProvider.Gemini;
     public GeminiOptions Gemini { get; set; } = new();
     public OpenAiCompatibleOptions OpenAi { get; set; } = new();

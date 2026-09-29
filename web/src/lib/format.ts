@@ -91,3 +91,14 @@ export function formatWait(seconds: number): string {
 
   return `about ${hours} ${plural(hours, 'hour', 'hours')}`
 }
+
+/** A wait short enough to name exactly: a pacing limit of seconds, not a day-long quota. */
+export function formatShortWait(seconds: number): string {
+  if (seconds < 60) {
+    const whole = Math.max(1, Math.ceil(seconds))
+
+    return `${whole} ${plural(whole, 'second', 'seconds')}`
+  }
+
+  return formatWait(seconds)
+}

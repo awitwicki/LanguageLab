@@ -130,4 +130,19 @@ describe('useSentenceTranslations', () => {
     expect(hook!.translations[KEY]).toEqual({ state: 'open', text: 'Українською.' })
     expect(apiMock.translateSentence).toHaveBeenCalledTimes(2)
   })
+
+  it('names the wait when the translation limit is hit', async () => {
+    apiMock.translateSentence.mockResolvedValue({ status: 'limit', retryAfterSeconds: 7 })
+
+    await render(<Probe />)
+    await act(async () => {
+      void hook!.toggle('9.9.9', 'A sentence nobody cached.')
+    })
+    await flush()
+
+    expect(hook!.translations['9.9.9']).toEqual({
+      state: 'error',
+      message: 'Too many translations at once. Try again in 7 seconds.',
+    })
+  })
 })

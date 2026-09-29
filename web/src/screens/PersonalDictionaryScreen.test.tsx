@@ -109,7 +109,7 @@ beforeEach(() => {
 
 describe('PersonalDictionaryScreen', () => {
   it('Enter in the word field looks the word up and fills the translation', async () => {
-    apiMock.translate.mockResolvedValue({ word: 'apple', translation: 'яблуко', source: 'myMemory' })
+    apiMock.translate.mockResolvedValue({ word: 'apple', translation: 'яблуко', source: 'llm' })
     const { container } = await render(screen())
     await flush()
     const { word, translation } = fields(container)
@@ -124,7 +124,7 @@ describe('PersonalDictionaryScreen', () => {
   })
 
   it('a hand-typed translation survives a later lookup', async () => {
-    apiMock.translate.mockResolvedValue({ word: 'apple', translation: 'яблуко', source: 'myMemory' })
+    apiMock.translate.mockResolvedValue({ word: 'apple', translation: 'яблуко', source: 'llm' })
     const { container } = await render(screen())
     await flush()
     const { word, translation } = fields(container)
@@ -139,7 +139,7 @@ describe('PersonalDictionaryScreen', () => {
 
   it('a suggestion is replaced by the next suggestion', async () => {
     apiMock.translate
-      .mockResolvedValueOnce({ word: 'apple', translation: 'яблуко', source: 'myMemory' })
+      .mockResolvedValueOnce({ word: 'apple', translation: 'яблуко', source: 'llm' })
       .mockResolvedValueOnce({ word: 'pear', translation: 'груша', source: 'dictionary' })
     const { container } = await render(screen())
     await flush()
@@ -449,5 +449,19 @@ describe('PersonalDictionaryScreen', () => {
     expect(editInput(container)!.value).toBe('бігти, керувати')
     // The untouched row keeps what the server still holds.
     expect(rowTranslations(container)).toEqual(['яблуко'])
+  })
+
+  it('shows a rate-limit refusal as its own words, not as an error dump', async () => {
+    apiMock.translate.mockRejectedValue(new Error('Too many requests. Try again in 10 seconds.'))
+    const { container } = await render(screen())
+    await flush()
+    const { word } = fields(container)
+
+    await type(word, 'apple')
+    await pressEnter(word)
+    await flush()
+
+    expect(container.textContent).toContain('Too many requests. Try again in 10 seconds.')
+    expect(container.textContent).not.toContain('Error:')
   })
 })
