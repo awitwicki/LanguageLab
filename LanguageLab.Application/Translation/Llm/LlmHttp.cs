@@ -140,6 +140,50 @@ internal static partial class LlmHttp
         element.ValueKind == JsonValueKind.String ? element.GetString() : null;
 
     /// <summary>
+    /// A failing response's machine-readable error code, never its free-text message — Google's
+    /// <c>error.status</c> ("INVALID_ARGUMENT", "PERMISSION_DENIED", ...; its own <c>error.code</c>
+    /// is just the HTTP status repeated as a number, so a non-string value there is skipped) or an
+    /// OpenAI-style <c>error.code</c>/<c>error.type</c> ("invalid_api_key",
+    /// "invalid_request_error", ...). Best-effort: any other shape, or a body that isn't JSON,
+    /// answers null. The caller passes the result through <see cref="ReasonCode"/> before it goes
+    /// in a message, the same defense in depth as a finish or block reason.
+    /// </summary>
+    public static string? ErrorCode(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("error", out var error)
+                || error.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            return (error.TryGetProperty("status", out var status) ? StringOrNull(status) : null)
+                ?? (error.TryGetProperty("code", out var code) ? StringOrNull(code) : null)
+                ?? (error.TryGetProperty("type", out var type) ? StringOrNull(type) : null);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The generic "answered a failing status" message both clients throw for anything not a quota.</summary>
+    public static LlmUnavailableException UnavailableStatus(
+        ILogger logger, string provider, HttpStatusCode status, string body)
+    {
+        var code = ErrorCode(body);
+
+        return Unavailable(logger, code is null
+            ? $"{provider} answered {(int)status}."
+            : $"{provider} answered {(int)status} ({ReasonCode(code)}).");
+    }
+
+    /// <summary>
     /// A finish or block reason, fit for a message: a provider's codes (STOP, MAX_TOKENS, length,
     /// content_filter) pass; anything else is response text and is not quoted.
     /// </summary>

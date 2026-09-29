@@ -4,7 +4,8 @@ import type { DrillState, Played } from './session'
 /** Long enough to cover a closed Mini App reopened later the same day, not a stale round. */
 export const MaxAgeMs = 12 * 60 * 60 * 1000
 
-const Key = 'll.verbs.session'
+/** v2: the choice drill. A round saved by the self-assessment drill has no exercises to show and is never read. */
+const Key = 'll.verbs.session.v2'
 
 /**
  * A round in progress, kept on this device so a reload can pick it up where it stopped. It
@@ -17,7 +18,7 @@ export interface SavedSession {
   query: DrillQuery
   title: string
   /** `done` only while its last answers are still waiting to leave. */
-  phase: 'intro' | 'drill' | 'done'
+  phase: 'drill' | 'done'
   /** The window on offer, and how much of it the learner took — the drill round's words. */
   offer: SessionVerb[]
   words: number
@@ -89,7 +90,7 @@ function isSavedSession(value: unknown): value is SavedSession {
     query !== null &&
     typeof query.mode === 'string' &&
     typeof v.title === 'string' &&
-    (v.phase === 'intro' || v.phase === 'drill' || v.phase === 'done') &&
+    (v.phase === 'drill' || v.phase === 'done') &&
     Array.isArray(v.offer) &&
     typeof v.words === 'number' &&
     typeof scope === 'object' &&
@@ -99,7 +100,7 @@ function isSavedSession(value: unknown): value is SavedSession {
     Array.isArray(v.pending) &&
     // Exactly one of the two rounds is being played.
     (played === null) !== (drill === null) &&
-    (played === null || (Array.isArray(played.cards) && typeof played.index === 'number')) &&
+    (played === null || (played.kind === 'queue' && Array.isArray(played.cards) && typeof played.index === 'number')) &&
     (drill === null || (Array.isArray(drill.words) && typeof drill.dealt === 'number'))
   )
 }

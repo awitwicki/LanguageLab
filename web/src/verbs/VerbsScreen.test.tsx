@@ -93,7 +93,7 @@ describe('VerbsScreen', () => {
         scope: { passed: 3, total: 27 },
         played: null,
         drill: createDrill([]),
-        pending: [{ verb: 'go', promptForm: 'v2', known: true, responseMs: 900, mode: 'batch', group: 4 }],
+        pending: [{ verb: 'go', promptForm: 'v2', chosen: 'went', responseMs: 900, mode: 'batch', group: 4 }],
       }
     }
 

@@ -8,12 +8,6 @@ public sealed record SessionRequest(DrillMode Mode, int? Group, DrillScope Scope
 /// <summary>How far the learner is through the set this session was drawn from.</summary>
 public sealed record ScopeProgressView(int Passed, int Total);
 
-/// <summary>
-/// A verb's example sentence in each of the three tenses, brackets and all. All three travel
-/// because the browser, not the server, decides which form a card prompts.
-/// </summary>
-public sealed record ExamplesView(string Present, string Past, string Perfect);
-
 /// <summary>A verb as a session needs it: everything to draw its cards, plus where the learner stands.</summary>
 public sealed record SessionVerbView(
     string V1,
@@ -22,12 +16,11 @@ public sealed record SessionVerbView(
     string Translation,
     int Group,
     string? Note,
-    ExamplesView Examples,
+    IReadOnlyList<VerbExercise> Exercises,
     IReadOnlyList<PromptForm> FormOrder,
     double Mastery,
     int Streak,
-    int Answers,
-    bool Fresh);
+    int Answers);
 
 /// <summary>One card of a free run's queue: which verb, prompted by which form.</summary>
 public sealed record SessionCardView(string Verb, PromptForm PromptForm);
@@ -49,8 +42,9 @@ public sealed record VerbSessionView(
 /// Ordinary training gets the window and no queue: the browser runs the round itself, because
 /// the next card depends on the answer just given and a queue drawn in advance could not react
 /// to it. A free run is a weighted random draw with nothing to react to, so its queue is drawn
-/// here. Either way the answers travel with the verbs, because the client has to blur them —
-/// self-assessment has nothing to game.
+/// here. Either way the exercises travel with the verbs, because the browser judges a pick at
+/// once for its own screen — the server judges it again from <c>chosen</c> when the answer
+/// reaches it.
 /// </summary>
 public class VerbSessionService
 {
@@ -107,21 +101,17 @@ public class VerbSessionService
             verb.Translation,
             verb.Group,
             verb.Note,
-            new ExamplesView(
-                verb.ExampleOf(Tense.Present).Text,
-                verb.ExampleOf(Tense.Past).Text,
-                verb.ExampleOf(Tense.Perfect).Text),
+            ExerciseBuilder.All(verb, dice),
             ShuffledForms(dice),
             standing.Mastery,
             standing.Streak,
-            standing.Answers,
-            standing.Answers == 0);
+            standing.Answers);
     }
 
     /// <summary>
     /// The three forms in a per-verb random order. The browser walks it instead of rolling its
-    /// own dice: it needs no randomness of its own, its tests stay deterministic, and a round
-    /// of the introduction cannot prompt the same form twice.
+    /// own dice: it needs no randomness of its own, its tests stay deterministic, and
+    /// consecutive showings of one verb cannot prompt the same form twice.
     /// </summary>
     private static IReadOnlyList<PromptForm> ShuffledForms(Random dice)
     {

@@ -372,6 +372,8 @@ export default function App() {
             title={route.title}
             userId={state.user.id}
             resume={route.resume}
+            wordCount={state.user.verbsWordCount}
+            onWordCountSaved={() => void refreshUser()}
             onStartDrill={(query, title) => setRoute({ name: 'verbs-drill', query, title })}
             onBack={() =>
               setRoute(

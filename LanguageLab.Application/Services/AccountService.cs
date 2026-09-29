@@ -20,6 +20,13 @@ public enum SetLanguageResult
     NotFound,
 }
 
+public enum SetVerbsWordCountResult
+{
+    Saved,
+    InvalidValue,
+    NotFound,
+}
+
 /// <summary>
 /// What a signed-in user may do to their own account. Deliberately separate from
 /// AdminUserService, whose every operation refuses to act on the caller — self-deletion is
@@ -78,5 +85,28 @@ public class AccountService
         user.Language = language.Code;
         await _dbContext.SaveChangesAsync();
         return SetLanguageResult.Saved;
+    }
+
+    /// <summary>
+    /// The upper bound is the client's own concern (it never offers more words than a session
+    /// has); this only refuses what could not be a word count at all.
+    /// </summary>
+    public async Task<SetVerbsWordCountResult> SetVerbsWordCountAsync(long userId, int words)
+    {
+        if (words < 1)
+        {
+            return SetVerbsWordCountResult.InvalidValue;
+        }
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user == null)
+        {
+            return SetVerbsWordCountResult.NotFound;
+        }
+
+        user.VerbsWordCount = words;
+        await _dbContext.SaveChangesAsync();
+        return SetVerbsWordCountResult.Saved;
     }
 }

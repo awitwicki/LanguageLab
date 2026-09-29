@@ -197,6 +197,43 @@ public class OpenAiCompatibleLlmClientTests
         AssertNothingLeaked(error, log);
     }
 
+    /// <summary>OpenAI-style error.code is a short slug, unlike Gemini's numeric one — worth keeping.</summary>
+    [Fact]
+    public async Task A_failing_status_names_the_providers_error_code_when_present()
+    {
+        var body = JsonSerializer.Serialize(new
+        {
+            error = new { code = "invalid_api_key", message = $"{EchoedBody} {UserText}" },
+        });
+        var handler = new StubHttpHandler(_ => StubHttpHandler.Json(body, HttpStatusCode.BadRequest));
+        var (client, log) = Create(handler);
+
+        var error = await Assert.ThrowsAsync<LlmUnavailableException>(
+            () => client.CompleteJsonAsync(Request(), CancellationToken.None));
+
+        Assert.Equal("OpenAiCompatible answered 400 (invalid_api_key).", error.Message);
+        Assert.Equal(error.Message, Assert.Single(log.Entries).Message);
+        AssertNothingLeaked(error, log);
+    }
+
+    /// <summary>error.type is the fallback when code is absent (or, as here, null).</summary>
+    [Fact]
+    public async Task Falls_back_to_error_type_when_code_is_absent()
+    {
+        var body = JsonSerializer.Serialize(new
+        {
+            error = new { code = (string?)null, type = "invalid_request_error", message = $"{EchoedBody} {UserText}" },
+        });
+        var handler = new StubHttpHandler(_ => StubHttpHandler.Json(body, HttpStatusCode.BadRequest));
+        var (client, log) = Create(handler);
+
+        var error = await Assert.ThrowsAsync<LlmUnavailableException>(
+            () => client.CompleteJsonAsync(Request(), CancellationToken.None));
+
+        Assert.Equal("OpenAiCompatible answered 400 (invalid_request_error).", error.Message);
+        AssertNothingLeaked(error, log);
+    }
+
     public static TheoryData<string, string> UnusableAnswers => new()
     {
         { """{"choices":[]}""", "OpenAiCompatible answered without a choice." },

@@ -24,7 +24,8 @@ public sealed record Example(Tense Tense, string Text)
 /// <summary>
 /// One irregular verb of the catalog. V2 and V3 are lists because <c>be</c> has
 /// <c>was / were</c> and <c>get</c> has <c>got / gotten</c>. V1 is the stable key used in
-/// knowledge rows and the API.
+/// knowledge rows and the API. <see cref="OwnSentencesOnly"/> keeps the drill's universal
+/// templates away from a verb they would misrepresent (<c>be</c> needs am / is / are).
 /// </summary>
 public sealed record IrregularVerb(
     int Group,
@@ -33,10 +34,19 @@ public sealed record IrregularVerb(
     IReadOnlyList<string> V3,
     string Translation,
     IReadOnlyList<Example> Examples,
-    string? Note = null)
+    string? Note = null,
+    bool OwnSentencesOnly = false)
 {
     /// <summary>"go – went – gone"; alternatives joined with " / ".</summary>
     public string Triplet => $"{V1} – {string.Join(" / ", V2)} – {string.Join(" / ", V3)}";
 
     public Example ExampleOf(Tense tense) => Examples.First(e => e.Tense == tense);
+
+    /// <summary>Every right answer for a blank that wants this form.</summary>
+    public IReadOnlyList<string> FormsOf(PromptForm form) => form switch
+    {
+        PromptForm.V1 => [V1],
+        PromptForm.V2 => V2,
+        _ => V3,
+    };
 }

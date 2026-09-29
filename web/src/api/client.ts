@@ -13,6 +13,8 @@ export interface CurrentUser {
   language: string | null
   /** From Telegram's language_code, only while language is null — preselects the picker. */
   suggestedLanguage: string | null
+  /** Word count last chosen for an irregular-verbs round; null until they've started one. */
+  verbsWordCount: number | null
 }
 
 /** One entry of the server's language catalog. */
@@ -22,8 +24,8 @@ export interface Language {
   nativeName: string
 }
 
-/** The admin list's row: the account, without the learner-language fields /me carries. */
-export interface AdminUser extends Omit<CurrentUser, 'language' | 'suggestedLanguage'> {
+/** The admin list's row: the account, without the learner-language and verbs-drill fields /me carries. */
+export interface AdminUser extends Omit<CurrentUser, 'language' | 'suggestedLanguage' | 'verbsWordCount'> {
   isBanned: boolean
   createdAt: string
   lastLoginAt: string | null
@@ -424,6 +426,15 @@ export type DrillMode = 'batch' | 'free'
 /** What a free run draws from. */
 export type DrillScope = 'stage' | 'cumulative' | 'all'
 
+/** One fill-the-blank card: the sentence around the blank, the options, and the right one. */
+export interface VerbExercise {
+  form: PromptForm
+  before: string
+  after: string
+  options: string[]
+  answer: string
+}
+
 /** A verb as a session hands it over: everything to draw its cards, plus the learner's standing. */
 export interface SessionVerb {
   v1: string
@@ -432,21 +443,20 @@ export interface SessionVerb {
   translation: string
   group: number
   note: string | null
-  examples: { present: string; past: string; perfect: string }
+  /** Each form's exercises, own sentence first; a form's showings walk them in order. */
+  exercises: VerbExercise[]
   /** The three forms in this verb's own order; each showing takes the next one. */
   formOrder: PromptForm[]
   mastery: number
   streak: number
   answers: number
-  /** Never answered before — what the introduction round exists for. */
-  fresh: boolean
 }
 
-/** One judged card on its way to the server. */
+/** One picked card on its way to the server, which judges `chosen` itself. */
 export interface VerbAnswerToPost {
   verb: string
   promptForm: PromptForm
-  known: boolean
+  chosen: string
   responseMs: number
   mode: DrillMode
   group?: number
@@ -467,7 +477,7 @@ export interface VerbSession {
   scope: { passed: number; total: number }
 }
 
-/** One row of a stage's table. `passed` is four "I know" answers in a row. */
+/** One row of a stage's table. `passed` is four right picks in a row. */
 export interface VerbRow {
   v1: string
   v2: string
@@ -1039,6 +1049,9 @@ export const api = {
 
   setLanguage: (code: string) =>
     request<null>('/api/auth/me/language', { method: 'PUT', body: JSON.stringify({ code }) }),
+
+  setVerbsWordCount: (words: number) =>
+    request<null>('/api/auth/me/verbs-word-count', { method: 'PUT', body: JSON.stringify({ words }) }),
 
   /** Page size is the server's default; the answer says what it was. */
   listUsers: (params: { search?: string; page: number }) => {

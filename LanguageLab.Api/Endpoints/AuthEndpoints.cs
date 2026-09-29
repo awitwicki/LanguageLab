@@ -33,12 +33,16 @@ public sealed record TelegramWebAppOptions(string BotToken)
 
 public sealed record CurrentUserView(
     long Id, long TelegramUserId, string DisplayName, string? Username, string? PhotoUrl, UserRole Role,
-    string? Language, string? SuggestedLanguage);
+    string? Language, string? SuggestedLanguage, int? VerbsWordCount);
 
 /// <summary>The body of POST /api/auth/telegram/webapp: window.Telegram.WebApp.initData, verbatim.</summary>
 public sealed record WebAppLoginRequest(string? InitData);
 
 public sealed record SetLanguageRequest(string? Code);
+
+public sealed record SetVerbsWordCountRequest(int Words);
+
+public sealed record WordCountError(string Error);
 
 public static class AuthEndpoints
 {
@@ -74,6 +78,15 @@ public static class AuthEndpoints
                 SetLanguageResult.Saved => Results.NoContent(),
                 SetLanguageResult.NotFound => Results.Unauthorized(),
                 _ => Results.Json(new LanguageError("unknown_language"), statusCode: StatusCodes.Status400BadRequest),
+            }).RequireAuthorization();
+
+        group.MapPut("/me/verbs-word-count", async (
+            SetVerbsWordCountRequest body, ICurrentUserContext currentUser, AccountService accounts) =>
+            await accounts.SetVerbsWordCountAsync(currentUser.Require().Id, body.Words) switch
+            {
+                SetVerbsWordCountResult.Saved => Results.NoContent(),
+                SetVerbsWordCountResult.NotFound => Results.Unauthorized(),
+                _ => Results.Json(new WordCountError("invalid_value"), statusCode: StatusCodes.Status400BadRequest),
             }).RequireAuthorization();
 
         group.MapPost("/logout", async (HttpContext http) =>
@@ -177,5 +190,6 @@ public static class AuthEndpoints
     private static CurrentUserView ToView(TelegramUser user) =>
         new(user.Id, user.TelegramUserId, user.DisplayName, user.Username, user.PhotoUrl, user.Role,
             user.Language,
-            user.Language == null ? LearnerLanguages.FromTelegram(user.TelegramLanguageCode)?.Code : null);
+            user.Language == null ? LearnerLanguages.FromTelegram(user.TelegramLanguageCode)?.Code : null,
+            user.VerbsWordCount);
 }

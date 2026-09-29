@@ -26,7 +26,7 @@ public class VerbSessionServiceTests
     {
         for (var i = 0; i < times; i++)
         {
-            await knowledge.ApplyAsync(1, verb, PromptForm.V1, known, 500, DrillMode.Batch, group, Now);
+            await knowledge.ApplyAsync(1, verb, PromptForm.V1, known ? verb : "wrong", 500, DrillMode.Batch, group, Now);
         }
     }
 
@@ -43,7 +43,6 @@ public class VerbSessionServiceTests
         Assert.Equal(DrillMode.Batch, session.Mode);
         Assert.Null(session.Queue);
         Assert.Equal(["cut", "put", "let", "set", "hit"], session.Verbs.Select(v => v.V1));
-        Assert.All(session.Verbs, v => Assert.True(v.Fresh));
         Assert.Equal(new ScopeProgressView(0, 9), session.Scope);
     }
 
@@ -58,12 +57,11 @@ public class VerbSessionServiceTests
             1, new SessionRequest(DrillMode.Batch, 1, DrillScope.Stage), new Random(1));
 
         Assert.Equal(["put", "let", "set", "hit", "cut"], session!.Verbs.Select(v => v.V1));
-        Assert.False(session.Verbs.Single(v => v.V1 == "cut").Fresh);
         Assert.Equal(1, session.Verbs.Single(v => v.V1 == "cut").Answers);
     }
 
     [Fact]
-    public async Task A_verb_carries_its_forms_its_three_examples_and_a_form_order()
+    public async Task A_verb_carries_its_forms_its_exercises_for_all_three_forms_and_a_form_order()
     {
         await using var db = NewContext();
         var (sessions, _) = Services(db);
@@ -77,10 +75,10 @@ public class VerbSessionServiceTests
         Assert.Equal("різати", cut.Translation);
         Assert.Equal(1, cut.Group);
 
-        // The catalog brackets the verb form in every example sentence.
-        Assert.Contains('[', cut.Examples.Present);
-        Assert.Contains('[', cut.Examples.Past);
-        Assert.Contains('[', cut.Examples.Perfect);
+        Assert.Equal(
+            [PromptForm.V1, PromptForm.V2, PromptForm.V3],
+            cut.Exercises.Select(e => e.Form).Distinct());
+        Assert.All(cut.Exercises, e => Assert.Equal("cut", e.Answer));
 
         Assert.Equal(
             [PromptForm.V1, PromptForm.V2, PromptForm.V3],

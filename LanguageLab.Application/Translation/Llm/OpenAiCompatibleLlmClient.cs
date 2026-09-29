@@ -68,7 +68,7 @@ public sealed class OpenAiCompatibleLlmClient : ILlmClient
 
         if (!response.IsSuccess)
         {
-            throw LlmHttp.Unavailable(_logger, $"{Name} answered {(int)response.Status}.");
+            throw LlmHttp.UnavailableStatus(_logger, Name, response.Status, response.Body);
         }
 
         using var envelope = LlmHttp.ParseEnvelope(response.Body, Name, _logger);

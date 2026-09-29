@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type DrillQuery, type SessionVerb, type VerbSession } from '../api/client'
-import { readIntroSettings, writeIntroSettings, type IntroSettings } from './introSettings'
 import { createOutbox } from './outbox'
+import { resolveWordCount } from './sessionSettings'
 import { clearSavedSession, readSavedSession, writeSavedSession, type SavedSession } from './savedSession'
 import {
   applyAnswer,
   createDrill,
-  introQueue,
+  exerciseFor,
   isDone,
   PassStreak,
   type Card,
@@ -21,7 +21,7 @@ const MaxResponseMs = 60_000
 /// How few cards may be left of a free run's queue before the next chunk is fetched.
 const RefillAt = 5
 
-export type Phase = 'loading' | 'start' | 'intro' | 'drill' | 'done' | 'finished'
+export type Phase = 'loading' | 'start' | 'drill' | 'done' | 'finished'
 
 /** Who the round is saved for, and — after a reload — the saved round to pick up. */
 export interface SessionSaving {
@@ -32,29 +32,36 @@ export interface SessionSaving {
 
 /**
  * One training session, run in the browser. The server hands over the words and their
- * standing; both rounds and the choice of the next card happen here, so no click waits on the
- * network. Answers leave through the outbox in the background.
+ * standing; the choice of the next card happens here, so no click waits on the network.
+ * Answers leave through the outbox in the background.
  *
- * Ordinary training opens on the start screen (`start`), walks the introduction (`intro`) and
- * then the drill round (`drill`), and ends on `done` — or on `finished` when the whole stage
- * has already passed. A free run has nothing to introduce and opens straight on `drill`.
+ * Ordinary training opens on the start screen (`start`), plays the drill round (`drill`) and
+ * ends on `done` — or on `finished` when the whole stage has already passed. A free run has
+ * nothing to choose the words of and opens straight on `drill`.
  *
  * Given `saving`, the round is kept on the device as it is played, so a reload can hand it
  * back as `saving.resume` and carry on from the same card — see `savedSession.ts`.
+ *
+ * `wordCount` is the account's last choice (null before it has ever made one); `onWordCountSaved`
+ * fires once a fresh choice, made by pressing Start, has reached the account.
  */
-export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
+export function useVerbSession(
+  query: DrillQuery,
+  saving?: SessionSaving,
+  wordCount?: number | null,
+  onWordCountSaved?: () => void,
+) {
   const [phase, setPhase] = useState<Phase>('loading')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [stuck, setStuck] = useState(false)
   const [offer, setOffer] = useState<SessionVerb[]>([])
-  const [settings, setSettings] = useState<IntroSettings>({ words: 0, rounds: 0 })
+  const [words, setWords] = useState(0)
   const [scope, setScope] = useState({ passed: 0, total: 0 })
   const [played, setPlayed] = useState<Played | null>(null)
   const [drill, setDrill] = useState<DrillState | null>(null)
-  const [revealed, setRevealed] = useState(false)
-  const [peeked, setPeeked] = useState(false)
+  const [picked, setPicked] = useState<string | null>(null)
 
   const resume = saving?.resume ?? null
   // Answers a saved round never sent go out with this one, resumed or not: a fresh round
@@ -79,8 +86,7 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
 
   const startedAt = useCallback(() => {
     shownAt.current = Date.now()
-    setRevealed(false)
-    setPeeked(false)
+    setPicked(null)
   }, [])
 
   const load = useCallback(
@@ -119,12 +125,12 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
       }
 
       setOffer(session.verbs)
-      setSettings(readIntroSettings(session.verbs.length))
+      setWords(resolveWordCount(wordCount, session.verbs.length))
       setPlayed(null)
       setDrill(null)
       setPhase('start')
     },
-    [startedAt],
+    [startedAt, wordCount],
   )
 
   // One last push on the way out: a closing tab gets a single shot, which is why the endpoint
@@ -152,36 +158,19 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
   }, [card])
 
   const beginDrill = useCallback(
-    (words: SessionVerb[]) => {
+    (chosenWords: SessionVerb[]) => {
       setPlayed(null)
-      setDrill(createDrill(words))
-      setPhase(words.length === 0 ? 'done' : 'drill')
+      setDrill(createDrill(chosenWords))
+      setPhase(chosenWords.length === 0 ? 'done' : 'drill')
       startedAt()
     },
     [startedAt],
   )
 
-  const chosen = useCallback(() => offer.slice(0, settings.words), [offer, settings.words])
-
-  const startIntro = useCallback(() => {
-    writeIntroSettings(settings)
-    const cards = introQueue(chosen(), settings.rounds)
-
-    if (cards.length === 0) {
-      beginDrill(chosen())
-
-      return
-    }
-
-    setPlayed({ kind: 'intro', cards, index: 0 })
-    setPhase('intro')
-    startedAt()
-  }, [beginDrill, chosen, settings, startedAt])
-
-  const skipIntro = useCallback(() => {
-    writeIntroSettings(settings)
-    beginDrill(chosen())
-  }, [beginDrill, chosen, settings])
+  const start = useCallback(() => {
+    beginDrill(offer.slice(0, words))
+    void api.setVerbsWordCount(words).then(onWordCountSaved).catch(() => {})
+  }, [beginDrill, offer, words, onWordCountSaved])
 
   const finish = useCallback(() => {
     setPhase('done')
@@ -221,16 +210,10 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
     if (played) {
       const index = played.index + 1
 
-      if (played.kind === 'intro' && index >= played.cards.length) {
-        beginDrill(chosen())
-
-        return
-      }
-
       setPlayed({ ...played, index })
       startedAt()
 
-      if (played.kind === 'queue' && played.cards.length - index <= RefillAt) {
+      if (played.cards.length - index <= RefillAt) {
         refill()
       }
 
@@ -249,7 +232,7 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
         finish()
       }
     }
-  }, [beginDrill, chosen, drill, finish, played, refill, startedAt])
+  }, [drill, finish, played, refill, startedAt])
 
   /// Puts a saved round back on screen. It was saved on the card the learner lands on next, so
   /// nothing here needs to know whether the last one was answered.
@@ -257,15 +240,15 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
     (saved: SavedSession) => {
       setScope(saved.scope)
       setOffer(saved.offer)
-      setSettings({ ...readIntroSettings(saved.offer.length), words: saved.words })
+      setWords(saved.words)
       setPlayed(saved.played)
       setDrill(saved.drill)
 
       if (saved.played) {
-        setPhase(saved.played.kind === 'intro' ? 'intro' : 'drill')
+        setPhase('drill')
         startedAt()
 
-        if (saved.played.kind === 'queue' && saved.played.cards.length - saved.played.index <= RefillAt) {
+        if (saved.played.cards.length - saved.played.index <= RefillAt) {
           refill()
         }
 
@@ -318,7 +301,7 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
 
     const queued = outbox.queued()
 
-    if (phase !== 'intro' && phase !== 'drill' && !(phase === 'done' && queued.length > 0)) {
+    if (phase !== 'drill' && !(phase === 'done' && queued.length > 0)) {
       clearSavedSession()
 
       return
@@ -334,7 +317,7 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
       title: saving.title,
       phase,
       offer,
-      words: settings.words,
+      words,
       scope,
       played: answered && played ? { ...played, index: played.index + 1 } : played,
       drill: answered ? (pending.current ?? drill) : drill,
@@ -354,7 +337,7 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
   // the queue has its own trigger through the outbox.
   useEffect(() => {
     saveRef.current()
-  }, [phase, played, drill, revealed])
+  }, [phase, played, drill, picked])
 
   /// The learner left the round on purpose: nothing is offered back to them later.
   const discard = useCallback(() => {
@@ -363,12 +346,13 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
   }, [])
 
   const answer = useCallback(
-    (known: boolean) => {
-      if (!card || answeredCard.current === card || phase === 'intro') {
+    (choice: string) => {
+      if (!card || answeredCard.current === card || phase !== 'drill') {
         return
       }
 
       answeredCard.current = card
+      const known = choice === card.exercise.answer
 
       // Ahead of `outbox.add`, which saves the round: the drill state after this answer is
       // the one a reload has to land on.
@@ -379,7 +363,7 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
       outbox.add({
         verb: card.verb.v1,
         promptForm: card.promptForm,
-        known,
+        chosen: choice,
         responseMs: Math.min(Math.max(0, Date.now() - shownAt.current), MaxResponseMs),
         mode: query.mode,
         group: query.group,
@@ -392,12 +376,12 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
         .then(() => setStuck(false))
         .catch(() => setStuck(true))
 
-      // "I know" needs no answer on screen: the next card comes at once. A miss is the moment
-      // the word is learned, so it stays until the learner has read it.
+      // A right pick needs nothing on screen: the next card comes at once. A wrong one is the
+      // moment the form is learned, so it stays until the learner has read it.
       if (known) {
         advance()
       } else {
-        setRevealed(true)
+        setPicked(choice)
       }
     },
     [advance, card, drill, outbox, phase, query.group, query.mode],
@@ -410,10 +394,6 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
 
     advance()
   }, [advance, card])
-
-  /// Uncovers the answer without judging the card. The clock keeps running, so a peeked
-  /// "I know" scores as the slow answer it is rather than a free full mark.
-  const peek = useCallback(() => setPeeked(true), [])
 
   const nextWords = useCallback(() => {
     setSyncing(true)
@@ -444,18 +424,13 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
     syncing,
     stuck,
     card,
-    intro:
-      played?.kind === 'intro' ? { step: played.index + 1, total: played.cards.length } : null,
     offer,
-    settings,
-    setWords: (words: number) => setSettings((s) => ({ ...s, words })),
-    setRounds: (rounds: number) => setSettings((s) => ({ ...s, rounds })),
-    startIntro,
-    skipIntro,
+    words,
+    setWords: (words: number) => setWords(words),
+    start,
     answer,
-    revealed,
-    peeked,
-    peek,
+    picked,
+    revealed: picked !== null,
     next,
     scope: { passed: scope.passed + passedHere, total: scope.total },
     nextWords,
@@ -464,15 +439,24 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
   }
 }
 
-/** A free run's queue, joined to the verb data it names. */
+/** A free run's queue, joined to the verb data it names; a form's repeats walk its exercises. */
 function cardsOf(session: VerbSession): Card[] {
   const byV1 = new Map(session.verbs.map((verb) => [verb.v1, verb]))
+  const shown = new Map<string, number>()
 
   return (session.queue ?? [])
     .map((entry) => {
       const verb = byV1.get(entry.verb)
 
-      return verb ? { verb, promptForm: entry.promptForm } : null
+      if (!verb) {
+        return null
+      }
+
+      const key = `${verb.v1}:${entry.promptForm}`
+      const nth = shown.get(key) ?? 0
+      shown.set(key, nth + 1)
+
+      return { verb, promptForm: entry.promptForm, exercise: exerciseFor(verb, entry.promptForm, nth) }
     })
     .filter((card): card is Card => card !== null)
 }

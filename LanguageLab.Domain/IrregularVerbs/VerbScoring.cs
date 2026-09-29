@@ -4,20 +4,20 @@ namespace LanguageLab.Domain.IrregularVerbs;
 public sealed record VerbTally(double Mastery, int Streak, int Answers, int Knows);
 
 /// <summary>
-/// Turns one self-assessment click into numbers. The learner's own verdict decides whether
-/// the answer counts; how long the click took decides how much it is worth, because an
-/// instant "I know" is stronger evidence than the same answer after five seconds of
-/// thinking. Two signals come out, each with one job: <see cref="NextMastery"/> feeds the
+/// Turns one pick in the drill into numbers. Whether the learner picked a right form decides
+/// whether the answer counts; how long the pick took decides how much it is worth, because an
+/// instant right pick is stronger evidence than the same pick after reading the sentence
+/// twice. Two signals come out, each with one job: <see cref="NextMastery"/> feeds the
 /// table's colour and the free-training draw, <see cref="NextStreak"/> feeds nothing but
-/// batch progression, so advancing stays predictable however fast the learner clicks.
+/// batch progression, so advancing stays predictable however fast the learner picks.
 /// </summary>
 public static class VerbScoring
 {
-    /// <summary>At or below this, a "know" is worth full marks.</summary>
-    public const int FastMs = 1500;
+    /// <summary>At or below this, a right pick is worth full marks.</summary>
+    public const int FastMs = 3000;
 
-    /// <summary>At or above this, a "know" is worth <see cref="SlowQuality"/>.</summary>
-    public const int SlowMs = 6000;
+    /// <summary>At or above this, a right pick is worth <see cref="SlowQuality"/>.</summary>
+    public const int SlowMs = 10000;
 
     public const double SlowQuality = 0.45;
 
@@ -58,8 +58,8 @@ public static class VerbScoring
 
     /// <summary>
     /// An exponential moving average, except for the very first answer, which sets the
-    /// score outright: averaging it against a zero start would cap an instant first
-    /// "I know" at <see cref="Alpha"/>, which reads as failure.
+    /// score outright: averaging it against a zero start would cap an instant first right
+    /// pick at <see cref="Alpha"/>, which reads as failure.
     /// </summary>
     public static double NextMastery(double mastery, int answers, double quality) =>
         answers == 0 ? quality : mastery + Alpha * (quality - mastery);
@@ -67,6 +67,13 @@ public static class VerbScoring
     public static int NextStreak(int streak, bool known) => known ? streak + 1 : 0;
 
     public static bool Passed(int streak) => streak >= PassStreak;
+
+    /// <summary>
+    /// Whether <paramref name="chosen"/> is a right form for a blank that wants
+    /// <paramref name="form"/>. Any member of the set counts — the drill never offers two.
+    /// </summary>
+    public static bool IsCorrect(IrregularVerb verb, PromptForm form, string chosen) =>
+        verb.FormsOf(form).Contains(chosen.Trim(), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Folds a verb's whole answer log, oldest first, into the standing it implies. The

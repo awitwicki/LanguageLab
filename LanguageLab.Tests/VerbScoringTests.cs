@@ -28,8 +28,8 @@ public class VerbScoringTests
     [Fact]
     public void Between_the_thresholds_quality_falls_off_linearly()
     {
-        // Halfway between 1500 ms and 6000 ms is halfway between 1.0 and 0.45.
-        Assert.Equal(0.725, VerbScoring.Quality(known: true, responseMs: 3750), precision: 10);
+        // Halfway between 3000 ms and 10000 ms is halfway between 1.0 and 0.45.
+        Assert.Equal(0.725, VerbScoring.Quality(known: true, responseMs: 6500), precision: 10);
     }
 
     /// <summary>Review focus 1: a tab left open, or a clock that jumped backwards.</summary>
@@ -48,7 +48,7 @@ public class VerbScoringTests
     [Fact]
     public void The_first_answer_sets_mastery_outright()
     {
-        // Seeding the average from zero would cap a first instant "I know" at alpha.
+        // Seeding the average from zero would cap a first instant right pick at alpha.
         Assert.Equal(1.0, VerbScoring.NextMastery(mastery: 0, answers: 0, quality: 1.0));
         Assert.Equal(0, VerbScoring.NextMastery(mastery: 0, answers: 0, quality: 0));
     }
@@ -128,5 +128,27 @@ public class VerbScoringTests
         Assert.False(VerbScoring.Passed(3));
         Assert.True(VerbScoring.Passed(4));
         Assert.True(VerbScoring.Passed(12));
+    }
+
+    [Theory]
+    [InlineData("go", PromptForm.V2, "went", true)]
+    [InlineData("go", PromptForm.V2, "gone", false)]
+    [InlineData("go", PromptForm.V2, "goed", false)]
+    [InlineData("be", PromptForm.V2, "was", true)]
+    [InlineData("be", PromptForm.V2, "were", true)]
+    [InlineData("get", PromptForm.V3, "gotten", true)]
+    [InlineData("put", PromptForm.V3, "put", true)]
+    [InlineData("put", PromptForm.V3, "putted", false)]
+    [InlineData("go", PromptForm.V2, "", false)]
+    public void Judges_the_chosen_form_against_the_prompted_one(string v1, PromptForm form, string chosen, bool right)
+    {
+        Assert.Equal(right, VerbScoring.IsCorrect(IrregularVerbCatalog.Find(v1)!, form, chosen));
+    }
+
+    /// <summary>Review focus 5.</summary>
+    [Fact]
+    public void Ignores_case_and_surrounding_space()
+    {
+        Assert.True(VerbScoring.IsCorrect(IrregularVerbCatalog.Find("go")!, PromptForm.V2, " Went "));
     }
 }
