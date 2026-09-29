@@ -102,7 +102,7 @@ Nothing below is loaded for you automatically — open the one that matches the 
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | You need the project map, what a service owns, the endpoint inventory, or the Postgres/config setup. |
 | [docs/auth.md](docs/auth.md) | Touching sign-in, the `ll_session` cookie, dev-login, the Mini App and its full-screen insets, or roles. |
-| [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md) | Working on import, publication and moderation, the personal dictionary, translation providers and budgets, or Leitner batches. |
+| [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md) | Working on import, publication and moderation, the personal dictionary, the LLM translator, the background translation queue and per-user limits, or Leitner batches. |
 | [docs/reader.md](docs/reader.md) | Working in Reading mode: `ReaderBook` and position sync, the word panel, chapter windowing, fb2/epub parsing. |
 | [docs/trainers.md](docs/trainers.md) | Working on the irregular-verbs or the pronunciation trainer. |
 | [web/README.md](web/README.md) | You need SPA specifics beyond the conventions above. |

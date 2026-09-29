@@ -57,10 +57,15 @@ The services on top of the domain:
 - **The home screen's recent work** — `RecentActivityService`: the last finished session per scope,
   and the scopes still being sorted. Both drop what the caller can no longer open.
 - **The personal dictionary** — `PersonalDictionaryService`, the user's own word list.
-- **Translation** — `Translation/`: `ITranslator` → `MyMemoryTranslator`, with
-  `TranslationService` trying the shared vocabulary first and the provider after;
-  `ISentenceTranslator` → `FallbackSentenceTranslator`, which uses DeepL when a key is set and
-  `MyMemorySentenceTranslator` otherwise.
+- **Translation** — `Translation/`: one language model behind `ILlmClient`, in `Translation/Llm/`
+  (`GeminiLlmClient` or `OpenAiCompatibleLlmClient`, picked by `Translation:Provider` through
+  `LlmClientSelector`; `AddLlmClient` registers it, and `LlmStartupCheck` logs a warning when
+  there is no key). On top of it: `IWordBatchTranslator` → `LlmWordBatchTranslator`,
+  `ITranslator` → `LlmTranslator` (one word as a batch of one; `AddWordTranslation()`), and
+  `ISentenceTranslator` → `LlmSentenceTranslator` (`AddSentenceTranslation()`).
+  `TranslationService` tries the shared vocabulary first and the model after, a miss paced by
+  `UncachedTranslationLimiter` (one per user every 10 seconds, shared with sentences). See
+  [vocabulary-and-training.md](vocabulary-and-training.md#translation).
 - **Background translation** — `Translation/Queue/`: `TranslationQueue` (`ITranslationQueue`)
   keeps one `TranslationJob` per dictionary and language, and the hosted `TranslationWorker` fills
   the missing translations through `IWordBatchTranslator`, one batch of one job per iteration
@@ -92,8 +97,8 @@ service.
 
 ### `web/`
 
-React + Vite SPA: book import in the browser (fb2, epub, zipped fb2), dictionary stats, word
-sorting.
+React + Vite SPA: book import (fb2, epub, zipped fb2 — the browser previews chapters, the server
+does the rest), dictionary stats, word sorting.
 
 - `src/layout/` — the shell: top bar and sidebar.
 - `src/screens/`, `src/components/`.
@@ -101,11 +106,13 @@ sorting.
   of menus.
 - `src/reader/` and `src/books/` — the Reading mode and everything format-dependent. See
   [reader.md](reader.md).
-- `src/fb2/wordExtractor.ts` — the word-extraction worker behind a promise, shared by the import
-  screen and the reader.
+- `src/fb2/chapters.ts` — fb2 sections and `flattenChapters`, the import screen's chapter preview
+  (the server's `BookChapters.Flatten` follows the same rule); `src/fb2/tokenize.ts` — the reader's
+  word tokenizer. Lemmatization is no longer done in the browser for import: `ImportScreen` uploads
+  the file itself (`api.importDictionary`, over `XMLHttpRequest` for upload progress).
 - `src/lexicon/lexicon.ts` — `loadLexicon()`: the English lexicon, fetched once per page load
   from `/lexicon/english-lexicon.txt` (a copy of the server's file) and parsed into
-  `lemmasOf`/`lemmaOf`.
+  `lemmasOf`/`lemmaOf`; the reader's highlights and word panel resolve lemmas with it.
 - Tests are `*.test.ts(x)` next to the code they cover (vitest + jsdom, helper
   `src/test/render.ts`).
 
@@ -134,8 +141,8 @@ than one lemma. It is written twice and a test keeps the copies byte-identical:
 SCOWL's and AGID's notices sit next to both as `LICENSE-SCOWL.txt` / `LICENSE-AGID.txt`.
 
 The server-side book import lemmatizes and whitelists with it (`ImportTokenizer` in
-`LanguageLab.Application/Import/`); the reader's highlights and word panel switch to the SPA
-loader with C4 of the [LLM roadmap](superpowers/specs/2026-09-27-llm-translation-roadmap.md).
+`LanguageLab.Application/Import/`), and the reader's highlights and word panel lemmatize with the
+SPA's copy (`src/lexicon/lexicon.ts`).
 
 ## API surface
 
@@ -144,7 +151,13 @@ loader with C4 of the [LLM roadmap](superpowers/specs/2026-09-27-llm-translation
 - `/api/dictionaries`, `/api/sorting`.
 - `GET /api/dictionaries/personal`, `POST|PUT|DELETE /api/dictionaries/personal/words[/{id}]` — the
   personal dictionary; the `PUT` corrects a word's translation and nothing else.
-- `GET /api/translate?word=` — a translation suggestion.
+- `GET /api/translate?word=` — a translation suggestion; 429 with `Retry-After` for a miss inside
+  the user's 10-second uncached-translation window, or past 500 lookups a day.
+- `POST /api/dictionaries/import` — multipart book upload; the server parses, lemmatizes and
+  imports (see [vocabulary-and-training.md](vocabulary-and-training.md#import-validation)).
+- `GET /api/dictionaries/{id}/translation` — the background translation job's `{ done, total }`
+  for the caller's language, read-only (the dictionary screen polls it; `GET /api/dictionaries/{id}`
+  also enqueues).
 - `POST|DELETE /api/dictionaries/{id}/publication` — the owner offers a dictionary for publication
   or withdraws the offer.
 - `GET /api/admin/dictionaries` — the moderation queue (`status` query parameter, defaulting to
@@ -205,8 +218,8 @@ catalog order; anonymous, since the picker may render before `/me` settles. See
 
 `/api/reader`:
 
-- `GET /capabilities` — `sentenceTranslation`, always true, because `FallbackSentenceTranslator`
-  always has MyMemory to fall back on.
+- `GET /capabilities` — `sentenceTranslation` (false when no language model is configured) and
+  `importRetryAfterSeconds` (the wait before the user's next import, or null).
 - `GET /books` — the reader's library.
 - `PUT /books/{hash}` — register or refresh a book by its file hash, idempotent.
 - `DELETE /books/{hash}`, `PUT /books/{hash}/position`.
@@ -217,10 +230,9 @@ catalog order; anonymous, since the picker may render before `/me` settles. See
 - `DELETE /words/{lemma}/shelf` — the panel's undo: 204, or 409 when the word gained a Leitner row
   since the panel loaded it.
 
-`POST /api/translate/sentence` — the reader's sentence translation (DeepL when
-`Translation:DeepLApiKey` is set, MyMemory otherwise); 413 for a sentence MyMemory cannot take
-(over 500 bytes), 429 past the user's 20 000-characters-a-day quota (`SentenceQuota`). Nothing is
-stored.
+`POST /api/translate/sentence` — the reader's sentence translation through the language model;
+400 over 500 characters, 429 with `Retry-After` inside the user's 10-second window, 404 when no
+model is configured. Nothing is stored. See [reader.md](reader.md#sentence-translation).
 
 ### Trainers
 
@@ -234,8 +246,10 @@ Postgres runs via `compose.yaml`. `LanguageLab.Api` reads `ConnectionStrings:Def
 Docker the same keys arrive as environment variables through the ASP.NET Core `__` convention.
 `WebUser:TelegramId` is gone; there is no config user any more.
 
-`Translation:MyMemoryEmail` and `Translation:DeepLApiKey` are optional; what changes without them
-is described in [vocabulary-and-training.md](vocabulary-and-training.md).
+`Translation:Provider` (`Gemini` | `OpenAiCompatible`), `Translation:Gemini:ApiKey|Model` and
+`Translation:OpenAi:BaseUrl|ApiKey|Model` pick and reach the language model (`LlmOptions`; the
+full list is in the README). Without the selected provider's key the app still starts and
+translation is off — see [vocabulary-and-training.md](vocabulary-and-training.md#translation).
 
 Migrations run automatically on startup, via `dbContext.Database.MigrateAsync()` in
 [Program.cs:39](../LanguageLab.Api/Program.cs#L39). To add one:

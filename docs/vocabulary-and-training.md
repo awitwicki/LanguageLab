@@ -68,7 +68,26 @@ words themselves.
 
 ## Translation
 
-`Translation:MyMemoryEmail` and `Translation:DeepLApiKey` are both optional config.
+Every machine translation — a word, a batch of a dictionary's words, a reader sentence — comes from
+one language model behind `ILlmClient` (`LanguageLab.Application/Translation/Llm/`): Gemini by
+default, or any OpenAI-compatible endpoint (DeepSeek by default) with
+`Translation:Provider=OpenAiCompatible`. The keys are listed in the README. Without the selected
+provider's API key the app still starts — in Production too — logs a warning, and translation is
+off: a lookup answers "no translation", the background queue idles, and the reader hides sentence
+translation. There is no non-LLM fallback.
+
+On top of `ILlmClient`:
+
+- `LlmWordBatchTranslator` (`IWordBatchTranslator`) — up to ~200 lemmas in one call, keeping an
+  answer only for a lemma it was asked about. A translation spelled the same as the English word
+  is kept: several languages share some spellings with English, so it is not an echo.
+- `LlmTranslator` (`ITranslator`) — one word as a batch of one; never throws, and refuses a word
+  over 100 characters without asking.
+- `LlmSentenceTranslator` (`ISentenceTranslator`) — see [Sentence translation](reader.md#sentence-translation).
+
+Every prompt is a fixed system instruction; the user's text travels only as data, the answer is
+read only from the fields of a constrained JSON schema, and no book, sentence or word text is ever
+logged or put in an exception message. Each HTTP call times out after 30 seconds (`LlmHttp.Timeout`).
 
 A word's meaning lives in `WordTranslation` (table `WordTranslations`), not on `WordPair` itself:
 `WordPairId` + `Language` (a `LearnerLanguages` code) is unique, `Text` is required and non-empty,
@@ -77,11 +96,12 @@ more "untranslated" sentinel value, only the absence of a row for that language.
 can carry a different translation per language at once; a personal word (`OwnerId` set) keeps one
 translation per language too, so switching languages does not lose what was typed for another one.
 
-Provider word translations (`TranslationService.LookupAsync`, used by both `GET /api/translate` and
-the reader's word panel) are cached into the shared vocabulary as a `Machine` `WordTranslation` in
-the language asked for, so the same word costs the network at most once per language. A `Manual`
-translation already there for that language is never overwritten, and a hit in one language says
-nothing about any other.
+Single-word lookups (`TranslationService.LookupAsync`, used by `GET /api/translate`, the reader's
+word panel and the sorting "don't know" mark) are cached into the shared vocabulary as a `Machine`
+`WordTranslation` in the language asked for, so the same word costs the model at most once per
+language. A `Manual` translation already there for that language is never overwritten, and a hit
+in one language says nothing about any other. A hit is free; a miss spends the user's
+[uncached-translation slot](#uncached-translation-limit).
 
 **A word without a `WordTranslation` in the learner's current language is neither learnable, nor
 due, nor a distractor** — `WordSelectionService`'s learnable query, due-words query and distractor
@@ -115,8 +135,9 @@ small one. A batch is up to 200 of the job's words, most frequent first, sent th
 that language appeared meanwhile. A pass walks the words once: a word the model gave nothing for
 is passed over until the next enqueue. A quota refusal pauses the whole worker (the provider's
 `Retry-After`, otherwise 1 minute doubling up to an hour); an unavailable batch waits a minute,
-and five in a row mark the job `Failed`. Without a configured translator (`NullWordBatchTranslator`
-until the LLM translator lands) the worker idles.
+and five in a row mark the job `Failed`. Without a configured language model
+(`IWordBatchTranslator.IsConfigured` false) the worker idles, and the dictionary screen shows no
+progress for a job that cannot advance.
 
 Three things enqueue a dictionary: import, for the importer's language
 (`BookFileImportService.ImportAsync`); opening it — `GET /api/dictionaries/{id}`, and the reader
@@ -129,25 +150,40 @@ whole dictionary (`SortingEndpoints.TranslateIfUnknownAsync`, reusing `Translati
 `Pending` with work left, else `null` — which the dictionary screen shows as "Translating… N of M",
 polling every 4 seconds until it clears.
 
-### Budgets
+### Uncached translation limit
 
-Without `Translation:DeepLApiKey`, MyMemory translates sentences too, capped by
-`MyMemorySentenceBudget`: a server-wide daily budget of 40% of MyMemory's own daily limit — 2,000
-characters without `Translation:MyMemoryEmail`, 20,000 with it — spent only on a sentence actually
-sent, so the reader cannot exhaust the quota the word lookups also share. The word lookups get the
-remaining 60% as `MyMemoryWordBudget`, the same `DailyCharacterBudget` mechanism
-(`LanguageLab.Application/Translation/DailyCharacterBudget.cs`) wrapped the other way round.
+One translation that reaches the model per user every 10 seconds, admins included
+(`UncachedTranslationLimiter`: one timestamp per user, claimed by compare-and-swap, so two
+concurrent misses cannot both get through). Sentences and word-lookup misses share the slot. It is
+checked inside `TranslationService.LookupAsync` at the cache-miss point, and by
+`POST /api/translate/sentence` before every model call — there is no server-side sentence cache,
+so every sentence spends it. How a refusal looks:
+
+- `GET /api/translate` and `POST /api/translate/sentence` answer 429 with `Retry-After`.
+- The reader's `GET /api/reader/words/{lemma}` stays 200, with `source: "rateLimited"` and
+  `retryAfterSeconds`, so the word panel keeps its buttons and says when to try again.
+- The sorting "don't know" mark just leaves the word untranslated; the background queue picks it
+  up on the dictionary's next open.
+
+The background queue does not go through this limit — it is the server's own work, not a user's.
 
 ### Per-user rate limits
 
-`UserRateLimits` — sliding windows, in-memory like `SentenceQuota` — sits in front of the three
-endpoints one account could otherwise make expensive for everybody, per day:
+Also in memory — a restart forgives everybody — and per day:
 
-| Endpoint | Limit |
-|---|---|
-| `POST /api/dictionaries/import` | 1 request (admins exempt) |
-| `GET /api/translate` | 500 lookups |
-| bulk personal-word import | 20 requests |
+| What | Limit | Where |
+|---|---|---|
+| Book import | 1 *successful* import (admins exempt) | `ImportQuota` |
+| `POST /api/dictionaries/import` | 20 attempts | `UserRateLimits.ImportAttempts` |
+| `GET /api/translate` | 500 lookups | `UserRateLimits.Translate` |
+| bulk personal-word import | 20 requests | `UserRateLimits.BulkWords` |
+
+`ImportQuota` counts only an import that succeeded, so a wrong file, DRM or a non-English book is
+immediately retryable: `TryReserve` checks and reserves the slot in one atomic step and a failed
+import releases it. The looser 20-attempt policy, checked by the middleware before the handler
+runs, stops a script from hammering the endpoint with garbage. `GET /api/reader/capabilities` reports
+the wait as `importRetryAfterSeconds` (a read-only peek), so the reader's **Build dictionary**
+button can show it without a click.
 
 A refused request answers 429 with a `Retry-After` header naming the wait in seconds.
 
@@ -157,7 +193,9 @@ Training requires a `WordTranslation` in the learner's language, both for batch 
 distractors; see [Translation](#translation) above. A session is built once and renders in
 `Training.Language` from then on, so a language switch mid-session never blanks a button.
 Translations for the "don't know" shelf were backfilled once on 2026-09-07
-(`result/translations.txt`, local, `uk` only); auto-translation is still in the README TODO.
+(`result/translations.txt`, local, `uk` only); since then the
+[background queue](#background-translation-queue) and the "don't know" mark fill in what is
+missing.
 
 A batch is the scope's most frequent learnable words, by chapter or book frequency, and is
 deterministic. The web app shows a preview and passes `wordPairIds` explicitly.
