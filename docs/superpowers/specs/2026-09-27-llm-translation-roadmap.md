@@ -232,8 +232,8 @@ differently (also written into the affected interfaces' XML doc-comments):
   language, translates them through `IWordBatchTranslator` in batches, writes `Machine` rows,
   backs off on quota, idles while unconfigured. *Needs:* W0 (tests use a fake
   `IWordBatchTranslator`).
-- [ ] **B2. Triggers + status** — enqueue on import (importer's language) and on demand per Q6;
-  translate a word on "don't know" (`WordSortingService.MarkAsync`) when it has no translation
+- [x] **B2. Triggers + status** (spec: `2026-09-29-llm-b2-triggers-status-design.md`; wt: llm-b2) — enqueue on import (importer's language, already C3) and on demand per Q6;
+  translate a word on "don't know" (`SortingEndpoints.TranslateIfUnknownAsync`, `POST /api/sorting/mark`) when it has no translation
   yet; expose the job's "N of M" on the dictionary endpoint and show it on the dictionary screen.
   *Needs:* B1.
 
@@ -252,7 +252,7 @@ differently (also written into the affected interfaces' XML doc-comments):
   `ReaderBook`-must-exist check, since the hash is now proven), tokenize → `IEnglishLexicon` →
   counts per chapter → existing `BookImportService` core; 1 import/day, admins exempt (Q5);
   enqueue B. *Needs:* C1, C2, B1.
-- [ ] **C4. Frontend** — `ImportScreen` uploads the file with progress; delete
+- [~] **C4. Frontend** (wt: llm-c4) — `ImportScreen` uploads the file with progress; delete
   `parseBook.worker.ts`, `web/src/fb2/aggregate.ts`/`lemmatize.ts`, `useAutoImport.ts` and the
   `compromise` / `wink-lemmatizer` deps; switch the reader's highlights and word panel to the C1
   `lemmaOf` loader; the reader's **Build dictionary** button (Q4); re-enable import inside the
@@ -305,7 +305,7 @@ Wave 3  └────────────── merge to dev, D1 docs, end
 
 ## README TODO items this closes
 
-- [ ] Auto-translate on book import and on "don't know" — B1 + B2
+- [x] Auto-translate on book import and on "don't know" — B1 + B2
 - [ ] Book import inside the Telegram Mini App — C3 + C4
 - [ ] Flaky `ImportScreen.test.tsx` worker-parse previews — C4 (the worker goes away)
 - [ ] One-off audit of shared `WordPair` rows that predate the import word rule — partially: C1
@@ -346,3 +346,21 @@ Wave 3  └────────────── merge to dev, D1 docs, end
   review caught that the original echo guard (inherited from MyMemory) silently dropped correct
   cognate translations in several languages; `MaxOutputTokens` raised 4000 → 8192 for a full
   ~200-lemma batch in a non-Latin script.
+- 2026-09-29 — B2 merged into dev: `GET /api/dictionaries/{id}` freely re-enqueues the dictionary
+  for the caller's language on every open (`ITranslationQueue.EnqueueAsync`, unconditional, per
+  Q6) and returns the job's progress as `DictionaryDetail.Translation` (new
+  `TranslationJobProgressReader`); `PUT /api/reader/books/{hash}` does the same for a linked
+  book's dictionary (`ReaderEndpoints.MaybeEnqueueTranslationAsync`); `POST /api/sorting/mark`
+  translates a shared word directly (`SortingEndpoints.TranslateIfUnknownAsync`, reusing
+  `TranslationService.LookupAsync`) when marking it "don't know" leaves it untranslated, instead
+  of enqueueing the whole dictionary. The dictionary screen shows "Translating… N of M", polling a
+  new read-only `GET /api/dictionaries/{id}/translation` every 4 s — final review caught the first
+  draft polling `GET /{id}` itself, which also enqueues, so a job with any leftover
+  model-skipped words (or one that had just failed out) was re-armed every tick for as long as a
+  tab stayed open; the dedicated endpoint doesn't enqueue, and `TranslationJobProgressReader` also
+  now answers null when `IWordBatchTranslator` is unconfigured, so a job that can never advance
+  doesn't show as "translating" either. `ITranslator.TranslateAsync` never throws, so the mark
+  endpoint stays language-optional (`ICurrentLanguage.Get()`, not `.Require()`) and never 409s
+  after already saving the shelf change. Known follow-up, not part of this merge: the mark
+  endpoint's translate is synchronous and now inherits A2's LLM client's timeout rather than the
+  old MyMemory one — see the README TODO next to "Auto-translate on book import…".
