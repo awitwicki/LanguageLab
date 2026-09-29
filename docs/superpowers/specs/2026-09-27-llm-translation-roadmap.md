@@ -105,6 +105,12 @@ respect, the contracts that let them run in parallel, and progress.
   `TryAddScoped` and `TimeProvider.System` with `TryAddSingleton`. A2 registers its
   `IWordBatchTranslator` with a plain `AddScoped` (or a typed `AddHttpClient`) in its own
   `Add…` method and wins in either order; a stream that needs a clock injects `TimeProvider`.
+- 2026-09-29 (A2 → A3) — A translation equal to its lemma is not itself a "no translation" signal
+  for an LLM the way it was for MyMemory (which echoed unanswerable input back): several languages
+  spell some words the same as English (German capitalises nouns; Polish/Spanish/Italian keep some
+  loanwords unchanged), so `LlmWordBatchTranslator` keeps any non-empty string answer instead of
+  filtering echoes. A3's sentence prompt should rely on the same "omit what you can't answer"
+  instruction rather than add an echo check of its own.
 
 No open questions remain at roadmap level; each workstream's spec settles its own details and
 adds a decision here only when it changes something another workstream relies on.
@@ -207,7 +213,7 @@ differently (also written into the affected interfaces' XML doc-comments):
 - [x] **A1. LLM clients** (spec: `2026-09-28-llm-a1-clients-design.md`; wt: llm-a1) — `GeminiLlmClient` (structured output via `responseSchema`),
   `OpenAiCompatibleLlmClient` (DeepSeek, `response_format: json_object`), config + DI selection
   per Q7, `StubHandler` tests like `DeepLTranslatorTests`. *Needs:* W0.
-- [ ] **A2. Word translation** — `LlmWordBatchTranslator` (batches of ~200, output accepted only
+- [x] **A2. Word translation** (spec: `2026-09-29-llm-a2-word-translation-design.md`; wt: llm-a2) — `LlmWordBatchTranslator` (batches of ~200, output accepted only
   for the lemmas requested), the single-word `ITranslator` lookup routed through it,
   `TranslationService.LookupAsync` unchanged on the cache side, 100-character word cap. Remove
   `MyMemoryTranslator`, `MyMemoryWordBudget`. *Needs:* A1.
@@ -334,3 +340,9 @@ Wave 3  └────────────── merge to dev, D1 docs, end
   enqueue for the importer's language on import; 1 import/day (admins exempt), 429s carry
   `Retry-After`; `ImportWordText.MinLength` 3 → 2. The SPA still sends the old JSON until C4 —
   import in the UI is down on dev until then (accepted).
+- 2026-09-29 — A2 merged into dev: `LlmWordBatchTranslator`/`LlmTranslator`
+  (`LanguageLab.Application/Translation/Llm/`), `AddWordTranslation()`; `MyMemoryTranslator` and
+  `MyMemoryWordBudget` removed. A value equal to its lemma is kept, not treated as an echo — final
+  review caught that the original echo guard (inherited from MyMemory) silently dropped correct
+  cognate translations in several languages; `MaxOutputTokens` raised 4000 → 8192 for a full
+  ~200-lemma batch in a non-Latin script.
