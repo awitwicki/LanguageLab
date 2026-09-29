@@ -67,6 +67,32 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
     }
   }, [id])
 
+  // The SPA's first polling UI: while a background translation job is running for this
+  // dictionary, refresh every 4s so "Translating… N of M" moves and clears on its own. Polls
+  // getTranslationProgress, not getDictionary — that one also re-enqueues on every call, which
+  // turned a tick into a fresh trigger and could re-arm a job forever (final review, finding 1).
+  // Merges only translation into the existing detail, so a response in flight cannot clobber an
+  // optimistic change (e.g. a star toggle) made between two ticks.
+  const translating = detail?.translation != null
+  useEffect(() => {
+    if (!translating) return
+    let cancelled = false
+    const interval = setInterval(() => {
+      api
+        .getTranslationProgress(id)
+        .then((translation) => {
+          if (!cancelled) setDetail((prev) => (prev ? { ...prev, translation } : prev))
+        })
+        .catch(() => {
+          // A transient blip skips this tick; the next one tries again.
+        })
+    }, 4000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [id, translating])
+
   // One path for both the header's book-wide review and a chapter's own: the scope is the
   // only difference, and a chapter's 204 is the same race as the book's. The review across
   // every book starts from the home screen instead.
@@ -264,12 +290,18 @@ export function DictionaryScreen({ id, role, onSort, onTrain, onReview, onDelete
         )}
       </div>
 
-      {detail.learnableCount === 0 && (
+      {detail.translation ? (
         <p className="footnote dict-actions-hint">
-          {learnerLanguage === 'uk'
-            ? 'No words to learn yet: mark words as “don’t know” while sorting.'
-            : 'No words translated into your language yet — look words up while reading, or add translations in My words.'}
+          Translating… {formatInt(detail.translation.done)} of {formatInt(detail.translation.total)}
         </p>
+      ) : (
+        detail.learnableCount === 0 && (
+          <p className="footnote dict-actions-hint">
+            {learnerLanguage === 'uk'
+              ? 'No words to learn yet: mark words as “don’t know” while sorting.'
+              : 'No words translated into your language yet — look words up while reading, or add translations in My words.'}
+          </p>
+        )
       )}
 
       {reviewNotice && <p className="footnote dict-actions-hint">{reviewNotice}</p>}

@@ -220,6 +220,16 @@ public class WordSortingService
     }
 
     /// <summary>
+    /// The shared word's text if it has no translation in language yet, else null (a personal
+    /// word, an unknown id, or one already translated).
+    /// </summary>
+    public async Task<string?> SharedWordNeedingTranslationAsync(long wordPairId, string language) =>
+        await _dbContext.Words
+            .Where(w => w.Id == wordPairId && w.OwnerId == null && !w.Translations.Any(t => t.Language == language))
+            .Select(w => w.Word)
+            .FirstOrDefaultAsync();
+
+    /// <summary>
     /// Moves the scope's visit to <paramref name="nowUtc"/>, inserting it the first time.
     /// Saved separately from the mark, and on its own terms: a visit is a convenience for the
     /// home screen, so neither a scope the client got wrong nor two tabs inserting the same

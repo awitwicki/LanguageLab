@@ -1,6 +1,7 @@
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
 using LanguageLab.Domain;
+using LanguageLab.Domain.Languages;
 
 namespace LanguageLab.Api.Endpoints;
 
@@ -35,8 +36,10 @@ public static class ReaderEndpoints
         });
 
         // PUT: opening the same file again is the same registration, so a retry is harmless.
+        // Also one of B2's Q6 triggers: a linked dictionary is freely re-enqueued on every open.
         group.MapPut("/books/{hash}", async (
-            string hash, RegisterReaderBookRequest request, ReaderBookService books, ICurrentUserContext currentUser) =>
+            string hash, RegisterReaderBookRequest request, ReaderBookService books, ITranslationQueue queue,
+            ICurrentUserContext currentUser, ICurrentLanguage language, CancellationToken cancellationToken) =>
         {
             if (ReaderHash.Normalize(hash) is not { } fileHash)
             {
@@ -47,9 +50,16 @@ public static class ReaderEndpoints
 
             try
             {
-                return Results.Ok(await books.RegisterAsync(
+                var view = await books.RegisterAsync(
                     userId, role, fileHash, request.Title ?? string.Empty, request.Author ?? string.Empty,
-                    request.ChaptersCount, DateTime.UtcNow));
+                    request.ChaptersCount, DateTime.UtcNow);
+
+                // language.Get(), not Require(): RegisterAsync already committed, so a learner
+                // with no language set yet must not turn an already-saved registration into a
+                // 409 — final review, finding 4.
+                await MaybeEnqueueTranslationAsync(queue, view.DictionaryId, language.Get(), cancellationToken);
+
+                return Results.Ok(view);
             }
             catch (ArgumentException e)
             {
@@ -174,4 +184,12 @@ public static class ReaderEndpoints
                     statusCode: StatusCodes.Status409Conflict);
         });
     }
+
+    /// <summary>
+    /// Enqueues the reader's linked dictionary for the learner's language, if it has one and the
+    /// caller has a language set.
+    /// </summary>
+    public static Task MaybeEnqueueTranslationAsync(
+        ITranslationQueue queue, long? dictionaryId, LearnerLanguage? language, CancellationToken cancellationToken) =>
+        dictionaryId is { } id && language is { } lang ? queue.EnqueueAsync(id, lang, cancellationToken) : Task.CompletedTask;
 }
