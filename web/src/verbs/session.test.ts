@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import type { SessionVerb } from '../api/client'
-import { applyAnswer, createDrill, introQueue, isDone, PassStreak } from './session'
+import type { SessionVerb, VerbExercise } from '../api/client'
+import { applyAnswer, createDrill, exerciseFor, isDone, PassStreak } from './session'
+
+function exercises(v1: string): VerbExercise[] {
+  return (['v1', 'v2', 'v3'] as const).flatMap((form) => {
+    const answer = form === 'v1' ? v1 : `${v1}-${form.slice(1)}`
+
+    return [0, 1].map((n) => ({
+      form,
+      before: `S${n} `,
+      after: '.',
+      options: [answer, `${v1}ed`],
+      answer,
+    }))
+  })
+}
 
 function verb(v1: string, overrides: Partial<SessionVerb> = {}): SessionVerb {
   return {
@@ -10,42 +24,44 @@ function verb(v1: string, overrides: Partial<SessionVerb> = {}): SessionVerb {
     translation: `переклад ${v1}`,
     group: 1,
     note: null,
-    examples: { present: `I [${v1}].`, past: `I [${v1}-2].`, perfect: `I have [${v1}-3].` },
+    exercises: exercises(v1),
     formOrder: ['v2', 'v1', 'v3'],
     mastery: 0,
     streak: 0,
     answers: 0,
-    fresh: true,
     ...overrides,
   }
 }
 
-describe('introQueue', () => {
-  it('walks the words round-robin so a word is spaced apart from itself', () => {
-    const cards = introQueue([verb('a'), verb('b'), verb('c')], 3)
+describe('exerciseFor', () => {
+  it('walks a form’s exercises in order and cycles', () => {
+    const a = verb('a')
 
-    expect(cards).toHaveLength(9)
-    expect(cards.map((c) => c.verb.v1)).toEqual(['a', 'b', 'c', 'a', 'b', 'c', 'a', 'b', 'c'])
+    expect(exerciseFor(a, 'v2', 0).before).toBe('S0 ')
+    expect(exerciseFor(a, 'v2', 1).before).toBe('S1 ')
+    expect(exerciseFor(a, 'v2', 2).before).toBe('S0 ')
+    expect(exerciseFor(a, 'v2', 0).answer).toBe('a-2')
+  })
+})
+
+describe('the drill round deals exercises', () => {
+  it('gives each card the exercise of its form', () => {
+    const state = createDrill([verb('a')])
+
+    expect(state.current!.promptForm).toBe('v2')
+    expect(state.current!.exercise.answer).toBe('a-2')
   })
 
-  it('takes the next form of the word own order on each pass', () => {
-    const cards = introQueue([verb('a', { formOrder: ['v3', 'v1', 'v2'] })], 3)
+  it('moves to the next exercise of a form once the form order has come round', () => {
+    let state = createDrill([verb('a')])
+    const seen: string[] = []
 
-    expect(cards.map((c) => c.promptForm)).toEqual(['v3', 'v1', 'v2'])
-  })
+    for (let i = 0; i < 4; i++) {
+      seen.push(`${state.current!.promptForm}:${state.current!.exercise.before}`)
+      state = applyAnswer(state, false)
+    }
 
-  it('cycles the forms past the third pass', () => {
-    const cards = introQueue([verb('a', { formOrder: ['v3', 'v1', 'v2'] })], 5)
-
-    expect(cards.map((c) => c.promptForm)).toEqual(['v3', 'v1', 'v2', 'v3', 'v1'])
-  })
-
-  it('repeats a lone word, since there is nothing to space it against', () => {
-    expect(introQueue([verb('a')], 3).map((c) => c.verb.v1)).toEqual(['a', 'a', 'a'])
-  })
-
-  it('is empty when no rounds were asked for', () => {
-    expect(introQueue([verb('a')], 0)).toEqual([])
+    expect(seen).toEqual(['v2:S0 ', 'v1:S0 ', 'v3:S0 ', 'v2:S1 '])
   })
 })
 
@@ -78,7 +94,7 @@ describe('the drill round', () => {
   it('serves the word with the lowest streak', () => {
     let state = createDrill([verb('a'), verb('b')])
 
-    // a, then b, then a again — each "know" puts the answered word one ahead.
+    // a, then b, then a again — each right pick puts the answered word one ahead.
     expect(state.current!.verb.v1).toBe('a')
     state = applyAnswer(state, true)
     expect(state.current!.verb.v1).toBe('b')
@@ -86,7 +102,7 @@ describe('the drill round', () => {
     expect(state.current!.verb.v1).toBe('a')
   })
 
-  it('takes a word out once it has four "I know" in a row', () => {
+  it('takes a word out once it has four right picks in a row', () => {
     let state = createDrill([verb('a'), verb('b')])
 
     for (let i = 0; i < PassStreak * 2; i++) {
@@ -109,7 +125,7 @@ describe('the drill round', () => {
   })
 
   it('counts the streak a word arrived with', () => {
-    let state = createDrill([verb('a', { streak: PassStreak - 1, answers: 5, fresh: false })])
+    let state = createDrill([verb('a', { streak: PassStreak - 1, answers: 5 })])
 
     state = applyAnswer(state, true)
 

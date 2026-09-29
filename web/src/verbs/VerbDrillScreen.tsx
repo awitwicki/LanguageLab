@@ -1,4 +1,4 @@
-import { useEffect, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { useEffect } from 'react'
 import type { DrillQuery } from '../api/client'
 import { formatInt } from '../lib/format'
 import type { SavedSession } from './savedSession'
@@ -18,9 +18,8 @@ interface Props {
   onStartDrill: (query: DrillQuery, title: string) => void
 }
 
-/// One card at a time: a form to recognise and the three forms blurred underneath. The
-/// introduction round only moves on; the drill round takes the learner's verdict, and a miss
-/// is what uncovers the answer.
+/// One card at a time: a sentence with a blank and the forms to fill it with. A right pick
+/// moves straight on; a wrong one shows the right form and the verb's three forms until Next.
 export function VerbDrillScreen({ query, title, userId, resume, onBack: leave, onStartDrill }: Props) {
   const session = useVerbSession(query, { userId, title, resume })
   // Leaving on purpose forgets the round; only a reload or a closed tab keeps it.
@@ -28,20 +27,19 @@ export function VerbDrillScreen({ query, title, userId, resume, onBack: leave, o
     session.discard()
     leave()
   }
-  const { phase, card, intro, revealed, peeked, error, busy, syncing, stuck } = session
-  const shown = revealed || peeked
+  const { phase, card, revealed, picked, error, busy, syncing, stuck } = session
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      // A held key auto-repeats every ~30ms; without this a held arrow or Space would race
+      // A held key auto-repeats every ~30ms; without this a held number or Space would race
       // through cards faster than React can re-render between them.
       if (event.repeat) {
         return
       }
 
-      // A keyboard user tabbed to a real control (a stepper, Skip to training, Back, the
-      // blurred answer) already has that control's own key handling; this shortcut is only for
-      // the page at large, not for hijacking Enter/Space away from whatever is focused.
+      // A keyboard user tabbed to a real control (a stepper, Back, an option) already has that
+      // control's own key handling; this shortcut is only for the page at large, not for
+      // hijacking Enter/Space/numbers away from whatever is focused.
       const target = event.target
       if (target instanceof HTMLElement && target.closest('button, [role="button"], input, textarea, select')) {
         return
@@ -53,13 +51,17 @@ export function VerbDrillScreen({ query, title, userId, resume, onBack: leave, o
       if (phase === 'start') {
         if (enter) {
           event.preventDefault()
-          session.startIntro()
+          session.start()
         }
 
         return
       }
 
-      if (phase === 'intro' || revealed) {
+      if (phase !== 'drill' || !card) {
+        return
+      }
+
+      if (revealed) {
         if (space || enter) {
           event.preventDefault()
           session.next()
@@ -68,16 +70,19 @@ export function VerbDrillScreen({ query, title, userId, resume, onBack: leave, o
         return
       }
 
-      if (phase === 'drill') {
-        if (event.key === 'ArrowRight') session.answer(true)
-        if (event.key === 'ArrowLeft') session.answer(false)
+      const index = Number(event.key) - 1
+      const choice = Number.isInteger(index) ? card.exercise.options[index] : undefined
+
+      if (choice !== undefined) {
+        event.preventDefault()
+        session.answer(choice)
       }
     }
 
     window.addEventListener('keydown', onKey)
 
     return () => window.removeEventListener('keydown', onKey)
-  }, [phase, revealed, session])
+  }, [card, phase, revealed, session])
 
   return (
     <>
@@ -103,11 +108,9 @@ export function VerbDrillScreen({ query, title, userId, resume, onBack: leave, o
       {phase === 'start' && (
         <VerbSessionStartScreen
           offer={session.offer}
-          settings={session.settings}
+          words={session.words}
           onWords={session.setWords}
-          onRounds={session.setRounds}
-          onStart={session.startIntro}
-          onSkip={session.skipIntro}
+          onStart={session.start}
         />
       )}
 
@@ -151,70 +154,48 @@ export function VerbDrillScreen({ query, title, userId, resume, onBack: leave, o
         </div>
       )}
 
-      {(phase === 'intro' || phase === 'drill') && !card && busy && <p className="footnote">Loading…</p>}
+      {phase === 'drill' && !card && busy && <p className="footnote">Loading…</p>}
 
-      {(phase === 'intro' || phase === 'drill') && card && (
+      {phase === 'drill' && card && (
         <div className="card drill-card">
-          {intro && (
-            <p className="footnote num drill-intro-step">
-              {formatInt(intro.step)} of {formatInt(intro.total)}
-            </p>
-          )}
+          <p className="drill-sentence">
+            {card.exercise.before}
+            <span className={`drill-blank${revealed ? ' is-filled' : ''}`}>
+              {revealed ? card.exercise.answer : '___'}
+            </span>
+            {card.exercise.after}
+          </p>
+          <p className="drill-translation">{card.verb.translation}</p>
 
-          <p className="drill-prompt">{promptOf(card.verb, card.promptForm)}</p>
-
-          {/* Blurred, the answer is a button: tapping it uncovers the forms without judging
-              the card, and its own text stays out of the screen-reader tree until then — the
-              label is what a reader announces instead. */}
-          <div
-            className={`drill-answer${shown ? '' : ' is-blurred'}`}
-            {...(shown
-              ? {}
-              : {
-                  role: 'button',
-                  tabIndex: 0,
-                  'aria-label': 'Show the answer',
-                  onClick: session.peek,
-                  onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      session.peek()
-                    }
-                  },
-                })}
-          >
-            <p className="drill-triplet" aria-hidden={shown ? undefined : true}>
-              {`${card.verb.v1} – ${card.verb.v2} – ${card.verb.v3}`}
-            </p>
-            <p className="drill-translation" aria-hidden={shown ? undefined : true}>
-              {card.verb.translation}
-            </p>
+          <div className="drill-options">
+            {card.exercise.options.map((option, index) => (
+              <button
+                key={option}
+                type="button"
+                data-option={option}
+                className={`btn btn-lg drill-option ${optionClass(option, card.exercise.answer, picked)}`}
+                aria-pressed={option === picked}
+                onClick={() => session.answer(option)}
+              >
+                {option} <kbd>{index + 1}</kbd>
+              </button>
+            ))}
           </div>
 
-          {phase === 'intro' ? (
+          {revealed && (
             <div className="drill-after">
-              <button type="button" className="btn btn-primary btn-lg drill-next" onClick={session.next}>
-                Next <kbd>Space</kbd>
-              </button>
-              <button type="button" className="btn btn-quiet drill-skip-intro" onClick={session.skipIntro}>
-                Skip introduction
-              </button>
-            </div>
-          ) : revealed ? (
-            <div className="drill-after">
-              <Example text={exampleOf(card.verb, card.promptForm)} />
+              <p className="drill-triplet">{`${card.verb.v1} – ${card.verb.v2} – ${card.verb.v3}`}</p>
               {card.verb.note && <p className="footnote">{card.verb.note}</p>}
-              <button type="button" className="btn btn-primary btn-lg drill-next" onClick={session.next}>
+              {/* A real click leaves the picked option focused, since it stays on screen for
+                  its colour instead of unmounting; autoFocus moves focus here so Space/Enter
+                  reaches Next natively rather than re-activating the stale option. */}
+              <button
+                type="button"
+                className="btn btn-primary btn-lg drill-next"
+                onClick={session.next}
+                autoFocus
+              >
                 Next <kbd>Space</kbd>
-              </button>
-            </div>
-          ) : (
-            <div className="drill-verdict">
-              <button type="button" className="btn btn-lg btn-unknown" onClick={() => session.answer(false)}>
-                I don't know <kbd>←</kbd>
-              </button>
-              <button type="button" className="btn btn-lg btn-known" onClick={() => session.answer(true)}>
-                I know <kbd>→</kbd>
               </button>
             </div>
           )}
@@ -224,37 +205,18 @@ export function VerbDrillScreen({ query, title, userId, resume, onBack: leave, o
   )
 }
 
-/// The catalog wraps the verb form in square brackets — "They [went] home early." — so the
-/// sentence can show which word is the point. The brackets themselves never reach the page.
-function Example({ text }: { readonly text: string }) {
-  const parts = /^([^[]*)\[([^\]]+)\](.*)$/s.exec(text)
-
-  if (!parts) {
-    return <p className="drill-example">{text}</p>
+/// Before a pick every option is plain. After a wrong one the right option turns green and the
+/// picked one red, reusing the sorting screen's known/unknown buttons, which the contrast test
+/// already covers. The options stay enabled — a disabled button would fade the colours — and
+/// the hook ignores a second pick on the same card.
+function optionClass(option: string, answer: string, picked: string | null): string {
+  if (picked === null) {
+    return 'btn-secondary'
   }
 
-  const [, before, form, after] = parts
+  if (option === answer) {
+    return 'btn-known'
+  }
 
-  return (
-    <p className="drill-example">
-      {before}
-      <strong>{form}</strong>
-      {after}
-    </p>
-  )
-}
-
-/// The example of the tense the prompted form belongs to.
-function exampleOf(
-  verb: { examples: { present: string; past: string; perfect: string } },
-  form: string,
-): string {
-  return form === 'v1' ? verb.examples.present : form === 'v2' ? verb.examples.past : verb.examples.perfect
-}
-
-function promptOf(verb: { v1: string; v2: string; v3: string }, form: string): string {
-  const text = form === 'v1' ? verb.v1 : form === 'v2' ? verb.v2 : verb.v3
-
-  // `be` has "was / were"; one form is enough to recognise it by.
-  return text.split(' / ')[0]
+  return option === picked ? 'btn-unknown' : 'btn-secondary'
 }

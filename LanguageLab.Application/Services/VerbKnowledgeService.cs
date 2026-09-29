@@ -19,7 +19,7 @@ public sealed record AnswerResultView(string Verb, double Mastery, int Streak, b
 
 /// <summary>One judged card as the trainer records it.</summary>
 public sealed record VerbAnswerToApply(
-    string Verb, PromptForm PromptForm, bool Known, int ResponseMs, DrillMode Mode, int? Group);
+    string Verb, PromptForm PromptForm, string Chosen, int ResponseMs, DrillMode Mode, int? Group);
 
 /// <summary>
 /// The learner's standing on the whole catalog, and the one write the trainer makes: a
@@ -65,13 +65,18 @@ public class VerbKnowledgeService
 
     /// <summary>Null when the verb is not in the catalog — nothing is written in that case.</summary>
     public async Task<AnswerResultView?> ApplyAsync(
-        long userId, string verb, PromptForm form, bool known, int responseMs,
+        long userId, string verb, PromptForm form, string chosen, int responseMs,
         DrillMode mode, int? group, DateTime nowUtc)
     {
-        if (IrregularVerbCatalog.Find(verb) == null)
+        var catalogVerb = IrregularVerbCatalog.Find(verb);
+
+        if (catalogVerb == null)
         {
             return null;
         }
+
+        // The browser judged the pick for its screen; the log trusts only its own judgement.
+        var known = VerbScoring.IsCorrect(catalogVerb, form, chosen);
 
         var row = await _dbContext.VerbKnowledges
             .FirstOrDefaultAsync(k => k.UserId == userId && k.Verb == verb);
@@ -90,6 +95,7 @@ public class VerbKnowledgeService
             Verb = verb,
             PromptForm = form,
             Known = known,
+            Chosen = chosen.Trim(),
             ResponseMs = clamped,
             Mode = mode,
             Group = group,
@@ -154,7 +160,7 @@ public class VerbKnowledgeService
         foreach (var answer in answers)
         {
             var result = await ApplyAsync(
-                userId, answer.Verb, answer.PromptForm, answer.Known, answer.ResponseMs,
+                userId, answer.Verb, answer.PromptForm, answer.Chosen, answer.ResponseMs,
                 answer.Mode, answer.Group, nowUtc);
 
             results.Add(result!);

@@ -80,7 +80,7 @@ public class IrregularVerbEndpointsTests
 
     private static VerbAnswerRequest Answer(
         string verb = "cut", PromptForm form = PromptForm.V1, DrillMode mode = DrillMode.Batch, int? group = 1) =>
-        new(verb, form, Known: true, ResponseMs: 500, mode, group);
+        new(verb, form, Chosen: "went", ResponseMs: 500, mode, group);
 
     /// <summary>
     /// Found on review: `POST /answers`'s body is ordinary JSON, not a query string, but a
@@ -174,6 +174,22 @@ public class IrregularVerbEndpointsTests
     public void A_verb_outside_the_catalog_refuses_the_chunk()
     {
         Assert.False(IrregularVerbEndpoints.IsValidChunk(Chunk(Answer(), Answer(verb: "frobnicate"))));
+    }
+
+    /// <summary>Review focus 4: an old client posting `known` without `chosen`.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("abcdefghijklmnopqrstuvwxyzabcdefg")] // 33 characters
+    public void An_answer_without_a_usable_pick_refuses_the_chunk(string? chosen)
+    {
+        var request = new VerbAnswersRequest([
+            new VerbAnswerRequest("go", PromptForm.V2, "went", 500, DrillMode.Batch, 4),
+            new VerbAnswerRequest("go", PromptForm.V2, chosen, 500, DrillMode.Batch, 4),
+        ]);
+
+        Assert.False(IrregularVerbEndpoints.IsValidChunk(request));
     }
 
     [Theory]

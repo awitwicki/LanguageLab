@@ -51,9 +51,8 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [x] Resume an interrupted irregular-verbs session after a page reload — the browser holds the
   session and nothing is stored, so a reload starts over from the start screen
   (`web/src/verbs/useVerbSession.ts`)
-- [ ] The introduction round's word and round counts live in `localStorage` per device rather than on
-  the account, so a learner sets them again on a second device
-  (`web/src/verbs/introSettings.ts`)
+- [ ] The verbs drill's word count lives in `localStorage` per device rather than on the account, so
+  a learner sets it again on a second device (`web/src/verbs/sessionSettings.ts`)
 - [ ] Offline reading: the book file and its parsing already live client-side (`web/src/reader/bookStore.ts`, `readerBook.ts`), so a previously opened book could be read with no network — needs a service worker/PWA manifest to load the app shell offline, plus making `useReaderPosition`, `ReaderWordStatusService` lookups and `POST /api/translate/sentence` degrade gracefully (skip or queue) when offline instead of blocking. Word-status highlights and training actions still need the server for Leitner progress, so this covers reading only, not training
 
 ## Development

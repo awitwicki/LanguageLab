@@ -17,7 +17,7 @@ public static class IrregularVerbCatalog
 
     private static IrregularVerb V(
         int group, string v1, string v2, string v3, string translation,
-        string present, string past, string perfect, string? note = null) =>
+        string present, string past, string perfect, string? note = null, bool ownSentencesOnly = false) =>
         new(
             group,
             v1,
@@ -25,7 +25,8 @@ public static class IrregularVerbCatalog
             v3.Split('/'),
             translation,
             [new Example(Tense.Present, present), new Example(Tense.Past, past), new Example(Tense.Perfect, perfect)],
-            note);
+            note,
+            ownSentencesOnly);
 
     public static readonly IReadOnlyList<IrregularVerb> Verbs =
     [
@@ -36,7 +37,7 @@ public static class IrregularVerbCatalog
         V(1, "set", "set", "set", "встановлювати", "We [set] the table before dinner.", "He [set] the alarm for six yesterday.", "I have [set] a new record."),
         V(1, "hit", "hit", "hit", "вдаряти", "The boys [hit] the ball over the fence every time.", "Last week a car [hit] the fence.", "She has [hit] the target three times."),
         V(1, "shut", "shut", "shut", "зачиняти", "Please [shut] the door when you leave.", "He [shut] the window an hour ago.", "They have [shut] the shop for the holidays."),
-        V(1, "cost", "cost", "cost", "коштувати", "Tickets [cost] ten dollars each.", "The dinner [cost] more than we expected.", "The repairs have [cost] us a fortune."),
+        V(1, "cost", "cost", "cost", "коштувати", "Tickets [cost] ten dollars each.", "The dinner [cost] more than we expected.", "The repairs have [cost] us a fortune.", ownSentencesOnly: true),
         V(1, "hurt", "hurt", "hurt", "боліти / ранити", "My feet [hurt] after a long walk.", "I [hurt] my knee last weekend.", "You have [hurt] her feelings."),
         V(1, "read", "read", "read", "читати", "I [read] the news every morning.", "Last night I [read] two chapters.", "I have [read] this book twice.", "Spelt the same in all three forms, but V2 and V3 are pronounced /red/."),
 
@@ -56,7 +57,7 @@ public static class IrregularVerbCatalog
         V(3, "keep", "kept", "kept", "тримати", "I [keep] my keys in this drawer.", "She [kept] the letter for years.", "You have [kept] your promise."),
         V(3, "feel", "felt", "felt", "відчувати", "I [feel] happy today.", "Yesterday I [felt] tired all day.", "I have never [felt] better."),
         V(3, "leave", "left", "left", "залишати", "The train will [leave] at nine.", "She [left] the party early.", "They have [left] the country."),
-        V(3, "mean", "meant", "meant", "означати", "What do these words [mean]?", "I never [meant] to hurt you.", "This job has [meant] a lot to me."),
+        V(3, "mean", "meant", "meant", "означати", "What do these words [mean]?", "I never [meant] to hurt you.", "This job has [meant] a lot to me.", ownSentencesOnly: true),
 
         V(3, "spend", "spent", "spent", "витрачати", "We [spend] our weekends by the lake.", "I [spent] too much money yesterday.", "She has [spent] a year in Spain."),
         V(3, "send", "sent", "sent", "надсилати", "I [send] her a message every morning.", "He [sent] the letter last Monday.", "We have [sent] the invitations."),
@@ -112,7 +113,7 @@ public static class IrregularVerbCatalog
         V(4, "fall", "fell", "fallen", "падати", "Leaves [fall] in autumn.", "He [fell] off his bike.", "Prices have [fallen] this year."),
         V(4, "see", "saw", "seen", "бачити", "I [see] my parents every weekend.", "We [saw] a great film last night.", "Have you [seen] my keys?"),
 
-        V(4, "be", "was/were", "been", "бути", "I want to [be] a doctor.", "We [were] at home yesterday.", "She has [been] to Japan twice.", "Past Simple is was with I / he / she / it and were with you / we / they."),
+        V(4, "be", "was/were", "been", "бути", "I want to [be] a doctor.", "We [were] at home yesterday.", "She has [been] to Japan twice.", "Past Simple is was with I / he / she / it and were with you / we / they.", ownSentencesOnly: true),
         V(4, "do", "did", "done", "робити", "I [do] my homework after school.", "He [did] the dishes last night.", "Have you [done] the shopping?"),
         V(4, "go", "went", "gone", "йти", "We [go] to school by bus.", "They [went] home early.", "She has [gone] to the shop."),
     ];

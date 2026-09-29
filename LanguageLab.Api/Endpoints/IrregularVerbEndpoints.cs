@@ -1,4 +1,5 @@
 using LanguageLab.Application.Services;
+using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.IrregularVerbs;
 using LanguageLab.Domain.Languages;
 
@@ -6,7 +7,7 @@ namespace LanguageLab.Api.Endpoints;
 
 /// <summary>One judged card, as the browser reports it.</summary>
 public sealed record VerbAnswerRequest(
-    string Verb, PromptForm PromptForm, bool Known, int ResponseMs, DrillMode Mode, int? Group);
+    string Verb, PromptForm PromptForm, string? Chosen, int ResponseMs, DrillMode Mode, int? Group);
 
 /// <summary>A chunk of judged cards, in the order they were answered.</summary>
 public sealed record VerbAnswersRequest(IReadOnlyList<VerbAnswerRequest>? Answers);
@@ -80,7 +81,7 @@ public static class IrregularVerbEndpoints
                 userId,
                 request.Answers!
                     .Select(a => new VerbAnswerToApply(
-                        a.Verb, a.PromptForm, a.Known, a.ResponseMs, a.Mode, a.Group))
+                        a.Verb, a.PromptForm, a.Chosen!, a.ResponseMs, a.Mode, a.Group))
                     .ToList(),
                 DateTime.UtcNow);
 
@@ -105,13 +106,17 @@ public static class IrregularVerbEndpoints
     /// problem — but a stale or hand-crafted client can still send a verb-less entry, or an
     /// out-of-range enum (the app's `JsonStringEnumConverter` accepts integers by default, so
     /// `promptForm: 7` deserializes instead of failing), straight into the append-only answer
-    /// log. True means the entry is coherent enough to apply.
+    /// log. True means the entry is coherent enough to apply. An old client still posting
+    /// `known` instead of `chosen` deserializes with a null or blank `Chosen` and is refused
+    /// here, not silently graded as a miss.
     /// </summary>
     public static bool IsValidAnswer(VerbAnswerRequest request) =>
         !string.IsNullOrEmpty(request.Verb)
         && Enum.IsDefined(request.PromptForm)
         && Enum.IsDefined(request.Mode)
-        && (request.Group is null || (request.Group >= 1 && request.Group <= IrregularVerbCatalog.GroupCount));
+        && (request.Group is null || (request.Group >= 1 && request.Group <= IrregularVerbCatalog.GroupCount))
+        && !string.IsNullOrWhiteSpace(request.Chosen)
+        && request.Chosen.Length <= VerbAnswer.ChosenMaxLength;
 
     /// <summary>
     /// Reads `GET /session`'s query string by hand — minimal API binds a query enum

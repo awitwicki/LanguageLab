@@ -3,7 +3,7 @@ import type { VerbAnswerToPost } from '../api/client'
 import { createOutbox, MaxPerRequest, RetryDelayMs } from './outbox'
 
 function answer(verb: string): VerbAnswerToPost {
-  return { verb, promptForm: 'v1', known: true, responseMs: 500, mode: 'batch', group: 1 }
+  return { verb, promptForm: 'v1', chosen: 'went', responseMs: 500, mode: 'batch', group: 1 }
 }
 
 describe('the answer outbox', () => {

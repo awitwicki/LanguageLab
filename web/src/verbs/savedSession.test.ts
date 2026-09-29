@@ -3,7 +3,7 @@ import type { SessionVerb } from '../api/client'
 import { clearSavedSession, MaxAgeMs, readSavedSession, writeSavedSession, type SavedSession } from './savedSession'
 import { createDrill } from './session'
 
-const Key = 'll.verbs.session'
+const Key = 'll.verbs.session.v2'
 
 function verb(v1: string): SessionVerb {
   return {
@@ -13,12 +13,17 @@ function verb(v1: string): SessionVerb {
     translation: `переклад ${v1}`,
     group: 4,
     note: null,
-    examples: { present: `I [${v1}].`, past: `I [${v1}-2].`, perfect: `I have [${v1}-3].` },
+    exercises: (['v1', 'v2', 'v3'] as const).map((form) => ({
+      form,
+      before: `I `,
+      after: '.',
+      options: [v1, `${v1}ed`],
+      answer: v1,
+    })),
     formOrder: ['v2', 'v1', 'v3'],
     mastery: 0,
     streak: 0,
     answers: 0,
-    fresh: true,
   }
 }
 
@@ -112,5 +117,18 @@ describe('the saved verbs session', () => {
     })
 
     expect(() => writeSavedSession(saved())).not.toThrow()
+  })
+
+  /// Review focus 3: a round from before the choice drill has no exercises to show.
+  it('ignores a round the old drill saved', () => {
+    window.localStorage.setItem('ll.verbs.session', JSON.stringify({ ...saved(), phase: 'intro' }))
+
+    expect(readSavedSession(7)).toBeNull()
+  })
+
+  it('drops a saved introduction round', () => {
+    window.localStorage.setItem(Key, JSON.stringify({ ...saved(), phase: 'intro' }))
+
+    expect(readSavedSession(7)).toBeNull()
   })
 })

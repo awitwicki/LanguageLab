@@ -424,6 +424,15 @@ export type DrillMode = 'batch' | 'free'
 /** What a free run draws from. */
 export type DrillScope = 'stage' | 'cumulative' | 'all'
 
+/** One fill-the-blank card: the sentence around the blank, the options, and the right one. */
+export interface VerbExercise {
+  form: PromptForm
+  before: string
+  after: string
+  options: string[]
+  answer: string
+}
+
 /** A verb as a session hands it over: everything to draw its cards, plus the learner's standing. */
 export interface SessionVerb {
   v1: string
@@ -432,21 +441,20 @@ export interface SessionVerb {
   translation: string
   group: number
   note: string | null
-  examples: { present: string; past: string; perfect: string }
+  /** Each form's exercises, own sentence first; a form's showings walk them in order. */
+  exercises: VerbExercise[]
   /** The three forms in this verb's own order; each showing takes the next one. */
   formOrder: PromptForm[]
   mastery: number
   streak: number
   answers: number
-  /** Never answered before — what the introduction round exists for. */
-  fresh: boolean
 }
 
-/** One judged card on its way to the server. */
+/** One picked card on its way to the server, which judges `chosen` itself. */
 export interface VerbAnswerToPost {
   verb: string
   promptForm: PromptForm
-  known: boolean
+  chosen: string
   responseMs: number
   mode: DrillMode
   group?: number
@@ -467,7 +475,7 @@ export interface VerbSession {
   scope: { passed: number; total: number }
 }
 
-/** One row of a stage's table. `passed` is four "I know" answers in a row. */
+/** One row of a stage's table. `passed` is four right picks in a row. */
 export interface VerbRow {
   v1: string
   v2: string

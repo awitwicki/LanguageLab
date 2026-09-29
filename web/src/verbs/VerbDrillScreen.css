@@ -17,24 +17,29 @@
   padding: 32px 20px;
 }
 
-.drill-prompt {
-  font-size: var(--fs-large);
-  line-height: var(--lh-large);
-  font-weight: 600;
+.drill-sentence {
+  font-size: var(--fs-title);
+  line-height: var(--lh-title);
   margin: 0;
 }
 
-.drill-answer {
-  display: grid;
-  gap: 4px;
-  transition: filter var(--dur) var(--ease);
+.drill-blank {
+  display: inline-block;
+  min-width: 3ch;
+  border-bottom: 2px solid var(--text-3);
+  font-weight: 600;
 }
 
-.drill-answer.is-blurred {
-  filter: blur(8px);
-  user-select: none;
-  /* Blurred, the whole block is the "show me" button. */
-  cursor: pointer;
+.drill-blank.is-filled {
+  border-bottom-color: var(--known);
+}
+
+.drill-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
 }
 
 .drill-triplet {
@@ -48,22 +53,11 @@
   margin: 0;
 }
 
-.drill-verdict,
 .drill-after {
   display: grid;
   gap: 12px;
   justify-items: center;
   width: 100%;
-}
-
-.drill-verdict {
-  grid-auto-flow: column;
-  justify-content: center;
-}
-
-.drill-example {
-  color: var(--text-2);
-  margin: 0;
 }
 
 .drill-done {
@@ -79,10 +73,6 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 12px;
-}
-
-.drill-intro-step {
-  margin: 0;
 }
 
 .drill-stuck {

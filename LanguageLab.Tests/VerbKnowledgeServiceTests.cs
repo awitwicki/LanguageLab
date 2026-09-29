@@ -58,7 +58,7 @@ public class VerbKnowledgeServiceTests
         await using var db = NewContext();
         var service = new VerbKnowledgeService(db);
 
-        var result = await service.ApplyAsync(1, "cut", PromptForm.V2, known: true, responseMs: 900,
+        var result = await service.ApplyAsync(1, "cut", PromptForm.V2, chosen: "cut", responseMs: 900,
             DrillMode.Batch, group: 1, Now);
 
         Assert.NotNull(result);
@@ -75,6 +75,7 @@ public class VerbKnowledgeServiceTests
         var logged = await db.VerbAnswers.SingleAsync();
         Assert.Equal(PromptForm.V2, logged.PromptForm);
         Assert.True(logged.Known);
+        Assert.Equal("cut", logged.Chosen);
         Assert.Equal(900, logged.ResponseMs);
         Assert.Equal(DrillMode.Batch, logged.Mode);
         Assert.Equal(1, logged.Group);
@@ -89,10 +90,10 @@ public class VerbKnowledgeServiceTests
 
         for (var i = 0; i < 3; i++)
         {
-            Assert.False((await service.ApplyAsync(1, "cut", PromptForm.V1, true, 800, DrillMode.Batch, 1, Now))!.Passed);
+            Assert.False((await service.ApplyAsync(1, "cut", PromptForm.V1, "cut", 800, DrillMode.Batch, 1, Now))!.Passed);
         }
 
-        var fourth = await service.ApplyAsync(1, "cut", PromptForm.V1, true, 800, DrillMode.Batch, 1, Now);
+        var fourth = await service.ApplyAsync(1, "cut", PromptForm.V1, "cut", 800, DrillMode.Batch, 1, Now);
 
         Assert.True(fourth!.Passed);
         Assert.Equal(4, fourth.Streak);
@@ -105,8 +106,8 @@ public class VerbKnowledgeServiceTests
         await using var db = NewContext();
         var service = new VerbKnowledgeService(db);
 
-        await service.ApplyAsync(1, "cut", PromptForm.V1, known: true, 500, DrillMode.Batch, 1, Now);
-        var missed = await service.ApplyAsync(1, "cut", PromptForm.V1, known: false, 500, DrillMode.Batch, 1, Now);
+        await service.ApplyAsync(1, "cut", PromptForm.V1, chosen: "cut", 500, DrillMode.Batch, 1, Now);
+        var missed = await service.ApplyAsync(1, "cut", PromptForm.V1, chosen: "cutted", 500, DrillMode.Batch, 1, Now);
 
         Assert.Equal(0, missed!.Streak);
         Assert.Equal(0.6, missed.Mastery, precision: 10);
@@ -123,7 +124,7 @@ public class VerbKnowledgeServiceTests
         await using var db = NewContext();
         var service = new VerbKnowledgeService(db);
 
-        var result = await service.ApplyAsync(1, "cut", PromptForm.V1, true, int.MaxValue, DrillMode.Free, null, Now);
+        var result = await service.ApplyAsync(1, "cut", PromptForm.V1, "cut", int.MaxValue, DrillMode.Free, null, Now);
 
         Assert.InRange(result!.Mastery, 0, 1);
         Assert.Equal(VerbScoring.MaxResponseMs, (await db.VerbAnswers.SingleAsync()).ResponseMs);
@@ -136,7 +137,7 @@ public class VerbKnowledgeServiceTests
         await using var db = NewContext();
 
         var result = await new VerbKnowledgeService(db)
-            .ApplyAsync(1, "walk", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+            .ApplyAsync(1, "walk", PromptForm.V1, "walk", 500, DrillMode.Batch, 1, Now);
 
         Assert.Null(result);
         Assert.Empty(await db.VerbKnowledges.ToListAsync());
@@ -149,7 +150,7 @@ public class VerbKnowledgeServiceTests
         await using var db = NewContext();
         var service = new VerbKnowledgeService(db);
 
-        await service.ApplyAsync(1, "cut", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+        await service.ApplyAsync(1, "cut", PromptForm.V1, "cut", 500, DrillMode.Batch, 1, Now);
 
         var other = await service.GetAsync(2);
 
@@ -167,7 +168,7 @@ public class VerbKnowledgeServiceTests
         {
             for (var i = 0; i < VerbScoring.PassStreak; i++)
             {
-                await service.ApplyAsync(1, verb, PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+                await service.ApplyAsync(1, verb, PromptForm.V1, verb, 500, DrillMode.Batch, 1, Now);
             }
         }
 
@@ -177,6 +178,19 @@ public class VerbKnowledgeServiceTests
         Assert.Equal(2, stage1.Passed);
         Assert.Equal(2 / 9.0, stage1.Mastery, precision: 10);
         Assert.Equal(3, view.LearnedPercent); // 2 of 68
+    }
+
+    [Fact]
+    public async Task The_server_judges_the_pick_itself()
+    {
+        await using var db = NewContext();
+        var service = new VerbKnowledgeService(db);
+
+        var result = await service.ApplyAsync(1, "go", PromptForm.V2, "gone", 500, DrillMode.Batch, 4, Now);
+
+        Assert.Equal(0, result!.Streak);
+        Assert.False(db.VerbAnswers.Single().Known);
+        Assert.Equal("gone", db.VerbAnswers.Single().Chosen);
     }
 
     /// <summary>
@@ -194,7 +208,7 @@ public class VerbKnowledgeServiceTests
             new(new DbContextOptionsBuilder<ApplicationDbContext>().UseInMemoryDatabase(name).Options);
 
         await using var seed = Context(database);
-        await new VerbKnowledgeService(seed).ApplyAsync(1, "cut", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+        await new VerbKnowledgeService(seed).ApplyAsync(1, "cut", PromptForm.V1, "cut", 500, DrillMode.Batch, 1, Now);
 
         // One device reads the standing and holds it — EF hands this context its tracked
         // copy from here on, which is exactly how the second tab goes stale.
@@ -203,11 +217,11 @@ public class VerbKnowledgeServiceTests
 
         // Meanwhile the other device answers twice.
         await using var other = Context(database);
-        await new VerbKnowledgeService(other).ApplyAsync(1, "cut", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
-        await new VerbKnowledgeService(other).ApplyAsync(1, "cut", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+        await new VerbKnowledgeService(other).ApplyAsync(1, "cut", PromptForm.V1, "cut", 500, DrillMode.Batch, 1, Now);
+        await new VerbKnowledgeService(other).ApplyAsync(1, "cut", PromptForm.V1, "cut", 500, DrillMode.Batch, 1, Now);
 
         var result = await new VerbKnowledgeService(stale)
-            .ApplyAsync(1, "cut", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+            .ApplyAsync(1, "cut", PromptForm.V1, "cut", 500, DrillMode.Batch, 1, Now);
 
         await using var fresh = Context(database);
         Assert.Equal(4, await fresh.VerbAnswers.CountAsync());
@@ -221,7 +235,7 @@ public class VerbKnowledgeServiceTests
     {
         await using var db = NewContext();
         var service = new VerbKnowledgeService(db);
-        await service.ApplyAsync(1, "put", PromptForm.V1, true, 500, DrillMode.Batch, 1, Now);
+        await service.ApplyAsync(1, "put", PromptForm.V1, "put", 500, DrillMode.Batch, 1, Now);
 
         var standings = await service.StandingsAsync(1, IrregularVerbCatalog.VerbsOfGroup(1));
 
@@ -232,7 +246,7 @@ public class VerbKnowledgeServiceTests
     }
 
     private static VerbAnswerToApply Answer(string verb, bool known) =>
-        new(verb, PromptForm.V1, known, 500, DrillMode.Batch, 1);
+        new(verb, PromptForm.V1, known ? verb : "wrong", 500, DrillMode.Batch, 1);
 
     [Fact]
     public async Task A_chunk_of_answers_is_applied_in_the_order_it_was_given()

@@ -18,31 +18,38 @@ language they are on, so switching back to Ukrainian brings the progress back ex
 ### The session
 
 The browser is handed a whole session rather than one card at a time: the words in play, their
-standing, their three example sentences and a per-verb order of the three forms. Both rounds then
-run in the client (`web/src/verbs/session.ts`), so no click waits on the network, and answers leave
-through a background outbox (`web/src/verbs/outbox.ts`).
+standing, a per-verb order of the three forms, and each verb's **exercises** — built by
+`ExerciseBuilder`: per form, the verb's own catalog sentence plus two universal `SentenceTemplates`
+(none for verbs marked `OwnSentencesOnly`: `be`, `cost`, `mean`), the whole set shuffled together so
+the own sentence is not always what a word's first showing meets, each with 2–4 options and its
+answer. The drill runs in the client (`web/src/verbs/session.ts`), so no click waits on the network,
+and answers leave through a background outbox (`web/src/verbs/outbox.ts`).
 
-Ordinary training opens on a start screen — the words coming up, a stepper for how many of them
-(1–5, default 5) and one for how many introduction rounds (1–5, default 3), remembered per device in
-`localStorage`. It opens every time, because an introduction already done and a batch not yet
-learned is exactly when it is wanted again.
+The options are the answer, the verb's other real forms, then `FakeForms` (+ed / +en with doubling,
+i→a/u for verbs ending in -ing/-ink, minus real forms and the hand-kept `Excluded` words). Exactly
+one option is ever right — `was`/`were`, `got`/`gotten` never appear together.
 
-The **introduction round** walks the chosen words round-robin, N·R cards, each pass taking the next
-form of the word's own order. It has one Next button, which moves on whether or not the answer is
-uncovered, and it is not recorded at all — there is no verdict in it to grade.
+Ordinary training opens on a start screen — the words coming up and a stepper for how many of them
+(1–5, default 5), remembered per device in `localStorage`. It opens every time, because a batch not
+yet learned is exactly when it is wanted again. There is no introduction round.
 
-The **drill round** then takes those same words to four "I know" in a row each. "I know" goes
-straight to the next card; "I don't know" uncovers the three forms and the example sentence and waits
-for Next, which is the moment the word is learned. Tapping the blur uncovers it and judges nothing,
-leaving the verdict still to give while the clock runs.
+The **drill** takes each word to four right picks in a row: a sentence with a blank, and the forms
+to fill it with as buttons. A right pick goes straight to the next card; a wrong one marks the pick,
+shows the right form in the blank, the verb's three forms and its note, and waits for Next — that is
+the moment the word is learned. Keys `1`–`4` pick an option, `Space`/`Enter` is Next. A form's
+showings walk its (already shuffled) exercises in order and cycle, so a word met many times still
+sees the own sentence and the templates rather than one sentence being learned by heart — though a
+fresh session (a new batch, or a free run's next chunk) starts that cycle over.
 
-That verdict plus how long the click took is the whole signal. `VerbScoring` gives quality 1.0 for a
-click within 1.5 s, down to 0.45 at 6 s, and 0 for a miss, folded into `Mastery` as a moving average
-with α = 0.4.
+The browser posts the picked option (`chosen`); the server judges it itself
+(`VerbScoring.IsCorrect`) rather than trusting the browser's own verdict, and folds the result with
+how long the pick took into the whole signal. `VerbScoring` gives quality 1.0 for a pick within 3 s,
+down to 0.45 at 10 s, and 0 for a wrong pick, folded into `Mastery` as a moving average with α = 0.4.
 
-`Streak` — consecutive "I know" answers, four of them to pass a verb — drives nothing but batch
+`Streak` — consecutive right picks, four of them to pass a verb — drives nothing but batch
 progression. Inside a session the browser counts it locally, seeded from the server's row; the
-server's own count is whatever `VerbScoring.Replay` folds out of the answer log.
+server's own count is whatever `VerbScoring.Replay` folds out of the answer log. Progress from the
+self-assessment drill this replaced was deleted by the `VerbChoiceDrill` migration.
 
 ### Batches and free training
 
@@ -59,17 +66,19 @@ the standing at request time and does not see the answers given inside itself.
 
 ### Storage
 
-A verb's standing is one `VerbKnowledge` row, and every judged card is appended to `VerbAnswer`. The
-row is a cache of that log, replayed from it on every answer (`VerbScoring.Replay`) rather than
-incremented, so two devices answering at once cannot leave the counters behind the log.
+A verb's standing is one `VerbKnowledge` row, and every picked card is appended to `VerbAnswer`, with
+the option picked (`Chosen`). The row is a cache of that log, replayed from it on every answer
+(`VerbScoring.Replay`) rather than incremented, so two devices answering at once cannot leave the
+counters behind the log.
 
 The server keeps no session and no queue. The device does: as a round is played, the browser saves
-it to `localStorage` (`web/src/verbs/savedSession.ts`) — the card the learner lands on next, the
-drill round's streaks, a free run's queue, and the answers the outbox has not sent yet, re-saved on
-every change to that queue so a resume never posts one twice. After a reload the Verbs screen offers
-the round back ("Resume session" or "Discard"). The saved round belongs to one user and lapses after
-12 hours; Back, a passed batch, or Discard forget it, and a round's unsent answers still go out
-whichever way it ends, including when a fresh round is started over it.
+it to `localStorage` (`web/src/verbs/savedSession.ts`, key `ll.verbs.session.v2`) — the card the
+learner lands on next, the drill round's streaks, a free run's queue, and the answers the outbox has
+not sent yet, re-saved on every change to that queue so a resume never posts one twice. After a
+reload the Verbs screen offers the round back ("Resume session" or "Discard"). The saved round
+belongs to one user and lapses after 12 hours; Back, a passed batch, or Discard forget it, and a
+round's unsent answers still go out whichever way it ends, including when a fresh round is started
+over it.
 
 ### API and presentation
 
@@ -80,8 +89,9 @@ verb of its stage.
 
 `POST /answers` takes an array of up to 100 answers and applies them in one transaction: the browser
 retries a failed request, and with no answer identity to deduplicate against, a half-applied chunk
-would count its first answers twice. One invalid entry — an unknown verb included — refuses the whole
-body.
+would count its first answers twice. Each entry carries `chosen` (1–32 characters) rather than a
+`known` verdict — the server judges it itself. One invalid entry — an unknown verb, or a `chosen`
+missing, blank or too long — refuses the whole body.
 
 The table's colour comes from `Mastery` as a band (`mastery.ts`, `--mastery-*` tokens), with the
 bar's length carrying the exact level.
