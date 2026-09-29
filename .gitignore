@@ -227,11 +227,8 @@ data/
 web/node_modules/
 web/dist/
 .worktrees/
-# Specs and plans stay local, except the shared roadmap tracker that parallel worktrees read.
-/docs/superpowers/*
-!/docs/superpowers/specs/
-/docs/superpowers/specs/*
-!/docs/superpowers/specs/2026-09-27-llm-translation-roadmap.md
+# Specs and plans stay local.
+/docs/superpowers
 result/import-sorted-words.sql
 /.superpowers/brainstorm
 /.superpowers/sdd
