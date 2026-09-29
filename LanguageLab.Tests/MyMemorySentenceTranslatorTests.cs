@@ -28,7 +28,7 @@ public class MyMemorySentenceTranslatorTests
         var options = Options.Create(new TranslationOptions { MyMemoryEmail = email });
 
         return new(
-            new HttpClient(handler) { BaseAddress = new Uri(MyMemoryTranslator.BaseUrl) },
+            new HttpClient(handler) { BaseAddress = new Uri("https://api.mymemory.translated.net/") },
             options,
             budget ?? new MyMemorySentenceBudget(options),
             NullLogger<MyMemorySentenceTranslator>.Instance);

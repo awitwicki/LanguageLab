@@ -32,7 +32,7 @@ public class FallbackSentenceTranslatorTests
         var deepL = new DeepLTranslator(
             new HttpClient(deepLHandler) { BaseAddress = new Uri(DeepLTranslator.BaseUrl) }, options, NullLogger<DeepLTranslator>.Instance);
         var myMemory = new MyMemorySentenceTranslator(
-            new HttpClient(myMemoryHandler) { BaseAddress = new Uri(MyMemoryTranslator.BaseUrl) }, options,
+            new HttpClient(myMemoryHandler) { BaseAddress = new Uri("https://api.mymemory.translated.net/") }, options,
             new MyMemorySentenceBudget(options),
             NullLogger<MyMemorySentenceTranslator>.Instance);
 
