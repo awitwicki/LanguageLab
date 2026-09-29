@@ -2,6 +2,8 @@ using LanguageLab.Api.Auth;
 using LanguageLab.Application.Books;
 using LanguageLab.Application.Import;
 using LanguageLab.Application.Services;
+using LanguageLab.Application.Translation;
+using LanguageLab.Application.Translation.Queue;
 using LanguageLab.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -36,7 +38,8 @@ public sealed record DictionaryDetail(
     LearningProgress Learning,
     IReadOnlyList<ChapterView> Chapters,
     IReadOnlyList<TopWord> TopWords,
-    PublicationStatus Status);
+    PublicationStatus Status,
+    TranslationProgress? Translation);
 
 public sealed record StatusRequest(PublicationStatus Status);
 
@@ -163,8 +166,11 @@ public static class DictionaryEndpoints
             LearningProgressService learningProgress,
             ChapterStatsService chapterStats,
             DictionaryAccessService access,
+            ITranslationQueue queue,
+            TranslationJobProgressReader progress,
             ICurrentUserContext currentUser,
-            ICurrentLanguage language) =>
+            ICurrentLanguage language,
+            CancellationToken cancellationToken) =>
         {
             var (userId, role) = currentUser.Require();
             var now = DateTime.UtcNow;
@@ -181,7 +187,8 @@ public static class DictionaryEndpoints
             }
 
             // "To learn" = translated into the learner's language, on the "don't know" shelf, never trained — what a new batch takes.
-            var code = language.Require().Code;
+            var learnerLanguage = language.Require();
+            var code = learnerLanguage.Code;
             var whole = await sorting.GetQueueAsync(userId, code, id, chapterIds: null, take: 1);
             var topWords = await stats.GetTopWordsAsync(id, userId);
 
@@ -191,6 +198,13 @@ public static class DictionaryEndpoints
             // The book's own box breakdown; the chapters' come with their rows.
             var learning = await learningProgress.GetAsync(userId, code, id);
             var chapterViews = await chapterStats.GetChapterViewsAsync(userId, code, id, now);
+
+            // Opening the dictionary is one of B2's Q6 triggers: freely re-enqueue (EnqueueAsync
+            // is idempotent while a job is pending, and re-arms a finished one) then read back
+            // whatever the job now looks like, so a just-re-armed job's fresh Total is what the
+            // client sees.
+            await queue.EnqueueAsync(id, learnerLanguage, cancellationToken);
+            var translation = await progress.GetAsync(id, code);
 
             return Results.Ok(new DictionaryDetail(
                 dictionary.Id,
@@ -202,7 +216,30 @@ public static class DictionaryEndpoints
                 learning,
                 chapterViews,
                 topWords,
-                dictionary.PublicationStatus));
+                dictionary.PublicationStatus,
+                translation));
+        });
+
+        // Read-only, and deliberately does not enqueue: the dictionary screen polls this while a
+        // job is running (final review, finding 1). GET /{id} above is the only place that
+        // enqueues on open — polling it too turned every 4s tick into a fresh EnqueueAsync, so a
+        // job that finished with leftover skipped words (or one whose provider had just failed
+        // five times) was continuously re-armed for as long as the tab stayed open.
+        group.MapGet("/{id:long}/translation", async (
+            long id,
+            DictionaryAccessService access,
+            TranslationJobProgressReader progress,
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
+        {
+            var (userId, role) = currentUser.Require();
+
+            if (!await access.IsVisibleAsync(id, userId, role))
+            {
+                return Results.NotFound();
+            }
+
+            return Results.Ok(await progress.GetAsync(id, language.Require().Code));
         });
 
         // Since C3 the import takes the book file itself: the server hashes, parses, tokenizes

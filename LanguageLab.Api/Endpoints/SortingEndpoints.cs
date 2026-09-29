@@ -1,4 +1,6 @@
 using LanguageLab.Application.Services;
+using LanguageLab.Application.Translation;
+using LanguageLab.Domain.Languages;
 
 namespace LanguageLab.Api.Endpoints;
 
@@ -39,7 +41,8 @@ public static class SortingEndpoints
         });
 
         group.MapPost("/mark", async (
-            MarkRequest request, WordSortingService sorting, ICurrentUser currentUser) =>
+            MarkRequest request, WordSortingService sorting, TranslationService translation,
+            ICurrentUser currentUser, ICurrentLanguage language, CancellationToken cancellationToken) =>
         {
             var userId = await currentUser.GetIdAsync();
 
@@ -49,6 +52,15 @@ public static class SortingEndpoints
                 : null;
 
             var marked = await sorting.MarkAsync(userId, request.WordPairId, request.Status, DateTime.UtcNow, scope);
+
+            // language.Get(), not Require(): the mark above already committed, so a learner with
+            // no language set yet (a race the SPA's picker should prevent, but not a certainty)
+            // must not turn an already-saved mark into a 409 — final review, finding 4.
+            if (marked)
+            {
+                await TranslateIfUnknownAsync(
+                    sorting, translation, request.Status, request.WordPairId, language.Get(), cancellationToken);
+            }
 
             // 404 rather than 403: an unknown id and someone else's private word look the
             // same from here, so neither is probeable by id.
@@ -69,5 +81,25 @@ public static class SortingEndpoints
             var userId = await currentUser.GetIdAsync();
             return Results.Ok(await sorting.GetRecentAsync(userId, take ?? 10));
         });
+    }
+
+    /// <summary>
+    /// On a fresh or repeated "don't know" mark, translates the shared word into language if it
+    /// has none there yet — B2's Q6 "don't know" trigger. No-op for Known/Excluded, a personal
+    /// word, one already translated, or a caller with no language set yet.
+    /// </summary>
+    public static async Task TranslateIfUnknownAsync(
+        WordSortingService sorting, TranslationService translation, SortStatus status, long wordPairId,
+        LearnerLanguage? language, CancellationToken cancellationToken)
+    {
+        if (status != SortStatus.Unknown || language is null)
+        {
+            return;
+        }
+
+        if (await sorting.SharedWordNeedingTranslationAsync(wordPairId, language.Code) is { } word)
+        {
+            await translation.LookupAsync(word, language, cancellationToken);
+        }
     }
 }

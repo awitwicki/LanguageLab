@@ -1,5 +1,5 @@
 import { act } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LearnerLanguageContext } from '../account/learnerLanguage'
 import type { DictionaryDetail, LearningProgress, TrainingStarted } from '../api/client'
 import { click, flush, render } from '../test/render'
@@ -7,6 +7,7 @@ import { DictionaryScreen } from './DictionaryScreen'
 
 const apiMock = vi.hoisted(() => ({
   getDictionary: vi.fn(),
+  getTranslationProgress: vi.fn(),
   startReview: vi.fn(),
   setDictionaryStatus: vi.fn(),
   requestPublication: vi.fn(),
@@ -57,6 +58,7 @@ const detail: DictionaryDetail = {
     { wordPairId: 2, word: 'abide', frequency: 750 },
   ],
   status: 'published',
+  translation: null,
 }
 
 const reviewStarted: TrainingStarted = { trainingId: 9, mode: 'review', words: [], totalQuestions: 12 }
@@ -82,6 +84,7 @@ function buttons(container: HTMLElement) {
 beforeEach(() => {
   vi.clearAllMocks()
   apiMock.getDictionary.mockResolvedValue(detail)
+  apiMock.getTranslationProgress.mockResolvedValue(null)
   apiMock.startReview.mockResolvedValue(reviewStarted)
   apiMock.setDictionaryStatus.mockResolvedValue(null)
   apiMock.requestPublication.mockResolvedValue(null)
@@ -91,6 +94,13 @@ beforeEach(() => {
   apiMock.undo.mockResolvedValue(null)
   apiMock.starChapter.mockResolvedValue(null)
   apiMock.unstarChapter.mockResolvedValue(null)
+})
+
+// A test that fails after vi.useFakeTimers() but before its own vi.useRealTimers() would
+// otherwise leave fake timers active for the next test, which can hang on a real setTimeout
+// (flush()) that fake time never advances — final review minor, on DictionaryScreen.test.tsx.
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('DictionaryScreen — chapters', () => {
@@ -603,5 +613,69 @@ describe('DictionaryScreen — starred', () => {
     expect(headings(container)).toEqual(['Chapters', 'Most frequent words', 'Sharing'])
     expect(container.querySelectorAll('.chapter-row')[0].querySelector('.chapter-star')?.getAttribute('aria-pressed')).toBe('false')
     expect(container.querySelector('.error')?.textContent).toBe('PUT /api/chapters/11/star → 404')
+  })
+})
+
+describe('DictionaryScreen — translation progress', () => {
+  it('shows a translating banner and polls a dedicated endpoint until it clears', async () => {
+    // Fake timers activate before mount so the polling interval is scheduled on the fake
+    // clock from the start — activating them mid-test would leave the interval on the real
+    // clock, where advancing fake time never ticks it.
+    vi.useFakeTimers()
+    apiMock.getDictionary.mockResolvedValueOnce({ ...detail, translation: { done: 2, total: 10 } })
+    const { container } = await render(screen())
+    await act(() => vi.advanceTimersByTimeAsync(0))
+
+    expect(container.querySelector('.dict-actions-hint')?.textContent).toBe('Translating… 2 of 10')
+    // The initial load is the only call that goes through getDictionary — polling must not
+    // reuse it, since that endpoint also re-enqueues (final review, finding 1).
+    expect(apiMock.getDictionary).toHaveBeenCalledTimes(1)
+
+    apiMock.getTranslationProgress.mockResolvedValueOnce({ done: 6, total: 10 })
+    await act(() => vi.advanceTimersByTimeAsync(4000))
+
+    expect(container.querySelector('.dict-actions-hint')?.textContent).toBe('Translating… 6 of 10')
+    expect(apiMock.getTranslationProgress).toHaveBeenCalledTimes(1)
+    expect(apiMock.getTranslationProgress).toHaveBeenCalledWith(7)
+    expect(apiMock.getDictionary).toHaveBeenCalledTimes(1)
+
+    apiMock.getTranslationProgress.mockResolvedValueOnce(null)
+    await act(() => vi.advanceTimersByTimeAsync(4000))
+
+    expect(container.querySelector('.dict-actions-hint')).toBeNull()
+    expect(apiMock.getTranslationProgress).toHaveBeenCalledTimes(2)
+
+    // No further polling once translation clears.
+    await act(() => vi.advanceTimersByTimeAsync(8000))
+    expect(apiMock.getTranslationProgress).toHaveBeenCalledTimes(2)
+
+    vi.useRealTimers()
+  })
+
+  it('shows no translating banner when there is no active job', async () => {
+    apiMock.getDictionary.mockResolvedValueOnce({ ...detail, learnableCount: 0, translation: null })
+    const { container } = await render(screen())
+    await flush()
+
+    expect(container.querySelector('.dict-actions-hint')?.textContent).not.toContain('Translating')
+  })
+
+  it('does not clobber an in-flight optimistic change while polling', async () => {
+    // Final review minor: the poll must merge only translation into the existing detail, not
+    // replace it wholesale — otherwise a response in flight can undo an optimistic update made
+    // between two ticks (e.g. a star toggle or a shelf change).
+    vi.useFakeTimers()
+    apiMock.getDictionary.mockResolvedValueOnce({ ...detail, translation: { done: 2, total: 10 } })
+    const { container } = await render(screen())
+    await act(() => vi.advanceTimersByTimeAsync(0))
+
+    apiMock.getTranslationProgress.mockResolvedValueOnce({ done: 5, total: 10 })
+    await act(() => vi.advanceTimersByTimeAsync(4000))
+
+    expect(container.querySelector('.dict-actions-hint')?.textContent).toBe('Translating… 5 of 10')
+    // Every other field the initial load carried is still the same object's data, not reset.
+    expect(container.querySelectorAll('.chapter-row')).toHaveLength(4)
+
+    vi.useRealTimers()
   })
 })

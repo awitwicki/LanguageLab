@@ -16,6 +16,7 @@ public static class TranslationQueueServiceCollectionExtensions
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<TranslationQueueSignal>();
         services.AddScoped<ITranslationQueue, TranslationQueue>();
+        services.AddScoped<TranslationJobProgressReader>();
         services.AddScoped<TranslationJobProcessor>();
         services.TryAddScoped<IWordBatchTranslator, NullWordBatchTranslator>();
         services.AddHostedService<TranslationWorker>();

@@ -116,8 +116,18 @@ that language appeared meanwhile. A pass walks the words once: a word the model 
 is passed over until the next enqueue. A quota refusal pauses the whole worker (the provider's
 `Retry-After`, otherwise 1 minute doubling up to an hour); an unavailable batch waits a minute,
 and five in a row mark the job `Failed`. Without a configured translator (`NullWordBatchTranslator`
-until the LLM translator lands) the worker idles. What enqueues a dictionary — import, opening it
-in another language, "don't know" — is roadmap workstream B2.
+until the LLM translator lands) the worker idles.
+
+Three things enqueue a dictionary: import, for the importer's language
+(`BookFileImportService.ImportAsync`); opening it — `GET /api/dictionaries/{id}`, and the reader
+linking a book to one via `PUT /api/reader/books/{hash}` — for the caller's current language, freely
+on every open (`ReaderEndpoints.MaybeEnqueueTranslationAsync`); and marking a shared word "don't
+know" (`POST /api/sorting/mark`), which translates that one word directly instead of enqueueing the
+whole dictionary (`SortingEndpoints.TranslateIfUnknownAsync`, reusing `TranslationService.LookupAsync`).
+`GET /api/dictionaries/{id}` also reads the matching `TranslationJob` back
+(`TranslationJobProgressReader`) as `DictionaryDetail.Translation` — `{ done, total }` while a job is
+`Pending` with work left, else `null` — which the dictionary screen shows as "Translating… N of M",
+polling every 4 seconds until it clears.
 
 ### Budgets
 

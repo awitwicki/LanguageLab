@@ -582,4 +582,56 @@ public class WordSortingServiceTests
         Assert.Equal(2, result.PageSize);
         Assert.Equal(["holston", "jahns"], result.Items.Select(i => i.Word));
     }
+
+    [Fact]
+    public async Task An_untranslated_shared_word_needs_translation()
+    {
+        await using var db = NewContext();
+        db.Words.Add(TestWords.Pair(10, "orphan", null));
+        await db.SaveChangesAsync();
+
+        var word = await new WordSortingService(db).SharedWordNeedingTranslationAsync(10, "uk");
+
+        Assert.Equal("orphan", word);
+    }
+
+    [Fact]
+    public async Task An_already_translated_shared_word_needs_nothing()
+    {
+        await using var db = NewContext();
+        db.Words.Add(TestWords.Pair(10, "apple", "яблуко"));
+        await db.SaveChangesAsync();
+
+        Assert.Null(await new WordSortingService(db).SharedWordNeedingTranslationAsync(10, "uk"));
+    }
+
+    [Fact]
+    public async Task A_translation_in_another_language_does_not_satisfy_this_one()
+    {
+        await using var db = NewContext();
+        var pair = TestWords.Pair(10, "apple", null);
+        pair.Translations.Add(new Domain.Entities.WordTranslation { Language = "pl", Text = "jabłko" });
+        db.Words.Add(pair);
+        await db.SaveChangesAsync();
+
+        Assert.Equal("apple", await new WordSortingService(db).SharedWordNeedingTranslationAsync(10, "uk"));
+    }
+
+    [Fact]
+    public async Task A_personal_word_needs_nothing_even_when_untranslated()
+    {
+        await using var db = NewContext();
+        db.Words.Add(TestWords.Pair(10, "orphan", null, ownerId: 1));
+        await db.SaveChangesAsync();
+
+        Assert.Null(await new WordSortingService(db).SharedWordNeedingTranslationAsync(10, "uk"));
+    }
+
+    [Fact]
+    public async Task An_unknown_word_id_needs_nothing()
+    {
+        await using var db = NewContext();
+
+        Assert.Null(await new WordSortingService(db).SharedWordNeedingTranslationAsync(999, "uk"));
+    }
 }

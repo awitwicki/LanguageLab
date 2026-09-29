@@ -87,6 +87,11 @@ export interface TopWord {
 
 export type PublicationStatus = 'private' | 'pending' | 'published' | 'rejected'
 
+export interface TranslationProgress {
+  done: number
+  total: number
+}
+
 export interface DictionaryDetail {
   id: number
   name: string
@@ -98,6 +103,7 @@ export interface DictionaryDetail {
   chapters: ChapterView[]
   topWords: TopWord[]
   status: PublicationStatus
+  translation: TranslationProgress | null
 }
 
 /** A row in the admin's moderation queue — a dictionary its owner offered for publication. */
@@ -699,6 +705,11 @@ export const api = {
 
   getDictionary: (id: number) =>
     request<DictionaryDetail>(`/api/dictionaries/${id}`) as Promise<DictionaryDetail>,
+
+  // Read-only: unlike getDictionary, this never re-enqueues, so the dictionary screen's poll
+  // uses this instead of getDictionary (final review, finding 1).
+  getTranslationProgress: (id: number) =>
+    request<TranslationProgress | null>(`/api/dictionaries/${id}/translation`) as Promise<TranslationProgress | null>,
 
   deleteDictionary: (id: number) => request<null>(`/api/dictionaries/${id}`, { method: 'DELETE' }),
 
