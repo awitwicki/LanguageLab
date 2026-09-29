@@ -13,6 +13,7 @@ const member: CurrentUser = {
   role: 'user',
   language: 'uk',
   suggestedLanguage: null,
+  verbsWordCount: null,
 }
 
 const admin: CurrentUser = { ...member, id: 1, displayName: 'Ada Vance', role: 'admin' }

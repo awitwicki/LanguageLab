@@ -13,6 +13,8 @@ export interface CurrentUser {
   language: string | null
   /** From Telegram's language_code, only while language is null — preselects the picker. */
   suggestedLanguage: string | null
+  /** Word count last chosen for an irregular-verbs round; null until they've started one. */
+  verbsWordCount: number | null
 }
 
 /** One entry of the server's language catalog. */
@@ -22,8 +24,8 @@ export interface Language {
   nativeName: string
 }
 
-/** The admin list's row: the account, without the learner-language fields /me carries. */
-export interface AdminUser extends Omit<CurrentUser, 'language' | 'suggestedLanguage'> {
+/** The admin list's row: the account, without the learner-language and verbs-drill fields /me carries. */
+export interface AdminUser extends Omit<CurrentUser, 'language' | 'suggestedLanguage' | 'verbsWordCount'> {
   isBanned: boolean
   createdAt: string
   lastLoginAt: string | null
@@ -1047,6 +1049,9 @@ export const api = {
 
   setLanguage: (code: string) =>
     request<null>('/api/auth/me/language', { method: 'PUT', body: JSON.stringify({ code }) }),
+
+  setVerbsWordCount: (words: number) =>
+    request<null>('/api/auth/me/verbs-word-count', { method: 'PUT', body: JSON.stringify({ words }) }),
 
   /** Page size is the server's default; the answer says what it was. */
   listUsers: (params: { search?: string; page: number }) => {

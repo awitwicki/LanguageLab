@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, type DrillQuery, type SessionVerb, type VerbSession } from '../api/client'
 import { createOutbox } from './outbox'
-import { readWordCount, writeWordCount } from './sessionSettings'
+import { resolveWordCount } from './sessionSettings'
 import { clearSavedSession, readSavedSession, writeSavedSession, type SavedSession } from './savedSession'
 import {
   applyAnswer,
@@ -41,8 +41,16 @@ export interface SessionSaving {
  *
  * Given `saving`, the round is kept on the device as it is played, so a reload can hand it
  * back as `saving.resume` and carry on from the same card — see `savedSession.ts`.
+ *
+ * `wordCount` is the account's last choice (null before it has ever made one); `onWordCountSaved`
+ * fires once a fresh choice, made by pressing Start, has reached the account.
  */
-export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
+export function useVerbSession(
+  query: DrillQuery,
+  saving?: SessionSaving,
+  wordCount?: number | null,
+  onWordCountSaved?: () => void,
+) {
   const [phase, setPhase] = useState<Phase>('loading')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -117,12 +125,12 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
       }
 
       setOffer(session.verbs)
-      setWords(readWordCount(session.verbs.length))
+      setWords(resolveWordCount(wordCount, session.verbs.length))
       setPlayed(null)
       setDrill(null)
       setPhase('start')
     },
-    [startedAt],
+    [startedAt, wordCount],
   )
 
   // One last push on the way out: a closing tab gets a single shot, which is why the endpoint
@@ -160,9 +168,9 @@ export function useVerbSession(query: DrillQuery, saving?: SessionSaving) {
   )
 
   const start = useCallback(() => {
-    writeWordCount(words)
     beginDrill(offer.slice(0, words))
-  }, [beginDrill, offer, words])
+    void api.setVerbsWordCount(words).then(onWordCountSaved).catch(() => {})
+  }, [beginDrill, offer, words, onWordCountSaved])
 
   const finish = useCallback(() => {
     setPhase('done')

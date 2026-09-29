@@ -7,7 +7,7 @@ import { readSavedSession, writeSavedSession } from './savedSession'
 import { PassStreak } from './session'
 import { useVerbSession } from './useVerbSession'
 
-const apiMock = vi.hoisted(() => ({ getVerbSession: vi.fn(), postVerbAnswers: vi.fn() }))
+const apiMock = vi.hoisted(() => ({ getVerbSession: vi.fn(), postVerbAnswers: vi.fn(), setVerbsWordCount: vi.fn() }))
 vi.mock('../api/client', () => ({ api: apiMock }))
 ;(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -102,6 +102,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   window.localStorage.clear()
   apiMock.postVerbAnswers.mockResolvedValue({ results: [] })
+  apiMock.setVerbsWordCount.mockResolvedValue(null)
 })
 
 describe('useVerbSession, ordinary training', () => {

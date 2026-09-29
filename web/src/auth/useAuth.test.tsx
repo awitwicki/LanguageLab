@@ -12,6 +12,7 @@ const user = {
   role: 'admin' as const,
   language: 'uk',
   suggestedLanguage: null,
+  verbsWordCount: null,
 }
 
 function respond(routes: Record<string, { status: number; body?: unknown }>) {

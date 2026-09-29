@@ -145,4 +145,30 @@ public class AccountServiceTests
 
         Assert.Equal(SetLanguageResult.NotFound, await NewService(db).SetLanguageAsync(99, "pl"));
     }
+
+    [Theory]
+    [InlineData(1, SetVerbsWordCountResult.Saved, 1)]
+    [InlineData(20, SetVerbsWordCountResult.Saved, 20)]
+    [InlineData(0, SetVerbsWordCountResult.InvalidValue, null)]
+    [InlineData(-3, SetVerbsWordCountResult.InvalidValue, null)]
+    public async Task Setting_the_verbs_word_count_accepts_only_positive_values(
+        int words, SetVerbsWordCountResult expected, int? stored)
+    {
+        await using var db = NewContext();
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 11 });
+        await db.SaveChangesAsync();
+
+        var result = await NewService(db).SetVerbsWordCountAsync(1, words);
+
+        Assert.Equal(expected, result);
+        Assert.Equal(stored, (await db.Users.SingleAsync()).VerbsWordCount);
+    }
+
+    [Fact]
+    public async Task Setting_the_verbs_word_count_of_a_missing_user_is_not_found()
+    {
+        await using var db = NewContext();
+
+        Assert.Equal(SetVerbsWordCountResult.NotFound, await NewService(db).SetVerbsWordCountAsync(99, 5));
+    }
 }

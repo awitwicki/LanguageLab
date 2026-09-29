@@ -13,6 +13,10 @@ interface Props {
   userId: number
   /// A round saved before a reload, to carry on from instead of fetching a new one.
   resume?: SavedSession | null
+  /// The account's last word-count choice; null before it has ever made one.
+  wordCount: number | null
+  /// A fresh choice, made by pressing Start, has reached the account.
+  onWordCountSaved: () => void
   onBack: () => void
   /// A finished stage has nothing left to drill in order, so the only way on is a free run.
   onStartDrill: (query: DrillQuery, title: string) => void
@@ -20,8 +24,17 @@ interface Props {
 
 /// One card at a time: a sentence with a blank and the forms to fill it with. A right pick
 /// moves straight on; a wrong one shows the right form and the verb's three forms until Next.
-export function VerbDrillScreen({ query, title, userId, resume, onBack: leave, onStartDrill }: Props) {
-  const session = useVerbSession(query, { userId, title, resume })
+export function VerbDrillScreen({
+  query,
+  title,
+  userId,
+  resume,
+  wordCount,
+  onWordCountSaved,
+  onBack: leave,
+  onStartDrill,
+}: Props) {
+  const session = useVerbSession(query, { userId, title, resume }, wordCount, onWordCountSaved)
   // Leaving on purpose forgets the round; only a reload or a closed tab keeps it.
   const onBack = () => {
     session.discard()

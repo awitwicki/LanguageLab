@@ -44,6 +44,12 @@ public class TelegramUser : BaseEntity
     public string? TelegramLanguageCode { get; set; }
 
     /// <summary>
+    /// How many words the learner last chose for an irregular-verbs round, kept across devices.
+    /// Null for an account that has never started one — the client falls back to its own default.
+    /// </summary>
+    public int? VerbsWordCount { get; set; }
+
+    /// <summary>
     /// What to call this person on screen. Lives here rather than in a view mapper because
     /// both /api/auth/me and the admin list need the same answer, and the fallbacks matter:
     /// Telegram guarantees first_name at login, but a row can predate any login.

@@ -5,7 +5,7 @@ import { click, flush, render } from '../test/render'
 import { readSavedSession } from './savedSession'
 import { VerbDrillScreen } from './VerbDrillScreen'
 
-const apiMock = vi.hoisted(() => ({ getVerbSession: vi.fn(), postVerbAnswers: vi.fn() }))
+const apiMock = vi.hoisted(() => ({ getVerbSession: vi.fn(), postVerbAnswers: vi.fn(), setVerbsWordCount: vi.fn() }))
 vi.mock('../api/client', () => ({ api: apiMock }))
 
 function verb(v1: string, overrides: Partial<SessionVerb> = {}): SessionVerb {
@@ -46,6 +46,8 @@ function screen(onStartDrill: (query: DrillQuery, title: string) => void = () =>
       query={{ mode: 'batch', group: 4 }}
       title="All three forms differ"
       userId={7}
+      wordCount={null}
+      onWordCountSaved={() => {}}
       onBack={() => {}}
       onStartDrill={onStartDrill}
     />
@@ -78,6 +80,7 @@ describe('VerbDrillScreen', () => {
     window.localStorage.clear()
     apiMock.getVerbSession.mockResolvedValue(session)
     apiMock.postVerbAnswers.mockResolvedValue({ results: [] })
+    apiMock.setVerbsWordCount.mockResolvedValue(null)
   })
 
   it('opens on the start screen', async () => {

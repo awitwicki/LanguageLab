@@ -6,7 +6,7 @@ import type { AppMode } from './mode'
 import { TopBar } from './TopBar'
 
 const user: CurrentUser = { id: 1, telegramUserId: 1, displayName: 'Ada', username: null, photoUrl: null, role: 'user',
-  language: 'uk', suggestedLanguage: null }
+  language: 'uk', suggestedLanguage: null, verbsWordCount: null }
 
 function topBar(mode: AppMode | null, onSelectMode: (mode: AppMode) => void = () => {}, who: CurrentUser = user) {
   return (

@@ -1,35 +1,14 @@
-/** The whole window — what the start screen opens on. */
+/** The whole window — what the start screen opens on when the account has never set one. */
 export const DefaultWords = 5
 
-/** Kept under the introduction's old key: the word count means the same thing it did. */
-const Key = 'll.verbs.intro'
-
 /**
- * How many words the learner last took, on this device. Storage can throw (a private window,
- * site data blocked) and can hold anything at all — an older build's shape, a hand-edited
- * number — so every read comes back clamped to what the window can actually offer.
+ * How many words to open the start screen on, given the account's last choice (`null` for an
+ * account that has never started a round) and how many the current offer actually holds — a
+ * nearly finished stage can offer fewer than what was last picked.
  */
-export function readWordCount(maxWords: number): number {
-  try {
-    const raw = window.localStorage.getItem(Key)
-    const stored = raw ? (JSON.parse(raw) as { words?: unknown }) : {}
+export function resolveWordCount(accountWords: number | null | undefined, maxWords: number): number {
+  const number =
+    typeof accountWords === 'number' && Number.isFinite(accountWords) ? Math.round(accountWords) : DefaultWords
 
-    return clamp(stored.words, maxWords)
-  } catch {
-    return clamp(undefined, maxWords)
-  }
-}
-
-export function writeWordCount(words: number) {
-  try {
-    window.localStorage.setItem(Key, JSON.stringify({ words }))
-  } catch {
-    // A device that cannot remember the setting still trains with it.
-  }
-}
-
-function clamp(value: unknown, high: number): number {
-  const number = typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : DefaultWords
-
-  return Math.min(Math.max(number, 1), Math.max(high, 1))
+  return Math.min(Math.max(number, 1), Math.max(maxWords, 1))
 }
