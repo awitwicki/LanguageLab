@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chaptersLabel, formatBytes, formatDue, formatInt, formatProgress, percentOf, plural, wordsLabel } from './format'
+import { chaptersLabel, formatBytes, formatDue, formatInt, formatProgress, formatWait, percentOf, plural, wordsLabel } from './format'
 
 describe('formatBytes', () => {
   it('bytes under a kilobyte stay bytes', () => {
@@ -89,5 +89,18 @@ describe('formatDue', () => {
   it('anything later — dd.MM', () => {
     expect(formatDue('2026-09-14T12:00:00Z', false, now)).toBe('14.09')
     expect(formatDue('2026-10-07T12:00:00Z', false, now)).toBe('07.10')
+  })
+})
+
+describe('formatWait', () => {
+  it('rounds up to a whole minute under an hour', () => {
+    expect(formatWait(45)).toBe('less than a minute')
+    expect(formatWait(90)).toBe('about 2 minutes')
+    expect(formatWait(60)).toBe('about 1 minute')
+  })
+
+  it('rounds to whole hours from an hour up', () => {
+    expect(formatWait(3600)).toBe('about 1 hour')
+    expect(formatWait(3600 * 6 + 200)).toBe('about 6 hours')
   })
 })

@@ -255,6 +255,7 @@ builder.Services.AddEnglishLexicon();
 
 // The C2 book parsers behind the server-side import, and the pipeline that drives them.
 builder.Services.AddBookParser();
+builder.Services.AddSingleton<ImportQuota>();
 builder.Services.AddScoped<BookFileImportService>();
 
 builder.Services.AddRequestDecompression();

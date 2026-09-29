@@ -1,3 +1,5 @@
+import { formatWait } from '../lib/format'
+
 export type UserRole = 'user' | 'admin'
 
 export interface CurrentUser {
@@ -152,6 +154,7 @@ export interface ReaderBookDto {
 
 export interface ReaderCapabilities {
   sentenceTranslation: boolean
+  importRetryAfterSeconds: number | null
 }
 
 export interface WordStatusesDto {
@@ -211,23 +214,13 @@ export interface BulkWordOutcome {
   error: string | null
 }
 
-export interface ImportWord {
-  word: string
-  count: number
-}
-
-export interface ImportChapter {
-  order: number
-  title: string
-  words: ImportWord[]
-}
-
 export interface ImportResult {
   dictionaryId: number
   totalWords: number
   newWords: number
   reusedWords: number
   droppedWords: number
+  translationQueued: boolean
 }
 
 export interface QueueWord {
@@ -633,17 +626,17 @@ export type UploadProgress = (sent: number, total: number) => void
 
 /**
  * A POST with upload progress. fetch cannot report bytes sent, and a book is a megabyte or
- * two of JSON that a phone on mobile data pushes slowly enough for a bare "Uploading…" to
- * look stuck — so this one request goes over XMLHttpRequest. Failures are named: the
- * server's own message when it sends one, a size hint for a 413 (the proxy in front of the
- * API refuses big bodies, not the API), and a dropped connection instead of silence.
+ * two that a phone on mobile data pushes slowly enough for a bare "Uploading…" to look stuck
+ * — so this one request goes over XMLHttpRequest. Failures are named: the server's own message
+ * when it sends one, the Retry-After header's exact wait on a 429, a size hint for a 413 (the
+ * proxy in front of the API refuses big bodies, not the API), and a dropped connection instead
+ * of silence.
  */
-function uploadJson<T>(path: string, payload: unknown, onProgress?: UploadProgress): Promise<T> {
+function uploadForm<T>(path: string, form: FormData, onProgress?: UploadProgress): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
 
     xhr.open('POST', path)
-    xhr.setRequestHeader('Content-Type', 'application/json')
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
@@ -669,14 +662,22 @@ function uploadJson<T>(path: string, payload: unknown, onProgress?: UploadProgre
         unauthorizedHandler()
       }
 
-      reject(new Error(uploadErrorMessage(xhr.status, xhr.responseText, path)))
+      reject(new Error(uploadErrorMessage(xhr.status, xhr.responseText, path, xhr.getResponseHeader('Retry-After'))))
     }
 
-    xhr.send(JSON.stringify(payload))
+    xhr.send(form)
   })
 }
 
-function uploadErrorMessage(status: number, body: string, path: string): string {
+function uploadErrorMessage(status: number, body: string, path: string, retryAfterHeader: string | null): string {
+  if (status === 429) {
+    const seconds = retryAfterHeader === null ? Number.NaN : Number(retryAfterHeader)
+
+    return Number.isFinite(seconds)
+      ? `You already imported a book today. Try again in ${formatWait(seconds)}.`
+      : 'You already imported a book today. Try again later.'
+  }
+
   try {
     const parsed = JSON.parse(body) as { message?: string }
 
@@ -830,15 +831,22 @@ export const api = {
 
   /** onUploadProgress gets the bytes sent so far and the body size, as the browser pushes the book out. */
   importDictionary: (
-    payload: {
-      name: string
-      chapters?: ImportChapter[]
-      words?: ImportWord[]
-      requestPublication?: boolean
-      fileHash?: string
-    },
+    file: File,
+    options: { chapterMode?: number; requestPublication: boolean },
     onUploadProgress?: UploadProgress,
-  ) => uploadJson<ImportResult>('/api/dictionaries/import', payload, onUploadProgress),
+  ) => {
+    const form = new FormData()
+
+    form.append('file', file)
+
+    if (options.chapterMode !== undefined) {
+      form.append('chapterMode', String(options.chapterMode))
+    }
+
+    form.append('requestPublication', String(options.requestPublication))
+
+    return uploadForm<ImportResult>('/api/dictionaries/import', form, onUploadProgress)
+  },
 
   getQueue: (dictionaryId: number, chapterIds: number[] | null, take = 50) => {
     const params = new URLSearchParams({ dictionaryId: String(dictionaryId), take: String(take) })

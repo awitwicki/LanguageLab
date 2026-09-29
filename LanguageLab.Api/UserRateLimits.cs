@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using LanguageLab.Api.Auth;
-using LanguageLab.Domain.Entities;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace LanguageLab.Api;
@@ -16,13 +15,19 @@ namespace LanguageLab.Api;
 /// </summary>
 public static class UserRateLimits
 {
-    public const string Import = "import";
     public const string Translate = "translate";
     public const string BulkWords = "bulk-words";
+    /// <summary>
+    /// A loose ceiling on import *attempts*, independent of ImportQuota's 1-success/day: a wrong
+    /// file, DRM or a non-English book is immediately retryable, but this is what stops a script
+    /// from hammering the endpoint with garbage forever (final review finding, C4) — generous
+    /// enough that a real user retrying a few times never sees it.
+    /// </summary>
+    public const string ImportAttempts = "import-attempts";
 
-    public const int ImportsPerDay = 1;
     public const int TranslationsPerDay = 500;
     public const int BulkRequestsPerDay = 20;
+    public const int ImportAttemptsPerDay = 20;
 
     /// <summary>
     /// The signed-in user's id, or one shared anonymous bucket. A request that reaches a limited
@@ -32,10 +37,6 @@ public static class UserRateLimits
     /// </summary>
     public static string PartitionKey(ClaimsPrincipal? user) =>
         PrincipalFactory.Read(user) is { } context ? $"user:{context.Id}" : "anonymous";
-
-    /// <summary>Q5: admins import without a daily cap. Import only — every other limit applies to them too.</summary>
-    public static bool IsImportExempt(ClaimsPrincipal? user) =>
-        PrincipalFactory.Read(user) is { Role: UserRole.Admin };
 
     /// <summary>
     /// Names the wait; without it a 429 is "try again when?". SlidingWindowRateLimiter's rejected
@@ -77,12 +78,9 @@ public static class UserRateLimits
             return ValueTask.CompletedTask;
         };
 
-        options.AddPolicy(Import, context =>
-            IsImportExempt(context.User)
-                ? RateLimitPartition.GetNoLimiter(PartitionKey(context.User))
-                : RateLimitPartition.GetSlidingWindowLimiter(PartitionKey(context.User), _ => Window(ImportsPerDay)));
         Add(options, Translate, TranslationsPerDay);
         Add(options, BulkWords, BulkRequestsPerDay);
+        Add(options, ImportAttempts, ImportAttemptsPerDay);
     }
 
     private static SlidingWindowRateLimiterOptions Window(int permits) => new()

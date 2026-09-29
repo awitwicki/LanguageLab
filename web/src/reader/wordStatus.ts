@@ -1,5 +1,5 @@
-import { adjective, noun, verb } from 'wink-lemmatizer'
 import { cleanWord, isRejected } from '../fb2/tokenize'
+import type { Lexicon } from '../lexicon/lexicon'
 import type { ReaderBook } from './readerBook'
 
 export type WordStatus = 'new' | 'learning' | 'known'
@@ -9,7 +9,7 @@ export type KnownStatuses = ReadonlyMap<string, 'learning' | 'known'>
 
 export const EMPTY_STATUSES: KnownStatuses = new Map()
 
-/** status null: a function word (the, of, don't) — tappable, never highlighted. */
+/** status null: a function word (the, of, don't) or a word the lexicon does not know — tappable, never highlighted. */
 export interface ResolvedWord {
   lemma: string
   status: WordStatus | null
@@ -17,15 +17,33 @@ export interface ResolvedWord {
 
 interface Analysis {
   word: string
-  /** null for a function word; otherwise the form itself first, then its base-form guesses. */
-  candidates: string[] | null
+  /** null for a function word or an unrecognized word; otherwise every lemma the lexicon has for it, primary first. */
+  candidates: readonly string[] | null
 }
 
-// A book repeats its words endlessly: analyse each spelling once per page load.
+// A book repeats its words endlessly: analyse each spelling once per page load, once the
+// lexicon is in hand. Never populated while the lexicon is still null — see analyse() below.
 const analyses = new Map<string, Analysis | null>()
 
-function analyse(token: string): Analysis | null {
-  const cached = analyses.get(token)
+/** A 2-letter form only counts when the lexicon itself treats it as a lemma (C1→C3→C4: go, ox). */
+function candidatesFor(word: string, lexicon: Lexicon): readonly string[] | null {
+  if (word.length < 2 || isRejected(word)) {
+    return null
+  }
+
+  if (word.length === 2 && lexicon.lemmaOf(word) !== word) {
+    return null
+  }
+
+  const lemmas = lexicon.lemmasOf(word)
+
+  return lemmas.length > 0 ? lemmas : null
+}
+
+function analyse(token: string, lexicon: Lexicon | null): Analysis | null {
+  // Cache reads/writes are skipped entirely while the lexicon has not loaded yet: an early
+  // answer must never get stuck once a real lexicon is available (Review Focus).
+  const cached = lexicon !== null ? analyses.get(token) : undefined
 
   if (cached !== undefined) {
     return cached
@@ -34,26 +52,27 @@ function analyse(token: string): Analysis | null {
   const word = cleanWord(token)
 
   // Only letters, apostrophes and hyphens make a word the API accepts (WordText on the server).
-  const analysis: Analysis | null = !/^[a-z'-]+$/.test(word) || !/[a-z]/.test(word)
-    ? null
-    : {
-        word,
-        candidates: isRejected(word) ? null : [...new Set([word, verb(word), noun(word), adjective(word)])],
-      }
+  const shapeOk = /^[a-z'-]+$/.test(word) && /[a-z]/.test(word)
 
-  analyses.set(token, analysis)
+  const analysis: Analysis | null = !shapeOk
+    ? null
+    : { word, candidates: lexicon === null ? null : candidatesFor(word, lexicon) }
+
+  if (lexicon !== null) {
+    analyses.set(token, analysis)
+  }
+
   return analysis
 }
 
 /**
- * A token of the text → its base form and the learner's standing on it. No part-of-speech
- * tagging (compromise is too slow on the main thread, and workers do not start inside
- * Telegram): every base-form guess is tried and the first one the learner has a standing on
- * wins. A new word is shown under its first guess that differs from the form itself. Now and
- * then a lemma is guessed wrong — accepted for highlighting.
+ * A token of the text → its base form and the learner's standing on it, resolved against the
+ * shared English lexicon (web/src/lexicon/lexicon.ts) rather than a guess: `lexicon` null means
+ * it has not loaded yet (or failed), and every word is treated as unrecognized until it has —
+ * tappable, never highlighted, exactly like a function word.
  */
-export function resolveWord(token: string, statuses: KnownStatuses): ResolvedWord | null {
-  const analysis = analyse(token)
+export function resolveWord(token: string, statuses: KnownStatuses, lexicon: Lexicon | null): ResolvedWord | null {
+  const analysis = analyse(token, lexicon)
 
   if (analysis === null) {
     return null
@@ -71,7 +90,10 @@ export function resolveWord(token: string, statuses: KnownStatuses): ResolvedWor
     }
   }
 
-  return { lemma: analysis.candidates.find((c) => c !== analysis.word) ?? analysis.word, status: 'new' }
+  // lemmasOf is primary-first, so the first candidate is the right lemma for a new word — not
+  // the first one that merely differs from the raw token (that was a wink-lemmatizer-era
+  // workaround; the lexicon is authoritative and needs no second-guessing).
+  return { lemma: analysis.candidates[0], status: 'new' }
 }
 
 export function toStatusMap(statuses: { learning: string[]; known: string[] }): Map<string, 'learning' | 'known'> {
@@ -89,14 +111,14 @@ export function toStatusMap(statuses: { learning: string[]; known: string[] }): 
 }
 
 /** "Count: N" in the word panel — how often each base form occurs in the whole book. */
-export function bookLemmaCounts(book: ReaderBook): Map<string, number> {
+export function bookLemmaCounts(book: ReaderBook, lexicon: Lexicon | null): Map<string, number> {
   const counts = new Map<string, number>()
 
   for (const chapter of book.chapters) {
     for (const paragraph of chapter.paragraphs) {
       for (const sentence of paragraph.sentences) {
         for (const token of sentence.tokens) {
-          const lemma = token.isWord ? resolveWord(token.text, EMPTY_STATUSES)?.lemma : undefined
+          const lemma = token.isWord ? resolveWord(token.text, EMPTY_STATUSES, lexicon)?.lemma : undefined
 
           if (lemma) {
             counts.set(lemma, (counts.get(lemma) ?? 0) + 1)

@@ -9,8 +9,8 @@ import {
   type MouseEvent,
 } from 'react'
 import { api, type ReaderBookDto } from '../api/client'
-import { telegramInitData } from '../auth/telegram'
-import { formatInt } from '../lib/format'
+import { formatInt, formatWait, percentOf } from '../lib/format'
+import { loadLexicon, type Lexicon } from '../lexicon/lexicon'
 import type { BookStore } from './bookStore'
 import { allChunks, chunkChapter, chunkOfPosition, chunksAround } from './chapterWindow'
 import {
@@ -26,7 +26,6 @@ import {
 import { ReaderMenu } from './ReaderMenu'
 import { loadSettings, resolveTheme, saveSettings, TEXT_SIZES, type ReaderSettings } from './readerSettings'
 import { Sentence } from './Sentence'
-import { useAutoImport } from './useAutoImport'
 import { loadLocalPosition, pickPosition, useReaderPosition } from './useReaderPosition'
 import { useSentenceTranslations } from './useSentenceTranslations'
 import { WordPanel } from './WordPanel'
@@ -44,7 +43,7 @@ type Load =
   | { status: 'loading' }
   | { status: 'missing' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; book: ReaderBook; bytes: ArrayBuffer }
+  | { status: 'ready'; book: ReaderBook; bytes: ArrayBuffer; fileName: string }
 
 interface Selection {
   key: string
@@ -93,6 +92,12 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   const [selection, setSelection] = useState<Selection | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [settings, setSettings] = useState<ReaderSettings>(loadSettings)
+  const [lexicon, setLexicon] = useState<Lexicon | null>(null)
+  const [lexiconFailed, setLexiconFailed] = useState(false)
+  const [buildState, setBuildState] = useState<'idle' | 'uploading' | 'failed'>('idle')
+  const [buildProgress, setBuildProgress] = useState<{ sent: number; total: number } | null>(null)
+  const [buildError, setBuildError] = useState<string | null>(null)
+  const [importRetryAfterSeconds, setImportRetryAfterSeconds] = useState<number | null>(null)
   const prefersDark = usePrefersDark()
   const bodyRef = useRef<HTMLElement>(null)
   const headerRef = useRef<HTMLElement>(null)
@@ -114,9 +119,7 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
   const book = load.status === 'ready' ? load.book : null
   const report = useReaderPosition(hash, book)
   const { translations, toggle } = useSentenceTranslations(hash, store)
-  const counts = useMemo(() => (book ? bookLemmaCounts(book) : new Map<string, number>()), [book])
-
-  const bytes = load.status === 'ready' ? load.bytes : null
+  const counts = useMemo(() => (book ? bookLemmaCounts(book, lexicon) : new Map<string, number>()), [book, lexicon])
 
   // After the dictionary is built: link it (dictionaryId) and pick up its words' statuses.
   const refreshAfterImport = useCallback(() => {
@@ -130,14 +133,28 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
       .catch(() => undefined)
   }, [hash])
 
-  const autoImport = useAutoImport({
-    // Only a registered book whose dictionaryId is known to be null — not a server that timed out.
-    enabled: telegramInitData() === null && server != null && server.dictionaryId === null,
-    hash,
-    title: book?.title ?? '',
-    bytes,
-    onImported: refreshAfterImport,
-  })
+  const onBuildDictionary = useCallback(async () => {
+    if (load.status !== 'ready') return
+
+    setBuildState('uploading')
+    setBuildProgress(null)
+    setBuildError(null)
+
+    try {
+      await api.importDictionary(
+        new File([load.bytes], load.fileName),
+        { requestPublication: false },
+        (sent, total) => setBuildProgress({ sent, total }),
+      )
+      setBuildState('idle')
+      refreshAfterImport()
+    } catch (e) {
+      // Surfaces the real reason (a 429's "try again in ~X", a dropped connection, ...) rather
+      // than a generic message — the same api/client.ts error text ImportScreen already shows.
+      setBuildError(e instanceof Error ? e.message : String(e))
+      setBuildState('failed')
+    }
+  }, [load, refreshAfterImport])
 
   // The file, from this device.
   useEffect(() => {
@@ -154,7 +171,7 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
         const fileName = metas.find((meta) => meta.hash === hash)?.fileName ?? 'book'
 
         try {
-          setLoad({ status: 'ready', book: readBookFile(bytes, fileName), bytes })
+          setLoad({ status: 'ready', book: readBookFile(bytes, fileName), bytes, fileName })
         } catch (e) {
           setLoad({ status: 'error', message: e instanceof Error ? e.message : String(e) })
         }
@@ -167,6 +184,18 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
       cancelled = true
     }
   }, [hash, store])
+
+  useEffect(() => {
+    let cancelled = false
+
+    loadLexicon()
+      .then((loaded) => !cancelled && setLexicon(loaded))
+      .catch(() => !cancelled && setLexiconFailed(true))
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // The header's real rendered height drives both the scroll offset (Sentence.css) and the
   // reading-band's rootMargin below, so the two can never disagree about where the header ends.
@@ -197,7 +226,11 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
 
     api
       .readerCapabilities()
-      .then((capabilities) => !cancelled && setCanTranslate(capabilities.sentenceTranslation))
+      .then((capabilities) => {
+        if (cancelled) return
+        setCanTranslate(capabilities.sentenceTranslation)
+        setImportRetryAfterSeconds(capabilities.importRetryAfterSeconds)
+      })
       .catch(() => undefined)
 
     api
@@ -396,7 +429,7 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
 
   const onWordTap = useCallback(
     (key: string, tokenIndex: number, resolved: ResolvedWord, form: string, element: HTMLElement) => {
-      const countKey = resolveWord(form, EMPTY_STATUSES)?.lemma ?? resolved.lemma
+      const countKey = resolveWord(form, EMPTY_STATUSES, lexicon)?.lemma ?? resolved.lemma
       setSelection({ key, tokenIndex, lemma: resolved.lemma, form, count: counts.get(countKey) ?? 0 })
 
       // The panel covers the lower part of the screen: bring a word down there up into view.
@@ -404,7 +437,7 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
         element.scrollIntoView({ block: 'center', behavior: 'smooth' })
       }
     },
-    [counts],
+    [counts, lexicon],
   )
 
   // 'new' is the panel's undo: the word goes back to having no standing, and is highlighted again.
@@ -488,15 +521,32 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
         <div className="reader-progress" style={progressStyle} />
       </header>
 
-      {statusesFailed && <p className="reader-notice">Word highlights unavailable</p>}
+      {(statusesFailed || lexiconFailed) && <p className="reader-notice">Word highlights unavailable</p>}
 
-      {autoImport.status === 'running' && (
-        <p className="reader-notice" role="status">
-          Building this book's word list…
-          {autoImport.total > 0 && ` ${formatInt(Math.round((autoImport.done / autoImport.total) * 100))} %`}
+      {server && server.dictionaryId === null && (
+        <p className="reader-notice reader-build-dictionary" role="status">
+          {buildState === 'uploading' ? (
+            <>
+              Building this book's word list…
+              {buildProgress && ` ${formatInt(percentOf(buildProgress.sent, buildProgress.total))} %`}
+            </>
+          ) : (
+            <>
+              {buildState === 'failed' && buildError && `${buildError} `}
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={importRetryAfterSeconds !== null}
+                onClick={onBuildDictionary}
+              >
+                {importRetryAfterSeconds !== null
+                  ? `Build dictionary (frees up in ${formatWait(importRetryAfterSeconds)})`
+                  : 'Build dictionary'}
+              </button>
+            </>
+          )}
         </p>
       )}
-      {autoImport.status === 'failed' && <p className="reader-notice">Couldn't build this book's word list</p>}
 
       <main className="reader-body" ref={bodyRef} onClick={onBodyClick}>
         {position.chapterIndex > 0 && (
@@ -516,6 +566,7 @@ export function ReaderScreen({ hash, store, onBack, onOpenDictionary }: Props) {
                 positionKey={entry.key}
                 paragraphStart={entry.paragraphStart}
                 statuses={statuses}
+                lexicon={lexicon}
                 selectedToken={selection?.key === entry.key ? selection.tokenIndex : null}
                 canTranslate={canTranslate}
                 translation={translations[entry.key]}

@@ -1,5 +1,6 @@
 import { Fragment, memo } from 'react'
 import { useLearnerLanguage } from '../account/learnerLanguage'
+import type { Lexicon } from '../lexicon/lexicon'
 import type { ReaderSentence } from './readerBook'
 import { resolveWord, type KnownStatuses, type ResolvedWord } from './wordStatus'
 import './Sentence.css'
@@ -51,6 +52,8 @@ interface Props {
   /** The first sentence of a paragraph gets a little more room above. */
   paragraphStart: boolean
   statuses: KnownStatuses
+  /** null while the lexicon has not loaded yet (or failed) — every word renders unhighlighted. */
+  lexicon: Lexicon | null
   /** The tapped token's index in this sentence, or null. */
   selectedToken: number | null
   canTranslate: boolean
@@ -65,6 +68,7 @@ export const Sentence = memo(function Sentence({
   positionKey,
   paragraphStart,
   statuses,
+  lexicon,
   selectedToken,
   canTranslate,
   translation,
@@ -82,7 +86,7 @@ export const Sentence = memo(function Sentence({
     <div className={paragraphStart ? 'reader-sentence reader-paragraph-start' : 'reader-sentence'} data-pos={positionKey}>
       <p className="reader-text">
         {sentence.tokens.map((token, index) => {
-          const resolved = token.isWord ? resolveWord(token.text, statuses) : null
+          const resolved = token.isWord ? resolveWord(token.text, statuses, lexicon) : null
 
           if (!resolved) {
             return <Fragment key={index}>{token.text}</Fragment>

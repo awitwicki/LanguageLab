@@ -7,51 +7,45 @@ import { api, setUnauthorizedHandler } from './client'
  */
 class FakeXhr {
   static instances: FakeXhr[] = []
-
-  method = ''
-  url = ''
-  headers: Record<string, string> = {}
-  body: string | null = null
   status = 0
   responseText = ''
   upload = { onprogress: null as ((event: ProgressEvent) => void) | null }
   onload: (() => void) | null = null
   onerror: (() => void) | null = null
+  private headers = new Map<string, string>()
+  sent: unknown
 
   constructor() {
     FakeXhr.instances.push(this)
   }
 
-  open(method: string, url: string) {
-    this.method = method
-    this.url = url
-  }
-
-  setRequestHeader(name: string, value: string) {
-    this.headers[name] = value
-  }
-
-  send(body: string) {
-    this.body = body
+  open() {}
+  setRequestHeader() {}
+  send(body: unknown) {
+    this.sent = body
   }
 
   progress(loaded: number, total: number) {
     this.upload.onprogress?.({ lengthComputable: true, loaded, total } as ProgressEvent)
   }
 
-  respond(status: number, text: string) {
+  respond(status: number, body: unknown, headers: Record<string, string> = {}) {
     this.status = status
-    this.responseText = text
+    this.responseText = typeof body === 'string' ? body : JSON.stringify(body)
+    for (const [key, value] of Object.entries(headers)) this.headers.set(key.toLowerCase(), value)
     this.onload?.()
   }
 
   fail() {
     this.onerror?.()
   }
+
+  getResponseHeader(name: string) {
+    return this.headers.get(name.toLowerCase()) ?? null
+  }
 }
 
-const payload = { name: 'Wool', words: [{ word: 'abide', count: 1 }], requestPublication: false }
-const result = { dictionaryId: 1, totalWords: 1, newWords: 1, reusedWords: 0, droppedWords: 0 }
+const RESULT = { dictionaryId: 1, totalWords: 1, newWords: 1, reusedWords: 0, droppedWords: 0, translationQueued: false }
 
 beforeEach(() => {
   FakeXhr.instances = []
@@ -64,28 +58,36 @@ afterEach(() => {
 })
 
 describe('importDictionary', () => {
-  it('posts the book as JSON with the chosen visibility', async () => {
-    const pending = api.importDictionary(payload)
-    const [xhr] = FakeXhr.instances
+  it('sends the file as multipart form data, omitting chapterMode for leaf', async () => {
+    const promise = api.importDictionary(new File(['x'], 'wool.fb2'), { requestPublication: true })
+    const xhr = FakeXhr.instances[0]
+    const body = xhr.sent as FormData
 
-    expect(xhr.method).toBe('POST')
-    expect(xhr.url).toBe('/api/dictionaries/import')
-    expect(xhr.headers['Content-Type']).toBe('application/json')
-    expect(JSON.parse(String(xhr.body))).toMatchObject({ requestPublication: false })
+    expect(body.get('file')).toBeInstanceOf(File)
+    expect(body.get('chapterMode')).toBeNull()
+    expect(body.get('requestPublication')).toBe('true')
 
-    xhr.respond(200, JSON.stringify(result))
+    xhr.respond(200, RESULT)
+    await expect(promise).resolves.toMatchObject({ dictionaryId: 1 })
+  })
 
-    await expect(pending).resolves.toEqual(result)
+  it('sends a numeric chapterMode when one is chosen', async () => {
+    void api.importDictionary(new File(['x'], 'wool.fb2'), { chapterMode: 1, requestPublication: false })
+    const body = FakeXhr.instances[0].sent as FormData
+
+    expect(body.get('chapterMode')).toBe('1')
   })
 
   it('reports the bytes sent while the upload is in flight', async () => {
     const seen: [number, number][] = []
-    const pending = api.importDictionary(payload, (sent, total) => seen.push([sent, total]))
-    const [xhr] = FakeXhr.instances
+    const pending = api.importDictionary(new File(['x'], 'wool.fb2'), { requestPublication: false }, (sent, total) =>
+      seen.push([sent, total]),
+    )
+    const xhr = FakeXhr.instances[0]
 
     xhr.progress(500, 2000)
     xhr.progress(2000, 2000)
-    xhr.respond(200, JSON.stringify(result))
+    xhr.respond(200, RESULT)
 
     await pending
 
@@ -96,15 +98,30 @@ describe('importDictionary', () => {
   })
 
   it('shows the server’s own reason when it sends one', async () => {
-    const pending = api.importDictionary(payload)
+    const pending = api.importDictionary(new File(['x'], 'wool.fb2'), { requestPublication: false })
 
-    FakeXhr.instances[0].respond(400, JSON.stringify({ message: 'The dictionary name cannot be empty.' }))
+    FakeXhr.instances[0].respond(400, { message: 'The dictionary name cannot be empty.' })
 
     await expect(pending).rejects.toThrow('The dictionary name cannot be empty.')
   })
 
+  it('names the wait from the Retry-After header on a 429', async () => {
+    const promise = api.importDictionary(new File(['x'], 'wool.fb2'), { requestPublication: false })
+    FakeXhr.instances[0].respond(429, { message: 'quota' }, { 'Retry-After': '3600' })
+
+    await expect(promise).rejects.toThrow('Try again in about 1 hour.')
+  })
+
+  // Review Focus: no header at all must still read, not crash or say "NaN".
+  it('still gives a readable message on a 429 with no Retry-After header', async () => {
+    const promise = api.importDictionary(new File(['x'], 'wool.fb2'), { requestPublication: false })
+    FakeXhr.instances[0].respond(429, { message: 'quota' })
+
+    await expect(promise).rejects.toThrow('You already imported a book today. Try again later.')
+  })
+
   it('explains a 413 — the proxy in front of the API, not the API, refuses big books', async () => {
-    const pending = api.importDictionary(payload)
+    const pending = api.importDictionary(new File(['x'], 'wool.fb2'), { requestPublication: false })
 
     FakeXhr.instances[0].respond(413, '<html>413 Request Entity Too Large</html>')
 
@@ -112,7 +129,7 @@ describe('importDictionary', () => {
   })
 
   it('falls back to the status code for any other failure', async () => {
-    const pending = api.importDictionary(payload)
+    const pending = api.importDictionary(new File(['x'], 'wool.fb2'), { requestPublication: false })
 
     FakeXhr.instances[0].respond(504, '<html>Gateway Time-out</html>')
 
@@ -120,7 +137,7 @@ describe('importDictionary', () => {
   })
 
   it('names a dropped connection instead of hanging', async () => {
-    const pending = api.importDictionary(payload)
+    const pending = api.importDictionary(new File(['x'], 'wool.fb2'), { requestPublication: false })
 
     FakeXhr.instances[0].fail()
 
@@ -131,7 +148,7 @@ describe('importDictionary', () => {
     const unauthorized = vi.fn()
     setUnauthorizedHandler(unauthorized)
 
-    const pending = api.importDictionary(payload)
+    const pending = api.importDictionary(new File(['x'], 'wool.fb2'), { requestPublication: false })
 
     FakeXhr.instances[0].respond(401, '')
 
