@@ -1,4 +1,5 @@
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Languages;
 using LanguageLab.Domain.Pronunciation;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +9,7 @@ namespace LanguageLab.Infrastructure.Database;
 public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
 {
     public DbSet<WordPair> Words { get; set; }
+    public DbSet<WordTranslation> WordTranslations { get; set; }
     public DbSet<Dictionary> Dictionaries { get; set; }
     public DbSet<TelegramUser> Users { get; set; }
     public DbSet<Training> Trainings { get; set; }
@@ -26,6 +28,7 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
     public DbSet<StarredChapter> StarredChapters { get; set; }
     public DbSet<SortingVisit> SortingVisits { get; set; }
     public DbSet<ReaderBook> ReaderBooks { get; set; }
+    public DbSet<TranslationJob> TranslationJobs { get; set; }
 
     /// <summary>
     /// The keys the session cookie is encrypted with. Kept in the database, not in the
@@ -55,6 +58,24 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
             .WithMany()
             .HasForeignKey(w => w.OwnerId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // One translation per word and language; a word's translations die with it.
+        builder.Entity<WordTranslation>()
+            .HasIndex(t => new { t.WordPairId, t.Language })
+            .IsUnique();
+
+        builder.Entity<WordTranslation>()
+            .HasOne(t => t.WordPair)
+            .WithMany(w => w.Translations)
+            .HasForeignKey(t => t.WordPairId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<WordTranslation>().Property(t => t.Language).HasMaxLength(LearnerLanguages.CodeMaxLength);
+        builder.Entity<TelegramUser>().Property(u => u.Language).HasMaxLength(LearnerLanguages.CodeMaxLength);
+        builder.Entity<TelegramUser>().Property(u => u.TelegramLanguageCode).HasMaxLength(16);
+        builder.Entity<Training>().Property(t => t.Language)
+            .HasMaxLength(LearnerLanguages.CodeMaxLength)
+            .HasDefaultValue(LearnerLanguages.DefaultCode);
 
         // Login upserts by TelegramUserId; without the unique index two concurrent
         // first logins could create two accounts for the same Telegram user.
@@ -238,5 +259,24 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
         // The library links a book to the dictionary imported from the same file.
         builder.Entity<Dictionary>()
             .HasIndex(d => d.FileHash);
+
+        // The background translation queue: one job per dictionary and language, which is what
+        // makes enqueueing idempotent when two requests race.
+        builder.Entity<TranslationJob>()
+            .HasIndex(j => new { j.DictionaryId, j.Language })
+            .IsUnique();
+
+        // The worker's pick: pending jobs, the one processed longest ago first.
+        builder.Entity<TranslationJob>()
+            .HasIndex(j => new { j.Status, j.LastProcessedAt });
+
+        // A job has no meaning without its dictionary.
+        builder.Entity<TranslationJob>()
+            .HasOne(j => j.Dictionary)
+            .WithMany()
+            .HasForeignKey(j => j.DictionaryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Entity<TranslationJob>().Property(j => j.Language).HasMaxLength(LearnerLanguages.CodeMaxLength);
     }
 }

@@ -55,6 +55,12 @@ public class WebAppInitDataTests
     }
 
     [Fact]
+    public void Reads_the_language_code()
+    {
+        Assert.Equal("en", WebAppInitData.Validate(Signed, Token, Now).Identity!.LanguageCode);
+    }
+
+    [Fact]
     public void Optional_profile_fields_come_back_null()
     {
         var identity = WebAppInitData.Validate(Minimal, Token, Now).Identity;

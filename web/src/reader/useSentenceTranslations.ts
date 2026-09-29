@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useLearnerLanguage } from '../account/learnerLanguage'
 import { api } from '../api/client'
+import { formatShortWait } from '../lib/format'
 import type { BookStore } from './bookStore'
 import type { SentenceTranslation } from './Sentence'
 
 const MESSAGES = {
-  limit: 'Daily sentence translation limit reached',
   quota: 'Translation limit reached — try again later',
   tooLong: 'This sentence is too long to translate',
   failed: "Couldn't translate",
 } as const
+
+function limitMessage(retryAfterSeconds: number | null): string {
+  return retryAfterSeconds === null
+    ? 'Too many translations at once. Try again in a few seconds.'
+    : `Too many translations at once. Try again in ${formatShortWait(retryAfterSeconds)}.`
+}
 
 /**
  * Open, closed and failed sentence translations of one book. A translation comes from the
@@ -16,6 +23,9 @@ const MESSAGES = {
  * keeps none. toggle closes an open or loading one and (re)requests a closed or failed one.
  */
 export function useSentenceTranslations(hash: string, store: BookStore) {
+  // A cached translation is only valid for the language it was made in — the cache key below
+  // includes it, so switching languages can never surface another language's cached text.
+  const language = useLearnerLanguage()
   const [translations, setTranslations] = useState<Record<string, SentenceTranslation>>({})
   const current = useRef(translations)
   // Bumped on every state change for a key, so an in-flight request that started before a close
@@ -51,7 +61,7 @@ export function useSentenceTranslations(hash: string, store: BookStore) {
       set(key, { state: 'loading' })
       const myEpoch = epoch.current[key]
 
-      const cached = await store.getTranslation(hash, key).catch(() => null)
+      const cached = await store.getTranslation(hash, language, key).catch(() => null)
 
       if (myEpoch !== epoch.current[key]) return
 
@@ -66,13 +76,16 @@ export function useSentenceTranslations(hash: string, store: BookStore) {
 
       if (result.status === 'ok') {
         set(key, { state: 'open', text: result.translation })
-        void store.putTranslation(hash, key, result.translation).catch(() => undefined)
+        void store.putTranslation(hash, language, key, result.translation).catch(() => undefined)
         return
       }
 
-      set(key, { state: 'error', message: MESSAGES[result.status] })
+      set(key, {
+        state: 'error',
+        message: result.status === 'limit' ? limitMessage(result.retryAfterSeconds) : MESSAGES[result.status],
+      })
     },
-    [hash, store, set],
+    [hash, store, language, set],
   )
 
   return { translations, toggle }

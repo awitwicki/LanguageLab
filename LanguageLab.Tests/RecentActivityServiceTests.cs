@@ -46,7 +46,7 @@ public class RecentActivityServiceTests
             new Chapter { Id = 3, DictionaryId = Hidden, Order = 0, Title = "Secret", WordsCount = 1 });
 
         var words = Enumerable.Range(1, 5)
-            .Select(i => new WordPair { Id = i, Word = $"word{i}", Translation = $"переклад{i}" })
+            .Select(i => TestWords.Pair(i, $"word{i}", $"переклад{i}"))
             .ToList();
         db.Words.AddRange(words);
 

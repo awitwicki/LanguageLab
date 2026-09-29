@@ -1,5 +1,6 @@
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.IrregularVerbs;
+using LanguageLab.Domain.Languages;
 using LanguageLab.Domain.Pronunciation;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
@@ -23,7 +24,7 @@ public class SchemaTests
         await using var db = NewContext();
 
         var dictionary = new Domain.Entities.Dictionary { Id = 1, Name = "book", WordsCount = 1 };
-        var word = new WordPair { Id = 1, Word = "abide", Translation = "дотримуватися" };
+        var word = TestWords.Pair(1, "abide", "дотримуватися");
         dictionary.Words = [word];
 
         db.Dictionaries.Add(dictionary);
@@ -85,7 +86,7 @@ public class SchemaTests
         await using var db = NewContext();
 
         var user = new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = DateTime.UtcNow };
-        var word = new WordPair { Id = 1, Word = "abide", Translation = "дотримуватися" };
+        var word = TestWords.Pair(1, "abide", "дотримуватися");
 
         db.Users.Add(user);
         db.Words.Add(word);
@@ -153,15 +154,15 @@ public class SchemaTests
 
         db.Users.Add(new TelegramUser { Id = 5, TelegramUserId = 555 });
         db.Words.AddRange(
-            new WordPair { Id = 1, Word = "run", Translation = "бігти" },
-            new WordPair { Id = 2, Word = "run", Translation = "запускати", OwnerId = 5 });
+            TestWords.Pair(1, "run", "бігти"),
+            TestWords.Pair(2, "run", "запускати", ownerId: 5));
         await db.SaveChangesAsync();
 
         var shared = await db.Words.SingleAsync(w => w.Word == "run" && w.OwnerId == null);
         var owned = await db.Words.SingleAsync(w => w.Word == "run" && w.OwnerId == 5);
 
-        Assert.Equal("бігти", shared.Translation);
-        Assert.Equal("запускати", owned.Translation);
+        Assert.Equal("бігти", (await db.WordTranslations.SingleAsync(t => t.WordPairId == shared.Id)).Text);
+        Assert.Equal("запускати", (await db.WordTranslations.SingleAsync(t => t.WordPairId == owned.Id)).Text);
     }
 
     /// <summary>
@@ -329,16 +330,16 @@ public class SchemaTests
         Assert.Equal(["UserId", "FileHash"], index.Properties.Select(p => p.Name));
     }
 
-    /// <summary>Every row that exists today was translated by hand or imported: Manual is the default.</summary>
+    /// <summary>Every translation that exists today was typed by hand or imported: Manual is the default.</summary>
     [Fact]
-    public async Task New_words_default_to_a_manual_translation()
+    public async Task New_translations_default_to_manual()
     {
         await using var db = NewContext();
 
-        db.Words.Add(new WordPair { Id = 1, Word = "abide", Translation = "дотримуватися" });
+        db.Words.Add(TestWords.Pair(1, "abide", "дотримуватися"));
         await db.SaveChangesAsync();
 
-        Assert.Equal(TranslationOrigin.Manual, (await db.Words.SingleAsync()).TranslationOrigin);
+        Assert.Equal(TranslationOrigin.Manual, (await db.WordTranslations.SingleAsync()).Origin);
     }
 
     [Fact]
@@ -395,5 +396,84 @@ public class SchemaTests
             .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(["UserId", "Verb"]));
 
         Assert.True(index.IsUnique);
+    }
+
+    [Fact]
+    public void A_word_translation_is_unique_per_word_and_language()
+    {
+        using var db = NewContext();
+        var index = db.Model.FindEntityType(typeof(WordTranslation))!.GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(["WordPairId", "Language"]));
+
+        Assert.True(index.IsUnique);
+    }
+
+    [Fact]
+    public void Language_columns_are_capped_at_the_catalog_length()
+    {
+        using var db = NewContext();
+
+        Assert.Equal(LearnerLanguages.CodeMaxLength,
+            db.Model.FindEntityType(typeof(WordTranslation))!.FindProperty("Language")!.GetMaxLength());
+        Assert.Equal(LearnerLanguages.CodeMaxLength,
+            db.Model.FindEntityType(typeof(TelegramUser))!.FindProperty("Language")!.GetMaxLength());
+        Assert.Equal(LearnerLanguages.CodeMaxLength,
+            db.Model.FindEntityType(typeof(Training))!.FindProperty("Language")!.GetMaxLength());
+        Assert.Equal(LearnerLanguages.CodeMaxLength,
+            db.Model.FindEntityType(typeof(TranslationJob))!.FindProperty("Language")!.GetMaxLength());
+    }
+
+    /// <summary>
+    /// The queue is idempotent per (dictionary, language) and relies on the database for it when
+    /// two enqueues race. InMemory enforces no index, so the model is the evidence.
+    /// </summary>
+    [Fact]
+    public void A_dictionary_has_one_translation_job_per_language()
+    {
+        using var db = NewContext();
+
+        var index = db.Model.FindEntityType(typeof(TranslationJob))!.GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(new[] { "DictionaryId", "Language" }));
+
+        Assert.True(index.IsUnique);
+    }
+
+    /// <summary>The worker's pick filters on Status and orders by LastProcessedAt.</summary>
+    [Fact]
+    public void Translation_jobs_are_indexed_for_the_workers_pick()
+    {
+        using var db = NewContext();
+
+        var index = db.Model.FindEntityType(typeof(TranslationJob))!.GetIndexes()
+            .Single(i => i.Properties.Select(p => p.Name).SequenceEqual(new[] { "Status", "LastProcessedAt" }));
+
+        Assert.False(index.IsUnique);
+    }
+
+    /// <summary>A deleted dictionary takes its translation jobs with it.</summary>
+    [Fact]
+    public void A_translation_job_goes_with_its_dictionary()
+    {
+        using var db = NewContext();
+
+        var fk = db.Model.FindEntityType(typeof(TranslationJob))!.GetForeignKeys()
+            .Single(f => f.PrincipalEntityType.ClrType == typeof(Domain.Entities.Dictionary));
+
+        Assert.Equal(DeleteBehavior.Cascade, fk.DeleteBehavior);
+    }
+
+    /// <summary>
+    /// The migrations and their snapshot describe the model exactly — the same check
+    /// MigrateAsync makes at startup, where a mismatch would stop the app. Needs no database:
+    /// the Npgsql provider only compares the model with the snapshot.
+    /// </summary>
+    [Fact]
+    public void The_migrations_cover_the_model()
+    {
+        using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseNpgsql("Host=localhost;Database=model-check")
+            .Options);
+
+        Assert.False(db.Database.HasPendingModelChanges());
     }
 }

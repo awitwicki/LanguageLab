@@ -3,12 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReaderBookDto } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { bytesOf, READER_BOOK_XML } from '../test/readerFixtures'
-import type { WorkerResponse } from '../worker/parseBook.worker'
 import { MemoryBookStore } from './bookStore'
 import { CHUNK_SENTENCES } from './chapterWindow'
 import { ReaderScreen } from './ReaderScreen'
 import { DEFAULT_SETTINGS } from './readerSettings'
-import { resetAutoImportsForTests } from './useAutoImport'
 
 const apiMock = vi.hoisted(() => ({
   readerCapabilities: vi.fn(),
@@ -26,6 +24,22 @@ const apiMock = vi.hoisted(() => ({
 }))
 
 vi.mock('../api/client', () => ({ api: apiMock }))
+
+const lexiconMock = vi.hoisted(() => ({ loadLexicon: vi.fn() }))
+
+vi.mock('../lexicon/lexicon', () => lexiconMock)
+
+/** Every word READER_BOOK_XML and LONG_BOOK_XML actually use, mapped to itself or its lemma. */
+const KNOWN_WORDS: Record<string, string> = {
+  most: 'most', men: 'man', man: 'man', tried: 'try', try: 'try', to: 'to', adjust: 'adjust',
+  silo: 'silo', quickly: 'quickly', holston: 'holston', climbed: 'climb', climb: 'climb',
+  the: 'the', stairs: 'stair', stair: 'stair', paragraph: 'paragraph',
+}
+
+const FAKE_LEXICON = {
+  lemmasOf: (form: string) => (KNOWN_WORDS[form] ? [KNOWN_WORDS[form]] : []),
+  lemmaOf: (form: string) => KNOWN_WORDS[form] ?? null,
+}
 
 /**
  * jsdom has no IntersectionObserver: this one lets a test say what is on screen. The reader runs
@@ -71,31 +85,6 @@ class FakeObserver {
     }
 
     throw new Error(`no observer is watching ${selector}`)
-  }
-}
-
-/** jsdom has no Worker: this one lets a test answer for the word extractor. */
-class FakeWorker {
-  static instances: FakeWorker[] = []
-  onmessage: ((event: MessageEvent<WorkerResponse>) => void) | null = null
-  onerror: ((event: ErrorEvent) => void) | null = null
-  onmessageerror: ((event: MessageEvent) => void) | null = null
-  requests: unknown[] = []
-
-  constructor() {
-    FakeWorker.instances.push(this)
-  }
-
-  postMessage(request: unknown) {
-    this.requests.push(request)
-  }
-
-  terminate() {}
-
-  reply(data: WorkerResponse) {
-    return act(async () => {
-      this.onmessage?.({ data } as MessageEvent<WorkerResponse>)
-    })
   }
 }
 
@@ -163,7 +152,7 @@ beforeEach(() => {
   vi.stubGlobal('IntersectionObserver', FakeObserver)
   Element.prototype.scrollIntoView = vi.fn()
   localStorage.clear()
-  apiMock.readerCapabilities.mockReset().mockResolvedValue({ sentenceTranslation: true })
+  apiMock.readerCapabilities.mockReset().mockResolvedValue({ sentenceTranslation: true, importRetryAfterSeconds: null })
   apiMock.getWordStatuses.mockReset().mockResolvedValue({ learning: ['adjust'], known: [] })
   apiMock.listReaderBooks.mockReset().mockResolvedValue([serverBook])
   apiMock.registerReaderBook.mockReset().mockResolvedValue(serverBook)
@@ -175,13 +164,14 @@ beforeEach(() => {
     shelf: 'learning',
     canReset: true,
     learnTarget: 'personal',
+    retryAfterSeconds: null,
   })
   apiMock.resetWord.mockReset().mockResolvedValue(null)
   apiMock.translateSentence.mockReset().mockResolvedValue({ status: 'ok', translation: 'Більшість чоловіків намагалися пристосуватися.' })
-  FakeWorker.instances = []
-  vi.stubGlobal('Worker', FakeWorker)
-  resetAutoImportsForTests()
-  apiMock.importDictionary.mockReset().mockResolvedValue({ dictionaryId: 77 })
+  lexiconMock.loadLexicon.mockReset().mockResolvedValue(FAKE_LEXICON)
+  apiMock.importDictionary.mockReset().mockResolvedValue({
+    dictionaryId: 77, totalWords: 0, newWords: 0, reusedWords: 0, droppedWords: 0, translationQueued: false,
+  })
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -270,18 +260,18 @@ describe('ReaderScreen', () => {
     expect(container.querySelector('[data-pos="1.2.0"] .reader-translation')!.textContent).toBe(
       'Більшість чоловіків намагалися пристосуватися.',
     )
-    expect(await store.getTranslation(HASH, '1.2.0')).toBe('Більшість чоловіків намагалися пристосуватися.')
+    expect(await store.getTranslation(HASH, 'uk', '1.2.0')).toBe('Більшість чоловіків намагалися пристосуватися.')
   })
 
-  it('names the daily limit when the server refuses', async () => {
-    apiMock.translateSentence.mockResolvedValue({ status: 'limit' })
+  it('names the wait when the server refuses a translation for now', async () => {
+    apiMock.translateSentence.mockResolvedValue({ status: 'limit', retryAfterSeconds: 10 })
     const { container } = await openReader()
 
     await click(container.querySelector('[data-pos="1.2.0"] .reader-strip')!)
     await flush()
 
     expect(container.querySelector('.reader-translation-error')!.textContent).toContain(
-      'Daily sentence translation limit reached',
+      'Too many translations at once. Try again in 10 seconds.',
     )
   })
 
@@ -380,53 +370,116 @@ describe('ReaderScreen', () => {
     expect(sentenceTexts(container)).toContain('Most men tried to adjust.')
   })
 
-  it("builds the book's dictionary in the background, then links it", async () => {
+  // Final review, Important 4: the lexicon-loading gate (wordStatus.ts's `lexicon: null` path)
+  // had no ReaderScreen-level test — only the resolveWord unit test covered it.
+  it('suppresses highlighting while the lexicon is still loading, then highlights once it resolves', async () => {
+    let resolve: (lexicon: typeof FAKE_LEXICON) => void = () => {}
+    lexiconMock.loadLexicon.mockReturnValue(new Promise((r) => (resolve = r)))
+
     const { container } = await openReader()
-    const worker = FakeWorker.instances[0]
 
-    expect(worker.requests[0]).toMatchObject({ kind: 'aggregate', mode: 'leaf' })
+    const word = () => [...container.querySelectorAll('.reader-word')].find((w) => w.textContent === 'adjust')!
+    expect(word().className).toBe('reader-word')
 
-    await worker.reply({ kind: 'progress', done: 1, total: 2 })
-    expect(container.querySelector('.reader-notice')!.textContent).toBe("Building this book's word list… 50 %")
-
-    apiMock.listReaderBooks.mockResolvedValue([{ ...serverBook, dictionaryId: 77 }])
-    await worker.reply({ kind: 'aggregated', chapters: [{ order: 0, title: 'One', words: [{ word: 'silo', count: 2 }] }] })
+    await act(async () => resolve(FAKE_LEXICON))
     await flush()
 
-    expect(apiMock.importDictionary).toHaveBeenCalledWith({
-      name: "Death's End",
-      requestPublication: false,
-      fileHash: HASH,
-      chapters: [{ order: 0, title: 'One', words: [{ word: 'silo', count: 2 }] }],
-    })
-    expect(apiMock.listReaderBooks).toHaveBeenCalledTimes(2)
-    expect(apiMock.getWordStatuses).toHaveBeenCalledTimes(2)
-    expect(container.querySelector('.reader-notice')).toBeNull()
+    expect(word().className).toContain('reader-word-learning')
   })
 
-  it('reads on and says so when building the word list fails', async () => {
-    apiMock.importDictionary.mockRejectedValue(new Error('500'))
+  it('reads on without highlights when the lexicon fails to load', async () => {
+    lexiconMock.loadLexicon.mockRejectedValue(new Error('offline'))
     const { container } = await openReader()
 
-    await FakeWorker.instances[0].reply({ kind: 'aggregated', chapters: [] })
-    await flush()
-
-    expect(container.querySelector('.reader-notice')!.textContent).toBe("Couldn't build this book's word list")
+    expect(container.querySelector('.reader-notice')!.textContent).toBe('Word highlights unavailable')
     expect(sentenceTexts(container)).toContain('Most men tried to adjust.')
   })
 
-  it('imports nothing when the book already has a dictionary', async () => {
-    apiMock.listReaderBooks.mockResolvedValue([{ ...serverBook, dictionaryId: 5 }])
-    await openReader()
+  it('offers Build dictionary for a book with no dictionary yet', async () => {
+    const { container } = await openReader()
 
-    expect(FakeWorker.instances).toHaveLength(0)
+    const button = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Build dictionary')
+    expect(button).toBeDefined()
+    expect(button!.disabled).toBe(false)
   })
 
-  it('imports nothing inside Telegram, where the worker does not start', async () => {
-    vi.stubGlobal('Telegram', { WebApp: { initData: 'auth_date=1&hash=abc', ready: vi.fn(), expand: vi.fn(), openLink: vi.fn() } })
-    await openReader()
+  it('shows no button once the book already has a dictionary', async () => {
+    apiMock.listReaderBooks.mockResolvedValue([{ ...serverBook, dictionaryId: 5 }])
+    const { container } = await openReader()
 
-    expect(FakeWorker.instances).toHaveLength(0)
+    expect([...container.querySelectorAll('button')].find((b) => b.textContent === 'Build dictionary')).toBeUndefined()
+  })
+
+  it('uploads the book and links the dictionary on success', async () => {
+    apiMock.importDictionary.mockResolvedValue({
+      dictionaryId: 77, totalWords: 1, newWords: 1, reusedWords: 0, droppedWords: 0, translationQueued: false,
+    })
+    const { container } = await openReader()
+
+    apiMock.listReaderBooks.mockResolvedValue([{ ...serverBook, dictionaryId: 77 }])
+    await click([...container.querySelectorAll('button')].find((b) => b.textContent === 'Build dictionary')!)
+    await flush()
+
+    expect(apiMock.importDictionary).toHaveBeenCalledTimes(1)
+    const [file, options] = apiMock.importDictionary.mock.calls[0]
+    expect(file.name).toBe('deaths-end.fb2')
+    expect(options).toEqual({ requestPublication: false })
+    expect(apiMock.listReaderBooks).toHaveBeenCalledTimes(2)
+    expect(apiMock.getWordStatuses).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('.reader-build-dictionary')).toBeNull()
+  })
+
+  // Review Focus: the button must vanish (not just relabel) while an upload is in flight, so a
+  // second click cannot start a second concurrent upload.
+  it('shows progress and hides the button while uploading', async () => {
+    let report: ((sent: number, total: number) => void) | undefined
+
+    apiMock.importDictionary.mockImplementation(
+      (_file: File, _options: unknown, onProgress: (sent: number, total: number) => void) => {
+        report = onProgress
+        return new Promise(() => {})
+      },
+    )
+    const { container } = await openReader()
+
+    await click([...container.querySelectorAll('button')].find((b) => b.textContent === 'Build dictionary')!)
+    await act(async () => report?.(50, 100))
+
+    expect(container.querySelector('.reader-build-dictionary')!.textContent).toContain('50 %')
+    expect([...container.querySelectorAll('button')].find((b) => b.textContent === 'Build dictionary')).toBeUndefined()
+  })
+
+  // The real message (api/client.ts's own error text), not a generic placeholder — matches
+  // ImportScreen's error handling and covers the spec's 429-while-building case too.
+  it('reads on and shows the real reason when building the dictionary fails', async () => {
+    apiMock.importDictionary.mockRejectedValue(
+      new Error('You already imported a book today. Try again in about 1 hour.'),
+    )
+    const { container } = await openReader()
+
+    await click([...container.querySelectorAll('button')].find((b) => b.textContent === 'Build dictionary')!)
+    await flush()
+
+    expect(container.querySelector('.reader-build-dictionary')!.textContent).toContain(
+      'You already imported a book today. Try again in about 1 hour.',
+    )
+    expect(sentenceTexts(container)).toContain('Most men tried to adjust.')
+  })
+
+  it('disables the button and names the wait when the quota is spent', async () => {
+    apiMock.readerCapabilities.mockResolvedValue({ sentenceTranslation: true, importRetryAfterSeconds: 3600 })
+    const { container } = await openReader()
+
+    const button = [...container.querySelectorAll('button')].find((b) => b.textContent?.startsWith('Build dictionary'))!
+    expect(button.disabled).toBe(true)
+    expect(button.textContent).toContain('about 1 hour')
+  })
+
+  it('offers Build dictionary inside Telegram too, since no worker is involved any more', async () => {
+    vi.stubGlobal('Telegram', { WebApp: { initData: 'auth_date=1&hash=abc', ready: vi.fn(), expand: vi.fn(), openLink: vi.fn() } })
+    const { container } = await openReader()
+
+    expect([...container.querySelectorAll('button')].find((b) => b.textContent === 'Build dictionary')).toBeDefined()
   })
 
   it('puts only the chunks around the reading place in the DOM, gaps for the rest', async () => {
@@ -508,16 +561,5 @@ describe('ReaderScreen', () => {
     expect(sentenceTexts(container)).toContain(`Paragraph ${paragraphIndex} climbed the stairs.`)
     expect(container.querySelectorAll('.reader-sentence')).toHaveLength(CHUNK_SENTENCES * 3)
     expect(sentenceTexts(container)).not.toContain('Paragraph 0 climbed the stairs.')
-  })
-
-  it('tries again next time when the reader was left mid-import', async () => {
-    const store = new MemoryBookStore()
-    const first = await openReader(store)
-    expect(FakeWorker.instances).toHaveLength(1)
-
-    await first.unmount()
-    await openReader(store)
-
-    expect(FakeWorker.instances).toHaveLength(2)
   })
 })

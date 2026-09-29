@@ -1,19 +1,18 @@
-using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Training;
 
 namespace LanguageLab.Tests;
 
 public class QuestionQueueBuilderTests
 {
-    private static WordPair W(long id, string word, string translation) =>
-        new() { Id = id, Word = word, Translation = translation };
+    private static TranslatedWord W(long id, string word, string translation) =>
+        new(id, word, translation);
 
-    private static List<WordPair> Pool(int count, int startId = 100) =>
+    private static List<TranslatedWord> Pool(int count, int startId = 100) =>
         Enumerable.Range(0, count)
             .Select(i => W(startId + i, $"word{i}", $"переклад{i}"))
             .ToList();
 
-    private static List<WordPair> FiveTargets() =>
+    private static List<TranslatedWord> FiveTargets() =>
     [
         W(1, "abide", "дотримуватися"),
         W(2, "abdomen", "черевна порожнина"),
@@ -27,7 +26,7 @@ public class QuestionQueueBuilderTests
     {
         var targets = FiveTargets();
 
-        var queue = QuestionQueueBuilder.Build(targets, repeats: 2, Pool(20), DirectionPolicy.EnToUa, new Random(1));
+        var queue = QuestionQueueBuilder.Build(targets, repeats: 2, Pool(20), DirectionPolicy.EnToNative, new Random(1));
 
         Assert.Equal(10, queue.Count);
         foreach (var target in targets)
@@ -44,7 +43,7 @@ public class QuestionQueueBuilderTests
     [InlineData(9999)]
     public void SameWordNeverAppearsTwiceInARow(int seed)
     {
-        var queue = QuestionQueueBuilder.Build(FiveTargets(), repeats: 2, Pool(20), DirectionPolicy.EnToUa, new Random(seed));
+        var queue = QuestionQueueBuilder.Build(FiveTargets(), repeats: 2, Pool(20), DirectionPolicy.EnToNative, new Random(seed));
 
         for (var i = 1; i < queue.Count; i++)
         {
@@ -55,7 +54,7 @@ public class QuestionQueueBuilderTests
     [Fact]
     public void EveryQuestionHasSixDistinctOptionsIncludingTheCorrectOne()
     {
-        var queue = QuestionQueueBuilder.Build(FiveTargets(), repeats: 2, Pool(20), DirectionPolicy.EnToUa, new Random(3));
+        var queue = QuestionQueueBuilder.Build(FiveTargets(), repeats: 2, Pool(20), DirectionPolicy.EnToNative, new Random(3));
 
         foreach (var question in queue)
         {
@@ -70,9 +69,9 @@ public class QuestionQueueBuilderTests
     {
         var target = W(1, "abide", "дотримуватися");
         var twin = W(2, "comply", "дотримуватися");
-        var pool = new List<WordPair> { twin, W(3, "cat", "кіт"), W(4, "dog", "пес") };
+        var pool = new List<TranslatedWord> { twin, W(3, "cat", "кіт"), W(4, "dog", "пес") };
 
-        var queue = QuestionQueueBuilder.Build([target], repeats: 1, pool, DirectionPolicy.EnToUa, new Random(5));
+        var queue = QuestionQueueBuilder.Build([target], repeats: 1, pool, DirectionPolicy.EnToNative, new Random(5));
 
         Assert.DoesNotContain(twin.Id, queue.Single().OptionIds);
     }
@@ -82,9 +81,9 @@ public class QuestionQueueBuilderTests
     {
         var target = W(1, "abide", "дотримуватися");
         var orphan = W(2, "aback", "");
-        var pool = new List<WordPair> { orphan, W(3, "cat", "кіт") };
+        var pool = new List<TranslatedWord> { orphan, W(3, "cat", "кіт") };
 
-        var queue = QuestionQueueBuilder.Build([target], repeats: 1, pool, DirectionPolicy.EnToUa, new Random(5));
+        var queue = QuestionQueueBuilder.Build([target], repeats: 1, pool, DirectionPolicy.EnToNative, new Random(5));
 
         Assert.DoesNotContain(orphan.Id, queue.Single().OptionIds);
     }
@@ -93,9 +92,9 @@ public class QuestionQueueBuilderTests
     public void PoorDistractorPool_StillProducesUsableQuestion()
     {
         var target = W(1, "abide", "дотримуватися");
-        var pool = new List<WordPair> { W(2, "cat", "кіт") };
+        var pool = new List<TranslatedWord> { W(2, "cat", "кіт") };
 
-        var queue = QuestionQueueBuilder.Build([target], repeats: 1, pool, DirectionPolicy.EnToUa, new Random(5));
+        var queue = QuestionQueueBuilder.Build([target], repeats: 1, pool, DirectionPolicy.EnToNative, new Random(5));
 
         var options = queue.Single().OptionIds;
         Assert.Equal(2, options.Count);
@@ -107,18 +106,18 @@ public class QuestionQueueBuilderTests
     public void NoValidDistractorAtAll_Throws()
     {
         var target = W(1, "abide", "дотримуватися");
-        var pool = new List<WordPair> { W(2, "comply", "дотримуватися") };
+        var pool = new List<TranslatedWord> { W(2, "comply", "дотримуватися") };
 
         Assert.Throws<InvalidOperationException>(() =>
-            QuestionQueueBuilder.Build([target], repeats: 1, pool, DirectionPolicy.EnToUa, new Random(5)));
+            QuestionQueueBuilder.Build([target], repeats: 1, pool, DirectionPolicy.EnToNative, new Random(5)));
     }
 
     [Fact]
-    public void EnToUaPolicy_ProducesOnlyEnToUaQuestions()
+    public void EnToNativePolicy_ProducesOnlyEnToNativeQuestions()
     {
-        var queue = QuestionQueueBuilder.Build(FiveTargets(), repeats: 2, Pool(20), DirectionPolicy.EnToUa, new Random(11));
+        var queue = QuestionQueueBuilder.Build(FiveTargets(), repeats: 2, Pool(20), DirectionPolicy.EnToNative, new Random(11));
 
-        Assert.All(queue, q => Assert.Equal(QuestionDirection.EnToUa, q.Direction));
+        Assert.All(queue, q => Assert.Equal(QuestionDirection.EnToNative, q.Direction));
     }
 
     [Fact]
@@ -126,8 +125,8 @@ public class QuestionQueueBuilderTests
     {
         var queue = QuestionQueueBuilder.Build(Pool(30, startId: 1), repeats: 1, Pool(30, startId: 1), DirectionPolicy.Random, new Random(13));
 
-        Assert.Contains(queue, q => q.Direction == QuestionDirection.EnToUa);
-        Assert.Contains(queue, q => q.Direction == QuestionDirection.UaToEn);
+        Assert.Contains(queue, q => q.Direction == QuestionDirection.EnToNative);
+        Assert.Contains(queue, q => q.Direction == QuestionDirection.NativeToEn);
     }
 
     [Fact]
@@ -144,7 +143,7 @@ public class QuestionQueueBuilderTests
     [Fact]
     public void SingleTargetWithTwoRepeats_IsAllowedToRepeatBackToBack()
     {
-        var queue = QuestionQueueBuilder.Build([W(1, "abide", "дотримуватися")], repeats: 2, Pool(10), DirectionPolicy.EnToUa, new Random(2));
+        var queue = QuestionQueueBuilder.Build([W(1, "abide", "дотримуватися")], repeats: 2, Pool(10), DirectionPolicy.EnToNative, new Random(2));
 
         Assert.Equal(2, queue.Count);
         Assert.All(queue, q => Assert.Equal(1, q.WordPairId));
@@ -153,7 +152,7 @@ public class QuestionQueueBuilderTests
     [Fact]
     public void NoTargets_ProducesEmptyQueue()
     {
-        var queue = QuestionQueueBuilder.Build([], repeats: 2, Pool(10), DirectionPolicy.EnToUa, new Random(1));
+        var queue = QuestionQueueBuilder.Build([], repeats: 2, Pool(10), DirectionPolicy.EnToNative, new Random(1));
 
         Assert.Empty(queue);
     }
@@ -162,6 +161,6 @@ public class QuestionQueueBuilderTests
     public void RepeatsBelowOne_Throws()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            QuestionQueueBuilder.Build(FiveTargets(), repeats: 0, Pool(10), DirectionPolicy.EnToUa, new Random(1)));
+            QuestionQueueBuilder.Build(FiveTargets(), repeats: 0, Pool(10), DirectionPolicy.EnToNative, new Random(1)));
     }
 }

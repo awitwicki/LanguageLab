@@ -1,5 +1,10 @@
+using System.Globalization;
 using LanguageLab.Api.Auth;
+using LanguageLab.Application.Books;
+using LanguageLab.Application.Import;
 using LanguageLab.Application.Services;
+using LanguageLab.Application.Translation;
+using LanguageLab.Application.Translation.Queue;
 using LanguageLab.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -17,8 +22,12 @@ public sealed record AddPersonalWordsRequest(IReadOnlyList<BulkWordEntryRequest>
 
 public sealed record UpdatePersonalWordRequest(string? Translation);
 
-/// <summary>A refusal written for the user; the client shows Message instead of the status code.</summary>
-public sealed record DictionaryError(string Message);
+/// <summary>
+/// A refusal written for the user; the client shows Message instead of the status code.
+/// Error is a machine code for refusals the SPA words itself (C4): "invalid_book",
+/// "encrypted_book" or "not_english"; null for plain validation messages.
+/// </summary>
+public sealed record DictionaryError(string Message, string? Error = null);
 
 public sealed record DictionaryDetail(
     long Id,
@@ -30,7 +39,8 @@ public sealed record DictionaryDetail(
     LearningProgress Learning,
     IReadOnlyList<ChapterView> Chapters,
     IReadOnlyList<TopWord> TopWords,
-    PublicationStatus Status);
+    PublicationStatus Status,
+    TranslationProgress? Translation);
 
 public sealed record StatusRequest(PublicationStatus Status);
 
@@ -44,7 +54,8 @@ public static class DictionaryEndpoints
             WordSortingService sorting,
             DictionaryAccessService access,
             PersonalDictionaryService personal,
-            ICurrentUserContext currentUser) =>
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var (userId, role) = currentUser.Require();
 
@@ -58,11 +69,12 @@ public static class DictionaryEndpoints
                 .Select(d => new { d.Id, d.Name, d.WordsCount, HasChapters = d.Chapters.Any(), d.IsPersonal })
                 .ToListAsync();
 
+            var code = language.Require().Code;
             var items = new List<DictionaryListItem>(dictionaries.Count);
 
             foreach (var d in dictionaries)
             {
-                var queue = await sorting.GetQueueAsync(userId, d.Id, chapterIds: null, take: 1);
+                var queue = await sorting.GetQueueAsync(userId, code, d.Id, chapterIds: null, take: 1);
                 items.Add(new DictionaryListItem(d.Id, d.Name, d.WordsCount, d.HasChapters, queue.Sorted, d.IsPersonal));
             }
 
@@ -71,11 +83,12 @@ public static class DictionaryEndpoints
 
         // The caller's own word list — its own screen, so its own shape: no chapters, no
         // sorting, the words themselves instead of a top-frequency list.
-        group.MapGet("/personal", async (PersonalDictionaryService personal, ICurrentUser currentUser) =>
-            Results.Ok(await personal.GetAsync(await currentUser.GetIdAsync(), DateTime.UtcNow)));
+        group.MapGet("/personal", async (
+            PersonalDictionaryService personal, ICurrentUser currentUser, ICurrentLanguage language) =>
+            Results.Ok(await personal.GetAsync(await currentUser.GetIdAsync(), language.Require().Code, DateTime.UtcNow)));
 
         group.MapPost("/personal/words", async (
-            AddPersonalWordRequest request, PersonalDictionaryService personal, ICurrentUser currentUser) =>
+            AddPersonalWordRequest request, PersonalDictionaryService personal, ICurrentUser currentUser, ICurrentLanguage language) =>
         {
             var userId = await currentUser.GetIdAsync();
             PersonalWord? added;
@@ -83,7 +96,7 @@ public static class DictionaryEndpoints
             try
             {
                 added = await personal.AddAsync(
-                    userId, request.Word ?? string.Empty, request.Translation ?? string.Empty, DateTime.UtcNow);
+                    userId, language.Require().Code, request.Word ?? string.Empty, request.Translation ?? string.Empty, DateTime.UtcNow);
             }
             catch (ArgumentException e)
             {
@@ -96,7 +109,7 @@ public static class DictionaryEndpoints
         });
 
         group.MapPost("/personal/words/import", async (
-            AddPersonalWordsRequest request, PersonalDictionaryService personal, ICurrentUser currentUser) =>
+            AddPersonalWordsRequest request, PersonalDictionaryService personal, ICurrentUser currentUser, ICurrentLanguage language) =>
         {
             try
             {
@@ -104,7 +117,8 @@ public static class DictionaryEndpoints
                     .Select(w => new BulkWordEntry(w.Word ?? string.Empty, w.Translation ?? string.Empty))
                     .ToList();
 
-                var outcomes = await personal.AddManyAsync(await currentUser.GetIdAsync(), entries, DateTime.UtcNow);
+                var outcomes = await personal.AddManyAsync(
+                    await currentUser.GetIdAsync(), language.Require().Code, entries, DateTime.UtcNow);
 
                 return Results.Ok(outcomes);
             }
@@ -121,14 +135,15 @@ public static class DictionaryEndpoints
             long wordPairId,
             UpdatePersonalWordRequest request,
             PersonalDictionaryService personal,
-            ICurrentUser currentUser) =>
+            ICurrentUser currentUser,
+            ICurrentLanguage language) =>
         {
             PersonalWord? updated;
 
             try
             {
                 updated = await personal.UpdateTranslationAsync(
-                    await currentUser.GetIdAsync(), wordPairId, request.Translation ?? string.Empty);
+                    await currentUser.GetIdAsync(), language.Require().Code, wordPairId, request.Translation ?? string.Empty);
             }
             catch (ArgumentException e)
             {
@@ -152,7 +167,11 @@ public static class DictionaryEndpoints
             LearningProgressService learningProgress,
             ChapterStatsService chapterStats,
             DictionaryAccessService access,
-            ICurrentUserContext currentUser) =>
+            ITranslationQueue queue,
+            TranslationJobProgressReader progress,
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language,
+            CancellationToken cancellationToken) =>
         {
             var (userId, role) = currentUser.Require();
             var now = DateTime.UtcNow;
@@ -168,16 +187,25 @@ public static class DictionaryEndpoints
                 return Results.NotFound();
             }
 
-            var whole = await sorting.GetQueueAsync(userId, id, chapterIds: null, take: 1);
+            // "To learn" = translated into the learner's language, on the "don't know" shelf, never trained — what a new batch takes.
+            var learnerLanguage = language.Require();
+            var code = learnerLanguage.Code;
+            var whole = await sorting.GetQueueAsync(userId, code, id, chapterIds: null, take: 1);
             var topWords = await stats.GetTopWordsAsync(id, userId);
 
-            // "To learn" = translated, on the "don't know" shelf, never trained — what a new batch takes.
-            var learnable = await selection.CountLearnableAsync(userId, id);
-            var due = await selection.CountDueAsync(userId, now, id);
+            var learnable = await selection.CountLearnableAsync(userId, code, id);
+            var due = await selection.CountDueAsync(userId, code, now, id);
 
             // The book's own box breakdown; the chapters' come with their rows.
-            var learning = await learningProgress.GetAsync(userId, id);
-            var chapterViews = await chapterStats.GetChapterViewsAsync(userId, id, now);
+            var learning = await learningProgress.GetAsync(userId, code, id);
+            var chapterViews = await chapterStats.GetChapterViewsAsync(userId, code, id, now);
+
+            // Opening the dictionary is one of B2's Q6 triggers: freely re-enqueue (EnqueueAsync
+            // is idempotent while a job is pending, and re-arms a finished one) then read back
+            // whatever the job now looks like, so a just-re-armed job's fresh Total is what the
+            // client sees.
+            await queue.EnqueueAsync(id, learnerLanguage, cancellationToken);
+            var translation = await progress.GetAsync(id, code);
 
             return Results.Ok(new DictionaryDetail(
                 dictionary.Id,
@@ -189,20 +217,86 @@ public static class DictionaryEndpoints
                 learning,
                 chapterViews,
                 topWords,
-                dictionary.PublicationStatus));
+                dictionary.PublicationStatus,
+                translation));
         });
 
-        group.MapPost("/import", async (
-            ImportRequest request, BookImportService import, ICurrentUserContext currentUser) =>
+        // Read-only, and deliberately does not enqueue: the dictionary screen polls this while a
+        // job is running (final review, finding 1). GET /{id} above is the only place that
+        // enqueues on open — polling it too turned every 4s tick into a fresh EnqueueAsync, so a
+        // job that finished with leftover skipped words (or one whose provider had just failed
+        // five times) was continuously re-armed for as long as the tab stayed open.
+        group.MapGet("/{id:long}/translation", async (
+            long id,
+            DictionaryAccessService access,
+            TranslationJobProgressReader progress,
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var (userId, role) = currentUser.Require();
+
+            if (!await access.IsVisibleAsync(id, userId, role))
+            {
+                return Results.NotFound();
+            }
+
+            return Results.Ok(await progress.GetAsync(id, language.Require().Code));
+        });
+
+        // Since C3 the import takes the book file itself: the server hashes, parses, tokenizes
+        // against the lexicon and imports — the client never sends word lists (the C4 SPA
+        // switch-over consumes this contract).
+        group.MapPost("/import", async (
+            [FromForm] IFormFile? file,
+            [FromForm] int? chapterMode,
+            BookFileImportService import,
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language,
+            HttpContext httpContext,
+            CancellationToken cancellationToken,
+            [FromForm] bool requestPublication = false) =>
+        {
+            var (userId, role) = currentUser.Require();
+
+            if (file is null || file.Length == 0)
+            {
+                return Results.Json(
+                    new DictionaryError("The upload has no book file."),
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            byte[] bytes;
+
+            using (var buffer = new MemoryStream((int)file.Length))
+            {
+                await file.CopyToAsync(buffer, cancellationToken);
+                bytes = buffer.ToArray();
+            }
 
             try
             {
                 var result = await import.ImportAsync(
-                    request, userId, BookImportService.StatusFor(role, request.RequestPublication));
+                    bytes, file.FileName, new ChapterMode(chapterMode), requestPublication,
+                    userId, role, language.Get(), cancellationToken);
 
                 return Results.Ok(result);
+            }
+            catch (ImportQuotaExceededException e)
+            {
+                httpContext.Response.Headers.RetryAfter =
+                    ((int)Math.Ceiling(e.RetryAfter.TotalSeconds)).ToString(CultureInfo.InvariantCulture);
+
+                return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status429TooManyRequests);
+            }
+            catch (BookFormatException e)
+            {
+                var code = e.Error == BookFormatError.Encrypted ? "encrypted_book" : "invalid_book";
+
+                return Results.Json(new DictionaryError(e.Message, code), statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (NotEnglishBookException e)
+            {
+                return Results.Json(new DictionaryError(e.Message, "not_english"), statusCode: StatusCodes.Status400BadRequest);
             }
             catch (ArgumentException e)
             {
@@ -211,10 +305,16 @@ public static class DictionaryEndpoints
                 return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status400BadRequest);
             }
         })
-          // A 50 000-word book is a few megabytes of JSON; the global 64 MB is headroom this
-          // endpoint does not need, and it is the only one a stranger can make large.
+          // Form binding demands antiforgery or an explicit opt-out; the API's CSRF story is the
+          // SameSite session cookie, same as every other endpoint here (docs/auth.md).
+          .DisableAntiforgery()
+          // A book file is a few megabytes; the global 64 MB is headroom this endpoint does not
+          // need, and it is the only one a stranger can make large.
           .WithMetadata(new RequestSizeLimitAttribute(16L * 1024 * 1024))
-          .RequireRateLimiting(UserRateLimits.Import);
+          // A loose attempts ceiling, independent of ImportQuota's 1-success/day: the middleware
+          // rejects before the body is even read, so a spent-quota or repeatedly-wrong-file
+          // caller cannot make the server buffer and parse an unbounded number of uploads.
+          .RequireRateLimiting(UserRateLimits.ImportAttempts);
 
         // A personal dictionary is invisible to everyone but its owner, even an admin — same
         // rule as the read paths (DictionaryAccessService.Visible); DictionaryDeletionService

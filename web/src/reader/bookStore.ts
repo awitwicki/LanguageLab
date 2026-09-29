@@ -18,8 +18,9 @@ export interface BookStore {
   put(meta: BookMeta, bytes: ArrayBuffer): Promise<void>
   /** Removes the book, its file and its cached translations. */
   remove(hash: string): Promise<void>
-  getTranslation(hash: string, key: string): Promise<string | null>
-  putTranslation(hash: string, key: string, text: string): Promise<void>
+  /** language: the learner's language when the translation was made — part of the cache key. */
+  getTranslation(hash: string, language: string, key: string): Promise<string | null>
+  putTranslation(hash: string, language: string, key: string, text: string): Promise<void>
 }
 
 /** For tests, and the fallback when IndexedDB is unavailable: the book lives until the tab closes. */
@@ -52,12 +53,12 @@ export class MemoryBookStore implements BookStore {
     }
   }
 
-  async getTranslation(hash: string, key: string) {
-    return this.translations.get(`${hash}:${key}`) ?? null
+  async getTranslation(hash: string, language: string, key: string) {
+    return this.translations.get(`${hash}:${language}:${key}`) ?? null
   }
 
-  async putTranslation(hash: string, key: string, text: string) {
-    this.translations.set(`${hash}:${key}`, text)
+  async putTranslation(hash: string, language: string, key: string, text: string) {
+    this.translations.set(`${hash}:${language}:${key}`, text)
   }
 }
 
@@ -117,13 +118,15 @@ class IndexedDbBookStore implements BookStore {
     })
   }
 
-  async getTranslation(hash: string, key: string) {
-    return (await this.read<string | undefined>('translations', (store) => store.get(`${hash}:${key}`))) ?? null
+  async getTranslation(hash: string, language: string, key: string) {
+    return (
+      (await this.read<string | undefined>('translations', (store) => store.get(`${hash}:${language}:${key}`))) ?? null
+    )
   }
 
-  putTranslation(hash: string, key: string, text: string) {
+  putTranslation(hash: string, language: string, key: string, text: string) {
     return this.write(['translations'], (tx) => {
-      tx.objectStore('translations').put(text, `${hash}:${key}`)
+      tx.objectStore('translations').put(text, `${hash}:${language}:${key}`)
     })
   }
 

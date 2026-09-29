@@ -21,6 +21,7 @@ const adjust: ReaderWord = {
   shelf: 'new',
   canReset: false,
   learnTarget: 'book',
+  retryAfterSeconds: null,
 }
 
 function setValue(input: HTMLInputElement, value: string) {
@@ -255,5 +256,21 @@ describe('WordPanel', () => {
     expect(container.querySelector('.word-panel-error')).not.toBeNull()
     expect(container.querySelector('.word-panel')!.classList).not.toContain('word-panel-closing')
     expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('keeps its buttons and says when to tap again while translations are rate-limited', async () => {
+    const { container } = await open({ ...adjust, translation: null, source: 'rateLimited', retryAfterSeconds: 7 })
+
+    expect(container.querySelector('.word-panel-typed span')!.textContent).toBe(
+      'Too many translations at once. Close this and tap the word again in 7 seconds, or type one.',
+    )
+    expect(button(container, 'I know it').disabled).toBe(false)
+    expect(button(container, 'Ignore').disabled).toBe(false)
+  })
+
+  it('says a word has no translation when the translator had none', async () => {
+    const { container } = await open({ ...adjust, translation: null, source: 'none' })
+
+    expect(container.querySelector('.word-panel-typed span')!.textContent).toBe('No translation found')
   })
 })

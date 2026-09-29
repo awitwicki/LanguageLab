@@ -7,12 +7,15 @@ import './AccountMenu.css'
 interface Props {
   user: CurrentUser
   onAdmin: () => void
+  onLanguage: () => void
+  /** The learner language's own name, shown on its row. */
+  languageName: string
   onSignOut: () => void
   /** Rejects with the server's reason when refused — the last-admin rule, in practice. */
   onDeleteAccount: () => Promise<void>
 }
 
-export function AccountMenu({ user, onAdmin, onSignOut, onDeleteAccount }: Props) {
+export function AccountMenu({ user, onAdmin, onLanguage, languageName, onSignOut, onDeleteAccount }: Props) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
 
@@ -49,6 +52,8 @@ export function AccountMenu({ user, onAdmin, onSignOut, onDeleteAccount }: Props
         <AccountPanel
           user={user}
           onAdmin={() => run(onAdmin)}
+          onLanguage={() => run(onLanguage)}
+          languageName={languageName}
           onSignOut={() => run(onSignOut)}
           onDeleteAccount={onDeleteAccount}
         />
@@ -62,7 +67,7 @@ export function AccountMenu({ user, onAdmin, onSignOut, onDeleteAccount }: Props
  * message — lives exactly as long as the panel is on screen. Closing the menu by any route
  * unmounts it, and the next open starts clean without any reset bookkeeping.
  */
-function AccountPanel({ user, onAdmin, onSignOut, onDeleteAccount }: Props) {
+function AccountPanel({ user, onAdmin, onLanguage, languageName, onSignOut, onDeleteAccount }: Props) {
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -92,6 +97,11 @@ function AccountPanel({ user, onAdmin, onSignOut, onDeleteAccount }: Props) {
         {user.username && <p className="caption">@{user.username}</p>}
         {user.role !== 'user' && <span className="role-badge caption">{roleLabel(user.role)}</span>}
       </div>
+
+      <button type="button" role="menuitem" className="account-action to-language" onClick={onLanguage}>
+        <span>Language</span>
+        <span className="account-action-value caption">{languageName} ›</span>
+      </button>
 
       {user.role === 'admin' && (
         <button type="button" role="menuitem" className="account-action to-admin" onClick={onAdmin}>

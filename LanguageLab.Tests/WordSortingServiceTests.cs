@@ -31,11 +31,11 @@ public class WordSortingServiceTests
 
         var words = new[]
         {
-            new WordPair { Id = 1, Word = "silo", Translation = "" },
-            new WordPair { Id = 2, Word = "abide", Translation = "" },
-            new WordPair { Id = 3, Word = "cleaning", Translation = "" },
-            new WordPair { Id = 4, Word = "holston", Translation = "" },
-            new WordPair { Id = 5, Word = "jahns", Translation = "" }
+            TestWords.Pair(1, "silo", null),
+            TestWords.Pair(2, "abide", null),
+            TestWords.Pair(3, "cleaning", null),
+            TestWords.Pair(4, "holston", null),
+            TestWords.Pair(5, "jahns", null)
         };
         db.Words.AddRange(words);
 
@@ -74,7 +74,7 @@ public class WordSortingServiceTests
 
         for (var i = 1; i <= count; i++)
         {
-            db.Words.Add(new WordPair { Id = i, Word = $"word{i}", Translation = "" });
+            db.Words.Add(TestWords.Pair(i, $"word{i}", null));
             db.DictionaryWords.Add(new DictionaryWord { DictionaryId = DictionaryId, WordPairId = i, Frequency = i });
         }
 
@@ -88,7 +88,7 @@ public class WordSortingServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSortingService(db);
 
-        var queue = await service.GetQueueAsync(UserId, DictionaryId, chapterIds: null, take: 50);
+        var queue = await service.GetQueueAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: null, take: 50);
 
         Assert.Equal(["silo", "holston", "abide", "cleaning", "jahns"], queue.Words.Select(w => w.Word));
     }
@@ -104,9 +104,24 @@ public class WordSortingServiceTests
 
         var service = new WordSortingService(db);
 
-        var queue = await service.GetQueueAsync(UserId, DictionaryId, chapterIds: null, take: 50);
+        var queue = await service.GetQueueAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: null, take: 50);
 
         Assert.Equal(["abide", "cleaning"], queue.Words.Select(w => w.Word));
+    }
+
+    [Fact]
+    public async Task The_queue_shows_the_translation_in_the_learners_language_or_none()
+    {
+        await using var db = await ArrangeAsync();
+        db.WordTranslations.Add(new WordTranslation { WordPairId = 1, Language = "pl", Text = "silos" });
+        await db.SaveChangesAsync();
+
+        var service = new WordSortingService(db);
+
+        var queue = await service.GetQueueAsync(UserId, "pl", DictionaryId, chapterIds: null, take: 10);
+
+        Assert.Equal("silos", queue.Words.Single(w => w.WordPairId == 1).Translation);
+        Assert.Equal("", queue.Words.Single(w => w.WordPairId == 2).Translation);
     }
 
     [Fact]
@@ -119,7 +134,7 @@ public class WordSortingServiceTests
 
         var service = new WordSortingService(db);
 
-        var queue = await service.GetQueueAsync(UserId, DictionaryId, chapterIds: null, take: 50);
+        var queue = await service.GetQueueAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: null, take: 50);
 
         Assert.Equal(5, queue.Total);
         Assert.Equal(2, queue.Sorted);
@@ -132,7 +147,7 @@ public class WordSortingServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSortingService(db);
 
-        var queue = await service.GetQueueAsync(UserId, DictionaryId, chapterIds: [2], take: 50);
+        var queue = await service.GetQueueAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [2], take: 50);
 
         // Frequency stays the book's (silo = 15) while the membership is the chapter's.
         Assert.Equal(["silo", "holston", "jahns"], queue.Words.Select(w => w.Word));
@@ -146,7 +161,7 @@ public class WordSortingServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSortingService(db);
 
-        var queue = await service.GetQueueAsync(UserId, DictionaryId, chapterIds: null, take: 10_000);
+        var queue = await service.GetQueueAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: null, take: 10_000);
 
         Assert.Equal(5, queue.Words.Count);
     }
@@ -161,7 +176,7 @@ public class WordSortingServiceTests
         await using var db = await ArrangeManyWordsAsync(WordSortingService.MaxTake + 50);
         var service = new WordSortingService(db);
 
-        var queue = await service.GetQueueAsync(UserId, DictionaryId, chapterIds: null, take: 10_000);
+        var queue = await service.GetQueueAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: null, take: 10_000);
 
         Assert.Equal(WordSortingService.MaxTake, queue.Words.Count);
     }
@@ -203,7 +218,7 @@ public class WordSortingServiceTests
     {
         await using var db = await ArrangeAsync();
         db.Users.Add(new TelegramUser { Id = 2, TelegramUserId = 2222222222 });
-        db.Words.Add(new WordPair { Id = 6, Word = "secret", Translation = "таємниця", OwnerId = 2 });
+        db.Words.Add(TestWords.Pair(6, "secret", "таємниця", ownerId: 2));
         await db.SaveChangesAsync();
 
         var service = new WordSortingService(db);
@@ -271,7 +286,7 @@ public class WordSortingServiceTests
         await service.MarkAsync(UserId, wordPairId: 2, SortStatus.Unknown, Now.AddSeconds(1));
         await service.MarkAsync(UserId, wordPairId: 3, SortStatus.Excluded, Now.AddSeconds(2));
 
-        var undone = await service.UndoAsync(UserId);
+        var undone = await service.UndoAsync(UserId, TestWords.Uk);
 
         Assert.NotNull(undone);
         Assert.Equal(3, undone.WordPairId);
@@ -289,8 +304,8 @@ public class WordSortingServiceTests
         await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now);
         await service.MarkAsync(UserId, wordPairId: 2, SortStatus.Unknown, Now.AddSeconds(1));
 
-        await service.UndoAsync(UserId);
-        var second = await service.UndoAsync(UserId);
+        await service.UndoAsync(UserId, TestWords.Uk);
+        var second = await service.UndoAsync(UserId, TestWords.Uk);
 
         Assert.Equal(1, second!.WordPairId);
         Assert.Equal(0, await db.KnownWords.CountAsync());
@@ -303,7 +318,7 @@ public class WordSortingServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSortingService(db);
 
-        Assert.Null(await service.UndoAsync(UserId));
+        Assert.Null(await service.UndoAsync(UserId, TestWords.Uk));
     }
 
     /// <summary>Undo rolls back only this user's marks.</summary>
@@ -318,7 +333,7 @@ public class WordSortingServiceTests
         var service = new WordSortingService(db);
         await service.MarkAsync(UserId, wordPairId: 1, SortStatus.Known, Now);
 
-        var undone = await service.UndoAsync(UserId);
+        var undone = await service.UndoAsync(UserId, TestWords.Uk);
 
         Assert.Equal(1, undone!.WordPairId);
         Assert.True(await db.KnownWords.AnyAsync(k => k.UserId == 2));
@@ -490,7 +505,7 @@ public class WordSortingServiceTests
         await service.MarkAsync(UserId, wordPairId: 2, SortStatus.Unknown, Now);
         await service.MarkAsync(UserId, wordPairId: 3, SortStatus.Excluded, Now);
 
-        var result = await service.ListShelfWordsAsync(UserId, status: null, search: null);
+        var result = await service.ListShelfWordsAsync(UserId, TestWords.Uk, status: null, search: null);
 
         Assert.Equal(5, result.Total);
         Assert.Equal(
@@ -514,7 +529,7 @@ public class WordSortingServiceTests
         await service.MarkAsync(UserId, wordPairId: 4, SortStatus.Known, Now);
         await service.MarkAsync(UserId, wordPairId: 2, SortStatus.Unknown, Now);
 
-        var result = await service.ListShelfWordsAsync(UserId, SortStatus.Known, search: null);
+        var result = await service.ListShelfWordsAsync(UserId, TestWords.Uk, SortStatus.Known, search: null);
 
         Assert.Equal(2, result.Total);
         Assert.Equal(["holston", "silo"], result.Items.Select(i => i.Word));
@@ -527,7 +542,7 @@ public class WordSortingServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSortingService(db);
 
-        var result = await service.ListShelfWordsAsync(UserId, status: null, search: "AN");
+        var result = await service.ListShelfWordsAsync(UserId, TestWords.Uk, status: null, search: "AN");
 
         Assert.Equal(["cleaning"], result.Items.Select(i => i.Word));
     }
@@ -541,13 +556,13 @@ public class WordSortingServiceTests
     {
         await using var db = await ArrangeAsync();
         db.Users.Add(new TelegramUser { Id = 2, TelegramUserId = 2222222222 });
-        db.Words.Add(new WordPair { Id = 6, Word = "mine", Translation = "моє", OwnerId = UserId });
-        db.Words.Add(new WordPair { Id = 7, Word = "theirs", Translation = "їхнє", OwnerId = 2 });
+        db.Words.Add(TestWords.Pair(6, "mine", "моє", ownerId: UserId));
+        db.Words.Add(TestWords.Pair(7, "theirs", "їхнє", ownerId: 2));
         await db.SaveChangesAsync();
 
         var service = new WordSortingService(db);
 
-        var result = await service.ListShelfWordsAsync(UserId, status: null, search: null);
+        var result = await service.ListShelfWordsAsync(UserId, TestWords.Uk, status: null, search: null);
 
         Assert.Equal(6, result.Total);
         Assert.Contains("mine", result.Items.Select(i => i.Word));
@@ -560,11 +575,63 @@ public class WordSortingServiceTests
         await using var db = await ArrangeAsync();
         var service = new WordSortingService(db);
 
-        var result = await service.ListShelfWordsAsync(UserId, status: null, search: null, page: 2, pageSize: 2);
+        var result = await service.ListShelfWordsAsync(UserId, TestWords.Uk, status: null, search: null, page: 2, pageSize: 2);
 
         Assert.Equal(5, result.Total);
         Assert.Equal(2, result.Page);
         Assert.Equal(2, result.PageSize);
         Assert.Equal(["holston", "jahns"], result.Items.Select(i => i.Word));
+    }
+
+    [Fact]
+    public async Task An_untranslated_shared_word_needs_translation()
+    {
+        await using var db = NewContext();
+        db.Words.Add(TestWords.Pair(10, "orphan", null));
+        await db.SaveChangesAsync();
+
+        var word = await new WordSortingService(db).SharedWordNeedingTranslationAsync(10, "uk");
+
+        Assert.Equal("orphan", word);
+    }
+
+    [Fact]
+    public async Task An_already_translated_shared_word_needs_nothing()
+    {
+        await using var db = NewContext();
+        db.Words.Add(TestWords.Pair(10, "apple", "яблуко"));
+        await db.SaveChangesAsync();
+
+        Assert.Null(await new WordSortingService(db).SharedWordNeedingTranslationAsync(10, "uk"));
+    }
+
+    [Fact]
+    public async Task A_translation_in_another_language_does_not_satisfy_this_one()
+    {
+        await using var db = NewContext();
+        var pair = TestWords.Pair(10, "apple", null);
+        pair.Translations.Add(new Domain.Entities.WordTranslation { Language = "pl", Text = "jabłko" });
+        db.Words.Add(pair);
+        await db.SaveChangesAsync();
+
+        Assert.Equal("apple", await new WordSortingService(db).SharedWordNeedingTranslationAsync(10, "uk"));
+    }
+
+    [Fact]
+    public async Task A_personal_word_needs_nothing_even_when_untranslated()
+    {
+        await using var db = NewContext();
+        db.Words.Add(TestWords.Pair(10, "orphan", null, ownerId: 1));
+        await db.SaveChangesAsync();
+
+        Assert.Null(await new WordSortingService(db).SharedWordNeedingTranslationAsync(10, "uk"));
+    }
+
+    [Fact]
+    public async Task An_unknown_word_id_needs_nothing()
+    {
+        await using var db = NewContext();
+
+        Assert.Null(await new WordSortingService(db).SharedWordNeedingTranslationAsync(999, "uk"));
     }
 }

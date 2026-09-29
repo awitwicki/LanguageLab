@@ -1,10 +1,12 @@
+using LanguageLab.Application.Import;
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
 using LanguageLab.Domain;
+using LanguageLab.Domain.Languages;
 
 namespace LanguageLab.Api.Endpoints;
 
-public sealed record ReaderCapabilities(bool SentenceTranslation);
+public sealed record ReaderCapabilities(bool SentenceTranslation, int? ImportRetryAfterSeconds);
 
 public sealed record RegisterReaderBookRequest(string? Title, string? Author, int ChaptersCount);
 
@@ -24,8 +26,15 @@ public static class ReaderEndpoints
     {
         var group = app.MapGroup("/api/reader").RequireAuthorization();
 
-        group.MapGet("/capabilities", (ISentenceTranslator sentences) =>
-            Results.Ok(new ReaderCapabilities(sentences.IsConfigured)));
+        group.MapGet("/capabilities", (ISentenceTranslator sentences, ImportQuota quota, ICurrentUserContext currentUser) =>
+        {
+            var (userId, role) = currentUser.Require();
+            var retryAfter = quota.RetryAfter(userId, role);
+
+            return Results.Ok(new ReaderCapabilities(
+                sentences.IsConfigured,
+                retryAfter is { } wait ? (int)Math.Ceiling(wait.TotalSeconds) : null));
+        });
 
         group.MapGet("/books", async (ReaderBookService books, ICurrentUserContext currentUser) =>
         {
@@ -35,8 +44,10 @@ public static class ReaderEndpoints
         });
 
         // PUT: opening the same file again is the same registration, so a retry is harmless.
+        // Also one of B2's Q6 triggers: a linked dictionary is freely re-enqueued on every open.
         group.MapPut("/books/{hash}", async (
-            string hash, RegisterReaderBookRequest request, ReaderBookService books, ICurrentUserContext currentUser) =>
+            string hash, RegisterReaderBookRequest request, ReaderBookService books, ITranslationQueue queue,
+            ICurrentUserContext currentUser, ICurrentLanguage language, CancellationToken cancellationToken) =>
         {
             if (ReaderHash.Normalize(hash) is not { } fileHash)
             {
@@ -47,9 +58,16 @@ public static class ReaderEndpoints
 
             try
             {
-                return Results.Ok(await books.RegisterAsync(
+                var view = await books.RegisterAsync(
                     userId, role, fileHash, request.Title ?? string.Empty, request.Author ?? string.Empty,
-                    request.ChaptersCount, DateTime.UtcNow));
+                    request.ChaptersCount, DateTime.UtcNow);
+
+                // language.Get(), not Require(): RegisterAsync already committed, so a learner
+                // with no language set yet must not turn an already-saved registration into a
+                // 409 — final review, finding 4.
+                await MaybeEnqueueTranslationAsync(queue, view.DictionaryId, language.Get(), cancellationToken);
+
+                return Results.Ok(view);
             }
             catch (ArgumentException e)
             {
@@ -91,7 +109,7 @@ public static class ReaderEndpoints
 
         group.MapGet("/words/{lemma}", async (
             string lemma, long? dictionaryId, ReaderWordService words, ICurrentUserContext currentUser,
-            CancellationToken cancellationToken) =>
+            ICurrentLanguage language, CancellationToken cancellationToken) =>
         {
             var word = WordText.Normalize(lemma);
 
@@ -102,11 +120,12 @@ public static class ReaderEndpoints
 
             var (userId, role) = currentUser.Require();
 
-            return Results.Ok(await words.GetAsync(userId, role, word, dictionaryId, cancellationToken));
+            return Results.Ok(await words.GetAsync(userId, role, language.Require(), word, dictionaryId, cancellationToken));
         });
 
         group.MapPost("/words/{lemma}/learn", async (
-            string lemma, LearnWordRequest request, ReaderWordService words, ICurrentUserContext currentUser) =>
+            string lemma, LearnWordRequest request, ReaderWordService words, ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var word = WordText.Normalize(lemma);
 
@@ -119,7 +138,8 @@ public static class ReaderEndpoints
 
             try
             {
-                await words.LearnAsync(userId, role, word, request.DictionaryId, request.Translation, DateTime.UtcNow);
+                await words.LearnAsync(
+                    userId, role, language.Require().Code, word, request.DictionaryId, request.Translation, DateTime.UtcNow);
                 return Results.NoContent();
             }
             catch (ArgumentException e)
@@ -172,4 +192,12 @@ public static class ReaderEndpoints
                     statusCode: StatusCodes.Status409Conflict);
         });
     }
+
+    /// <summary>
+    /// Enqueues the reader's linked dictionary for the learner's language, if it has one and the
+    /// caller has a language set.
+    /// </summary>
+    public static Task MaybeEnqueueTranslationAsync(
+        ITranslationQueue queue, long? dictionaryId, LearnerLanguage? language, CancellationToken cancellationToken) =>
+        dictionaryId is { } id && language is { } lang ? queue.EnqueueAsync(id, lang, cancellationToken) : Task.CompletedTask;
 }

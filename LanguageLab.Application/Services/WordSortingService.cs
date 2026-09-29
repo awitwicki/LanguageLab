@@ -1,3 +1,4 @@
+using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
@@ -60,7 +61,7 @@ public class WordSortingService
     }
 
     public async Task<SortingQueue> GetQueueAsync(
-        long userId, long dictionaryId, IReadOnlyList<long>? chapterIds, int take)
+        long userId, string language, long dictionaryId, IReadOnlyList<long>? chapterIds, int take)
     {
         take = Math.Clamp(take, 1, MaxTake);
 
@@ -76,7 +77,11 @@ public class WordSortingService
             .OrderByDescending(dw => dw.Frequency)
             .ThenBy(dw => dw.WordPairId)
             .Take(take)
-            .Select(dw => new QueueWord(dw.WordPairId, dw.WordPair.Word, dw.WordPair.Translation, dw.Frequency))
+            .Select(dw => new QueueWord(
+                dw.WordPairId,
+                dw.WordPair.Word,
+                dw.WordPair.Translations.Where(t => t.Language == language).Select(t => t.Text).FirstOrDefault() ?? "",
+                dw.Frequency))
             .ToListAsync();
 
         return new SortingQueue(words, total, total - remaining, remaining);
@@ -215,6 +220,16 @@ public class WordSortingService
     }
 
     /// <summary>
+    /// The shared word's text if it has no translation in language yet, else null (a personal
+    /// word, an unknown id, or one already translated).
+    /// </summary>
+    public async Task<string?> SharedWordNeedingTranslationAsync(long wordPairId, string language) =>
+        await _dbContext.Words
+            .Where(w => w.Id == wordPairId && w.OwnerId == null && !w.Translations.Any(t => t.Language == language))
+            .Select(w => w.Word)
+            .FirstOrDefaultAsync();
+
+    /// <summary>
     /// Moves the scope's visit to <paramref name="nowUtc"/>, inserting it the first time.
     /// Saved separately from the mark, and on its own terms: a visit is a convenience for the
     /// home screen, so neither a scope the client got wrong nor two tabs inserting the same
@@ -270,7 +285,7 @@ public class WordSortingService
     /// Removes the user's most recent mark, whichever shelf it is on.
     /// Server-side rather than client-side, so it survives a page reload.
     /// </summary>
-    public async Task<UndoResult?> UndoAsync(long userId)
+    public async Task<UndoResult?> UndoAsync(long userId, string language)
     {
         var newestKnown = await _dbContext.KnownWords
             .Where(k => k.UserId == userId)
@@ -314,10 +329,7 @@ public class WordSortingService
         _dbContext.Remove(newest.Row);
         await _dbContext.SaveChangesAsync();
 
-        var word = await _dbContext.Words
-            .Where(w => w.Id == newest.WordPairId)
-            .Select(w => new { w.Word, w.Translation })
-            .SingleAsync();
+        var word = await _dbContext.Words.Where(w => w.Id == newest.WordPairId).Translated(language).SingleAsync();
 
         return new UndoResult(newest.WordPairId, word.Word, word.Translation, newest.Status);
     }
@@ -374,7 +386,7 @@ public class WordSortingService
     /// <paramref name="search"/> is a case-insensitive substring over the word text.
     /// </summary>
     public async Task<ShelfWordPage> ListShelfWordsAsync(
-        long userId, SortStatus? status, string? search, int page = 1, int pageSize = DefaultShelfPageSize)
+        long userId, string language, SortStatus? status, string? search, int page = 1, int pageSize = DefaultShelfPageSize)
     {
         page = Math.Max(page, 1);
         pageSize = pageSize < 1 ? DefaultShelfPageSize : Math.Min(pageSize, MaxShelfPageSize);
@@ -409,6 +421,7 @@ public class WordSortingService
             .ThenBy(w => w.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Translated(language)
             .ToListAsync();
 
         // A status filter already tells every row's shelf; only the unfiltered "All" list

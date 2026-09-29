@@ -74,6 +74,10 @@
   text-align: center;
 }
 
+.reader-build-dictionary .btn {
+  margin-top: 4px;
+}
+
 .reader-body {
   max-width: 720px;
   margin: 0 auto;

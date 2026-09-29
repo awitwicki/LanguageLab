@@ -98,6 +98,11 @@
   color: var(--text-2);
 }
 
+.personal-word .translation.missing {
+  color: var(--text-3);
+  font-style: italic;
+}
+
 .personal-word .state {
   color: var(--text-3);
   white-space: nowrap;

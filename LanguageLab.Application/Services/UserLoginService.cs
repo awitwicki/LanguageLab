@@ -20,7 +20,9 @@ public sealed record TelegramIdentity(
     string? FirstName,
     string? LastName,
     string? Username,
-    string? PhotoUrl);
+    string? PhotoUrl,
+    // Telegram's language_code; only the Mini App sends it.
+    string? LanguageCode = null);
 
 public sealed record LoginResult(LoginOutcome Outcome, TelegramUser User);
 
@@ -68,6 +70,14 @@ public class UserLoginService
         user.LastName = identity.LastName;
         user.Username = identity.Username;
         user.PhotoUrl = identity.PhotoUrl;
+
+        // Only a suggestion for the language picker. The OIDC path never sends it, so an absent
+        // code keeps the last one rather than wiping it.
+        if (!string.IsNullOrWhiteSpace(identity.LanguageCode))
+        {
+            user.TelegramLanguageCode = identity.LanguageCode.Length > 16 ? identity.LanguageCode[..16] : identity.LanguageCode;
+        }
+
         user.LastLoginAt = utcNow;
 
         await _dbContext.SaveChangesAsync();

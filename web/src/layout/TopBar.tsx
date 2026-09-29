@@ -1,7 +1,7 @@
 import type { CurrentUser } from '../api/client'
 import { appVersion } from '../lib/version'
 import { AccountMenu } from './AccountMenu'
-import { MODES, type AppMode } from './mode'
+import { visibleModes, type AppMode } from './mode'
 import './TopBar.css'
 
 interface Props {
@@ -10,11 +10,24 @@ interface Props {
   onSelectMode: (mode: AppMode) => void
   onHome: () => void
   onAdmin: () => void
+  onLanguage: () => void
+  /** The learner language's own name, for the account menu's Language row. */
+  languageName: string
   onSignOut: () => void
   onDeleteAccount: () => Promise<void>
 }
 
-export function TopBar({ user, mode, onSelectMode, onHome, onAdmin, onSignOut, onDeleteAccount }: Props) {
+export function TopBar({
+  user,
+  mode,
+  onSelectMode,
+  onHome,
+  onAdmin,
+  onLanguage,
+  languageName,
+  onSignOut,
+  onDeleteAccount,
+}: Props) {
   return (
     <header className="topbar">
       <button type="button" className="brand" onClick={onHome}>
@@ -28,7 +41,7 @@ export function TopBar({ user, mode, onSelectMode, onHome, onAdmin, onSignOut, o
       </button>
 
       <nav className="mode-tabs" aria-label="Mode">
-        {MODES.map((entry) => (
+        {visibleModes(user.language).map((entry) => (
           <button
             key={entry.mode}
             type="button"
@@ -41,7 +54,14 @@ export function TopBar({ user, mode, onSelectMode, onHome, onAdmin, onSignOut, o
         ))}
       </nav>
 
-      <AccountMenu user={user} onAdmin={onAdmin} onSignOut={onSignOut} onDeleteAccount={onDeleteAccount} />
+      <AccountMenu
+        user={user}
+        onAdmin={onAdmin}
+        onLanguage={onLanguage}
+        languageName={languageName}
+        onSignOut={onSignOut}
+        onDeleteAccount={onDeleteAccount}
+      />
     </header>
   )
 }

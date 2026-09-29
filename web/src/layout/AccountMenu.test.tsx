@@ -11,17 +11,21 @@ const member: CurrentUser = {
   username: 'bo',
   photoUrl: null,
   role: 'user',
+  language: 'uk',
+  suggestedLanguage: null,
 }
 
 const admin: CurrentUser = { ...member, id: 1, displayName: 'Ada Vance', role: 'admin' }
 
-type Handlers = Partial<Pick<Parameters<typeof AccountMenu>[0], 'onAdmin' | 'onSignOut' | 'onDeleteAccount'>>
+type Handlers = Partial<Pick<Parameters<typeof AccountMenu>[0], 'onAdmin' | 'onLanguage' | 'onSignOut' | 'onDeleteAccount'>>
 
 function mount(user: CurrentUser, handlers: Handlers = {}) {
   return render(
     <AccountMenu
       user={user}
       onAdmin={handlers.onAdmin ?? vi.fn()}
+      onLanguage={handlers.onLanguage ?? vi.fn()}
+      languageName="Українська"
       onSignOut={handlers.onSignOut ?? vi.fn()}
       onDeleteAccount={handlers.onDeleteAccount ?? vi.fn(() => Promise.resolve())}
     />,
@@ -45,6 +49,19 @@ describe('AccountMenu', () => {
 
     expect(container.querySelector('.account')?.getAttribute('aria-expanded')).toBe('true')
     expect(container.querySelector('.account-name')?.textContent).toBe('Bo Lind')
+  })
+
+  it('shows the current language and opens the picker', async () => {
+    const onLanguage = vi.fn()
+    const { container } = await mount(member, { onLanguage })
+
+    await click(container.querySelector('.account')!)
+    const row = container.querySelector('.to-language')!
+
+    expect(row.textContent).toContain('Language')
+    expect(row.textContent).toContain('Українська')
+    await click(row)
+    expect(onLanguage).toHaveBeenCalled()
   })
 
   it('hides the admin panel entry from a regular user', async () => {

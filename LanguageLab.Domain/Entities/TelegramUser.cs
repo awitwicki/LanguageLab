@@ -32,6 +32,18 @@ public class TelegramUser : BaseEntity
     public DateTime? LastLoginAt { get; set; }
 
     /// <summary>
+    /// The learner's main language, a LearnerLanguages code: every translation they see is into
+    /// it. Null only for a new account that has not picked yet — the SPA asks before anything else.
+    /// </summary>
+    public string? Language { get; set; }
+
+    /// <summary>
+    /// Telegram's language_code from the last Mini App sign-in, verbatim. Only feeds the
+    /// picker's suggestion (LearnerLanguages.FromTelegram); never used as Language by itself.
+    /// </summary>
+    public string? TelegramLanguageCode { get; set; }
+
+    /// <summary>
     /// What to call this person on screen. Lives here rather than in a view mapper because
     /// both /api/auth/me and the admin list need the same answer, and the fallbacks matter:
     /// Telegram guarantees first_name at login, but a row can predate any login.

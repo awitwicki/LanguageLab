@@ -227,6 +227,15 @@ data/
 web/node_modules/
 web/dist/
 .worktrees/
+# Specs and plans stay local.
 /docs/superpowers
 result/import-sorted-words.sql
 /.superpowers/brainstorm
+/.superpowers/sdd
+
+# The English lexicon: its generated data, licence notices and hand-kept overrides are tracked
+# despite the *.txt rule above; the upstream downloads behind them are not.
+!/LanguageLab.Domain/Lexicon/*.txt
+!/web/public/lexicon/*.txt
+!/scripts/lexicon-overrides.txt
+/scripts/.cache/

@@ -127,7 +127,7 @@ public class StarredChapterServiceTests
         await service.StarAsync(Owner, UserRole.User, 4, Now);
         await service.StarAsync(Owner, UserRole.User, 1, Now);
 
-        var list = await service.GetStarredAsync(Owner, UserRole.User, Now);
+        var list = await service.GetStarredAsync(Owner, TestWords.Uk, UserRole.User, Now);
 
         Assert.Equal(
             new[] { ("Dune", 5L), ("Private", 4L), ("Wool", 1L), ("Wool", 2L) },
@@ -148,7 +148,7 @@ public class StarredChapterServiceTests
         (await db.Dictionaries.SingleAsync(d => d.Id == 10)).PublicationStatus = PublicationStatus.Private;
         await db.SaveChangesAsync();
 
-        Assert.Empty(await service.GetStarredAsync(Stranger, UserRole.User, Now));
+        Assert.Empty(await service.GetStarredAsync(Stranger, TestWords.Uk, UserRole.User, Now));
         Assert.True(await service.UnstarAsync(Stranger, 1));
     }
 
@@ -157,6 +157,6 @@ public class StarredChapterServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        Assert.Empty(await Service(db).GetStarredAsync(Owner, UserRole.User, Now));
+        Assert.Empty(await Service(db).GetStarredAsync(Owner, TestWords.Uk, UserRole.User, Now));
     }
 }

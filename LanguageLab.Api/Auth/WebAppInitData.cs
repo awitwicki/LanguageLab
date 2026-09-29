@@ -130,7 +130,8 @@ public static class WebAppInitData
                 OptionalString(root, "first_name"),
                 OptionalString(root, "last_name"),
                 OptionalString(root, "username"),
-                OptionalString(root, "photo_url"));
+                OptionalString(root, "photo_url"),
+                LanguageCode: OptionalString(root, "language_code"));
         }
         catch (JsonException)
         {

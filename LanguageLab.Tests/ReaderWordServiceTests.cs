@@ -1,7 +1,9 @@
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
+using LanguageLab.Tests.Fakes;
 using Microsoft.EntityFrameworkCore;
 
 namespace LanguageLab.Tests;
@@ -14,7 +16,7 @@ public class ReaderWordServiceTests
 
     private sealed class FakeTranslator(string? answer) : ITranslator
     {
-        public Task<string?> TranslateAsync(string word, CancellationToken cancellationToken) => Task.FromResult(answer);
+        public Task<string?> TranslateAsync(string word, LearnerLanguage target, CancellationToken cancellationToken) => Task.FromResult(answer);
     }
 
     /// <summary>
@@ -30,11 +32,11 @@ public class ReaderWordServiceTests
 
         db.Users.AddRange(new TelegramUser { Id = User, TelegramUserId = 11 }, new TelegramUser { Id = Other, TelegramUserId = 22 });
 
-        var adjust = new WordPair { Id = 1, Word = "adjust", Translation = "налаштувати" };
-        var orphan = new WordPair { Id = 2, Word = "orphan", Translation = "" };
-        var silo = new WordPair { Id = 3, Word = "silo", Translation = "силос" };
-        var cold = new WordPair { Id = 4, Word = "cold", Translation = "холодний" };
-        var hidden = new WordPair { Id = 5, Word = "hidden", Translation = "прихований" };
+        var adjust = TestWords.Pair(1, "adjust", "налаштувати");
+        var orphan = TestWords.Pair(2, "orphan", null);
+        var silo = TestWords.Pair(3, "silo", "силос");
+        var cold = TestWords.Pair(4, "cold", "холодний");
+        var hidden = TestWords.Pair(5, "hidden", "прихований");
         db.Words.AddRange(adjust, orphan, silo, cold, hidden);
 
         var wool = new Domain.Entities.Dictionary
@@ -53,10 +55,12 @@ public class ReaderWordServiceTests
         return db;
     }
 
-    private static ReaderWordService Service(ApplicationDbContext db, string? providerAnswer = null) =>
+    private static ReaderWordService Service(
+        ApplicationDbContext db, string? providerAnswer = null, UncachedTranslationLimiter? limiter = null) =>
         new(
             db,
-            new TranslationService(db, new FakeTranslator(providerAnswer)),
+            new TranslationService(
+                db, new FakeTranslator(providerAnswer), limiter ?? new UncachedTranslationLimiter(TimeProvider.System)),
             new ReaderWordStatusService(db),
             new WordSortingService(db),
             new PersonalDictionaryService(db, new WordSelectionService(db), new LearningProgressService(db)),
@@ -72,7 +76,16 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        Assert.Equal(expected, await Service(db).LearnTargetAsync(User, UserRole.User, lemma, dictionaryId));
+        Assert.Equal(expected, await Service(db).LearnTargetAsync(User, UserRole.User, "uk", lemma, dictionaryId));
+    }
+
+    /// <summary>A word translated only in uk is out of reach for a pl learner, even in its own book.</summary>
+    [Fact]
+    public async Task A_book_word_without_a_translation_in_the_language_goes_to_my_words()
+    {
+        await using var db = await ArrangeAsync();
+
+        Assert.Equal(LearnTarget.Personal, await Service(db).LearnTargetAsync(User, UserRole.User, "pl", "adjust", 10L));
     }
 
     [Fact]
@@ -80,7 +93,7 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var view = await Service(db).GetAsync(User, UserRole.User, "adjust", 10, CancellationToken.None);
+        var view = await Service(db).GetAsync(User, UserRole.User, LearnerLanguages.Default, "adjust", 10, CancellationToken.None);
 
         Assert.Equal(new ReaderWordView("adjust", "налаштувати", TranslationSource.Dictionary, ReaderWordShelf.New, false, LearnTarget.Book), view);
     }
@@ -91,7 +104,7 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var view = await Service(db, "бездомна дитина").GetAsync(User, UserRole.User, "waif", 10, CancellationToken.None);
+        var view = await Service(db, "бездомна дитина").GetAsync(User, UserRole.User, LearnerLanguages.Default, "waif", 10, CancellationToken.None);
 
         Assert.Equal("бездомна дитина", view.Translation);
         Assert.Equal(LearnTarget.Personal, view.LearnTarget);
@@ -102,7 +115,7 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var outcome = await Service(db).LearnAsync(User, UserRole.User, "adjust", 10, null, Now);
+        var outcome = await Service(db).LearnAsync(User, UserRole.User, "uk", "adjust", 10, null, Now);
 
         Assert.Equal(LearnOutcome.Shelved, outcome);
         Assert.True(await db.UnknownWords.AnyAsync(u => u.UserId == User && u.WordPairId == 1));
@@ -113,7 +126,7 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        await Service(db).LearnAsync(User, UserRole.User, "silo", 10, null, Now);
+        await Service(db).LearnAsync(User, UserRole.User, "uk", "silo", 10, null, Now);
 
         Assert.False(await db.KnownWords.AnyAsync(k => k.WordPairId == 3));
         Assert.True(await db.UnknownWords.AnyAsync(u => u.WordPairId == 3));
@@ -125,12 +138,12 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var outcome = await Service(db).LearnAsync(User, UserRole.User, "cold", 10, null, Now);
+        var outcome = await Service(db).LearnAsync(User, UserRole.User, "uk", "cold", 10, null, Now);
 
         Assert.Equal(LearnOutcome.AddedToPersonal, outcome);
         Assert.False(await db.UnknownWords.AnyAsync(u => u.WordPairId == 4));
         var mine = await db.Words.SingleAsync(w => w.Word == "cold" && w.OwnerId == User);
-        Assert.Equal("холодний", mine.Translation);
+        Assert.Equal("холодний", (await db.WordTranslations.SingleAsync(t => t.WordPairId == mine.Id && t.Language == "uk")).Text);
         Assert.True(await db.UnknownWords.AnyAsync(u => u.WordPairId == mine.Id));
     }
 
@@ -139,10 +152,11 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var outcome = await Service(db).LearnAsync(User, UserRole.User, "adjust", null, null, Now);
+        var outcome = await Service(db).LearnAsync(User, UserRole.User, "uk", "adjust", null, null, Now);
 
         Assert.Equal(LearnOutcome.AddedToPersonal, outcome);
-        Assert.Equal("налаштувати", (await db.Words.SingleAsync(w => w.Word == "adjust" && w.OwnerId == User)).Translation);
+        var mine = await db.Words.SingleAsync(w => w.Word == "adjust" && w.OwnerId == User);
+        Assert.Equal("налаштувати", (await db.WordTranslations.SingleAsync(t => t.WordPairId == mine.Id && t.Language == "uk")).Text);
     }
 
     /// <summary>A typed translation never goes into a shared row: it lands in the user's own list.</summary>
@@ -151,11 +165,12 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var outcome = await Service(db).LearnAsync(User, UserRole.User, "orphan", 10, " сирота ", Now);
+        var outcome = await Service(db).LearnAsync(User, UserRole.User, "uk", "orphan", 10, " сирота ", Now);
 
         Assert.Equal(LearnOutcome.AddedToPersonal, outcome);
-        Assert.Equal("", (await db.Words.SingleAsync(w => w.Id == 2)).Translation);
-        Assert.Equal("сирота", (await db.Words.SingleAsync(w => w.Word == "orphan" && w.OwnerId == User)).Translation);
+        Assert.False(await db.WordTranslations.AnyAsync(t => t.WordPairId == 2));
+        var mine = await db.Words.SingleAsync(w => w.Word == "orphan" && w.OwnerId == User);
+        Assert.Equal("сирота", (await db.WordTranslations.SingleAsync(t => t.WordPairId == mine.Id && t.Language == "uk")).Text);
     }
 
     [Theory]
@@ -165,7 +180,7 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        await Assert.ThrowsAsync<ArgumentException>(() => Service(db).LearnAsync(User, UserRole.User, "orphan", 10, typed, Now));
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(db).LearnAsync(User, UserRole.User, "uk", "orphan", 10, typed, Now));
     }
 
     [Fact]
@@ -174,8 +189,8 @@ public class ReaderWordServiceTests
         await using var db = await ArrangeAsync();
         var service = Service(db);
 
-        await service.LearnAsync(User, UserRole.User, "orphan", null, "сирота", Now);
-        var again = await service.LearnAsync(User, UserRole.User, "orphan", null, "сирота", Now);
+        await service.LearnAsync(User, UserRole.User, "uk", "orphan", null, "сирота", Now);
+        var again = await service.LearnAsync(User, UserRole.User, "uk", "orphan", null, "сирота", Now);
 
         Assert.Equal(LearnOutcome.AddedToPersonal, again);
         Assert.Equal(1, await db.Words.CountAsync(w => w.Word == "orphan" && w.OwnerId == User));
@@ -200,7 +215,7 @@ public class ReaderWordServiceTests
 
         var row = await db.Words.SingleAsync(w => w.Word == "waif");
         Assert.Null(row.OwnerId);
-        Assert.Equal("", row.Translation);
+        Assert.False(await db.WordTranslations.AnyAsync(t => t.WordPairId == row.Id));
         Assert.True(await db.KnownWords.AnyAsync(k => k.UserId == User && k.WordPairId == row.Id));
     }
 
@@ -236,7 +251,7 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var shelved = await Service(db).GetAsync(User, UserRole.User, "silo", 10, CancellationToken.None);
+        var shelved = await Service(db).GetAsync(User, UserRole.User, LearnerLanguages.Default, "silo", 10, CancellationToken.None);
 
         Assert.Equal(ReaderWordShelf.Known, shelved.Shelf);
         Assert.True(shelved.CanReset);
@@ -244,7 +259,7 @@ public class ReaderWordServiceTests
         db.WordProgresses.Add(new WordProgress { UserId = User, WordPairId = 3, Box = 2 });
         await db.SaveChangesAsync();
 
-        Assert.False((await Service(db).GetAsync(User, UserRole.User, "silo", 10, CancellationToken.None)).CanReset);
+        Assert.False((await Service(db).GetAsync(User, UserRole.User, LearnerLanguages.Default, "silo", 10, CancellationToken.None)).CanReset);
     }
 
     [Fact]
@@ -275,7 +290,7 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        await service.LearnAsync(User, UserRole.User, "adjust", 10, null, Now);
+        await service.LearnAsync(User, UserRole.User, "uk", "adjust", 10, null, Now);
 
         await service.ResetAsync(User, "adjust");
 
@@ -288,7 +303,7 @@ public class ReaderWordServiceTests
     {
         await using var db = await ArrangeAsync();
         var service = Service(db);
-        await service.LearnAsync(User, UserRole.User, "cold", 10, null, Now);
+        await service.LearnAsync(User, UserRole.User, "uk", "cold", 10, null, Now);
 
         await service.ResetAsync(User, "cold");
 
@@ -327,5 +342,21 @@ public class ReaderWordServiceTests
         await Service(db).ResetAsync(User, "adjust");
 
         Assert.True(await db.KnownWords.AnyAsync(k => k.UserId == Other && k.WordPairId == 1));
+    }
+
+    [Fact]
+    public async Task A_rate_limited_lookup_still_answers_the_panel_without_a_translation()
+    {
+        await using var db = await ArrangeAsync();
+        var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-09-29T12:00:00Z"));
+        var service = Service(db, "сирота", new UncachedTranslationLimiter(clock));
+
+        await service.GetAsync(User, UserRole.User, LearnerLanguages.Default, "orphan", 10, CancellationToken.None);
+        clock.Advance(TimeSpan.FromSeconds(3));
+        var view = await service.GetAsync(User, UserRole.User, LearnerLanguages.Default, "waif", 10, CancellationToken.None);
+
+        Assert.Equal(
+            new ReaderWordView("waif", null, TranslationSource.RateLimited, ReaderWordShelf.New, false, LearnTarget.Personal, 7),
+            view);
     }
 }

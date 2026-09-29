@@ -20,7 +20,10 @@ public sealed record ImportRequest(
     bool RequestPublication = false,
     string? FileHash = null);
 
-public sealed record ImportResult(long DictionaryId, int TotalWords, int NewWords, int ReusedWords, int DroppedWords);
+/// <summary>TranslationQueued: set by BookFileImportService when a background job was enqueued.</summary>
+public sealed record ImportResult(
+    long DictionaryId, int TotalWords, int NewWords, int ReusedWords, int DroppedWords,
+    bool TranslationQueued = false);
 
 /// <summary>
 /// Loads a book parsed on the client into the DB. Raw text never gets here —
@@ -126,25 +129,17 @@ public class BookImportService
                 continue;
             }
 
-            var pair = new WordPair { Word = word, Translation = string.Empty };
+            var pair = new WordPair { Word = word };
             created.Add(pair);
             existing[word] = pair;
         }
 
         _dbContext.Words.AddRange(created);
 
-        // The hash is what points a reader's book at this dictionary, and it arrives from the
-        // client with nothing to verify it against — the file itself is never uploaded. Keep it
-        // only when this user already has a ReaderBook row with that hash: it does not prove the
-        // hash is genuine (registering one is just another client-named claim), but it raises the
-        // bar past a casual collision or a drive-by import with no ReaderBook at all. The actual
-        // backstop against a stranger's junk import reaching other readers is publication review
-        // below: an unreviewed import is Private, invisible to everyone but its owner and admins
-        // regardless of what hash it claims.
-        var fileHash = ReaderHash.Normalize(request.FileHash) is { } normalized
-            && await _dbContext.ReaderBooks.AnyAsync(b => b.UserId == ownerId && b.FileHash == normalized)
-                ? normalized
-                : null;
+        // Since C3 the hash is the server's own SHA-256 of the uploaded bytes
+        // (BookFileImportService computes it), so it needs no vouching — Normalize stays as a
+        // format guard only.
+        var fileHash = ReaderHash.Normalize(request.FileHash);
 
         var dictionary = new Domain.Entities.Dictionary
         {

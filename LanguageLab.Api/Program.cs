@@ -3,8 +3,13 @@ using System.Text.Json.Serialization;
 using LanguageLab.Api;
 using LanguageLab.Api.Auth;
 using LanguageLab.Api.Endpoints;
+using LanguageLab.Application.Books;
+using LanguageLab.Application.Import;
+using LanguageLab.Application.Lexicon;
 using LanguageLab.Application.Services;
 using LanguageLab.Application.Translation;
+using LanguageLab.Application.Translation.Llm;
+using LanguageLab.Application.Translation.Queue;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
@@ -31,6 +36,7 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ClaimsCurrentUser>();
 builder.Services.AddScoped<ICurrentUser>(sp => sp.GetRequiredService<ClaimsCurrentUser>());
 builder.Services.AddScoped<ICurrentUserContext>(sp => sp.GetRequiredService<ClaimsCurrentUser>());
+builder.Services.AddScoped<ICurrentLanguage, HttpCurrentLanguage>();
 builder.Services.AddScoped<UserLoginService>();
 
 var telegram = new TelegramLoginOptions(
@@ -207,38 +213,30 @@ builder.Services.AddScoped<PronunciationProgressService>();
 builder.Services.AddScoped<DictionaryDeletionService>();
 builder.Services.AddScoped<DictionaryPublicationService>();
 
-// MyMemory is keyless; the optional contact email only raises its daily quota.
-builder.Services.Configure<TranslationOptions>(builder.Configuration.GetSection(TranslationOptions.SectionName));
-// Word lookups through MyMemory get 60% of its daily quota, server-wide — see MyMemoryWordBudget
-// — so one account looping over GET /api/translate cannot empty the day for everyone else.
-builder.Services.AddSingleton<MyMemoryWordBudget>();
-builder.Services.AddHttpClient<ITranslator, MyMemoryTranslator>(client =>
-{
-    client.BaseAddress = new Uri(MyMemoryTranslator.BaseUrl);
-    client.Timeout = MyMemoryTranslator.Timeout;
-});
+// The language model behind translation, picked by Translation:Provider (Gemini by default).
+// Without that provider's key the app still starts and LlmStartupCheck logs a warning.
+builder.Services.AddLlmClient(builder.Configuration);
 
-// Sentence translation: DeepL when Translation:DeepLApiKey is set, MyMemory otherwise.
-builder.Services.AddHttpClient<DeepLTranslator>(client =>
-{
-    client.BaseAddress = new Uri(DeepLTranslator.BaseUrl);
-    client.Timeout = DeepLTranslator.Timeout;
-});
-builder.Services.AddHttpClient<MyMemorySentenceTranslator>(client =>
-{
-    client.BaseAddress = new Uri(MyMemoryTranslator.BaseUrl);
-    client.Timeout = MyMemoryTranslator.Timeout;
-});
-// Sentences translated through MyMemory get 40% of its daily quota, server-wide — see
-// MyMemorySentenceBudget — so one reader cannot exhaust the day's quota for everyone's word lookups.
-builder.Services.AddSingleton<MyMemorySentenceBudget>();
-builder.Services.AddScoped<ISentenceTranslator, FallbackSentenceTranslator>();
-builder.Services.AddSingleton(new SentenceQuota());
+// The single-word ITranslator and the background queue's IWordBatchTranslator, both on ILlmClient.
+builder.Services.AddWordTranslation();
+// The reader's sentence translation, on ILlmClient too.
+builder.Services.AddSentenceTranslation();
 builder.Services.AddScoped<TranslationService>();
+// One uncached translation per user every 10 s — sentences and word-lookup misses alike. Its
+// TimeProvider comes from AddTranslationQueue below.
+builder.Services.AddSingleton<UncachedTranslationLimiter>();
+// A dictionary's missing translations, filled in the background per learner language.
+builder.Services.AddTranslationQueue();
 builder.Services.AddScoped<PersonalDictionaryService>();
 builder.Services.AddScoped<ReaderBookService>();
 builder.Services.AddScoped<ReaderWordStatusService>();
 builder.Services.AddScoped<ReaderWordService>();
+builder.Services.AddEnglishLexicon();
+
+// The C2 book parsers behind the server-side import, and the pipeline that drives them.
+builder.Services.AddBookParser();
+builder.Services.AddSingleton<ImportQuota>();
+builder.Services.AddScoped<BookFileImportService>();
 
 builder.Services.AddRequestDecompression();
 
@@ -288,8 +286,10 @@ app.UseSpaFiles();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseRateLimiter();
+app.UseLanguageNotSet();
 
 app.MapAuthEndpoints();
+app.MapLanguageEndpoints();
 app.MapDictionaryEndpoints();
 app.MapChapterEndpoints();
 app.MapHomeEndpoints();

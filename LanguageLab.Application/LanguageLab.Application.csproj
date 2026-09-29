@@ -7,7 +7,19 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <!-- 10.0.12 matches the Microsoft.Extensions.* the solution already resolves through
+           Microsoft.AspNetCore.DataProtection.EntityFrameworkCore. -->
+      <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.12" />
+      <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
+    </ItemGroup>
+
+    <ItemGroup>
       <ProjectReference Include="..\LanguageLab.Infrastructure\LanguageLab.Infrastructure.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="AngleSharp" Version="1.8.2" />
+      <PackageReference Include="AngleSharp.Xml" Version="1.2.0" />
     </ItemGroup>
 
 </Project>

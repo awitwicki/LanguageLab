@@ -1,0 +1,36 @@
+# Hand-kept fixes to english-lexicon.txt, applied by scripts/build_lexicon.py after the table is
+# computed. One line per form, in the output's own syntax: the form, then its lemmas, primary
+# first. A line replaces the computed lemmas of that form. Edit here, then rerun
+#     uv run scripts/build_lexicon.py
+#
+# lay: its own verb (lay the table) first; the past tense of "lie" second. The inflection rule
+# would put "lie" first.
+lay lay lie
+
+# AGID auto-generates a comparative ("-er") and superlative ("-est") form for obscure adjective
+# headwords; several of those generated forms happen to spell far more common, unrelated English
+# words (numb -> number, inter -> interest). The inflection-wins rule then buries the common word
+# behind the obscure one. Found via the C1 final review, which sampled SCOWL-size <= 20 forms
+# whose primary lemma was rarer than the form itself; each line below reorders so the word a
+# fiction reader actually means comes first, keeping the rarer sense (still a real word/form)
+# second rather than discarding it.
+number number numb
+interest interest inter
+his his hi
+yes yes ye
+after after aft
+customer customer custom
+feed feed fee
+forest forest fore
+priest priest prey pry
+honest honest hone
+danger danger dang
+morning morning morn
+evening evening even
+news news new
+matter matter mat matt matte
+butter butter but
+wicked wicked wick
+temper temper temp
+breathed breathe breath
+clothing clothe cloth clothing

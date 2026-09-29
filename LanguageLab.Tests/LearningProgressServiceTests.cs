@@ -17,7 +17,7 @@ public class LearningProgressServiceTests
             .Options);
 
     private static WordPair Word(long id, string word, string translation = "переклад") =>
-        new() { Id = id, Word = word, Translation = translation };
+        TestWords.Pair(id, word, translation);
 
     private static WordProgress Progress(long id, long wordPairId, int box, bool isLearned = false) =>
         new()
@@ -113,7 +113,7 @@ public class LearningProgressServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var progress = await new LearningProgressService(db).GetAsync(UserId, DictionaryId);
+        var progress = await new LearningProgressService(db).GetAsync(UserId, TestWords.Uk, DictionaryId);
 
         Assert.Equal(2, progress.NotStarted);
         Assert.Equal(new[] { 0, 1, 0, 1, 1 }, progress.Boxes);
@@ -127,8 +127,8 @@ public class LearningProgressServiceTests
         await using var db = await ArrangeAsync();
         var service = new LearningProgressService(db);
 
-        var one = await service.GetAsync(UserId, DictionaryId, chapterIds: [1]);
-        var two = await service.GetAsync(UserId, DictionaryId, chapterIds: [2]);
+        var one = await service.GetAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [1]);
+        var two = await service.GetAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [2]);
 
         Assert.Equal((2, 0, 4), (one.NotStarted, one.Learned, one.Total));
         Assert.Equal(new[] { 0, 1, 0, 1, 0 }, one.Boxes);
@@ -142,8 +142,8 @@ public class LearningProgressServiceTests
         await using var db = await ArrangeAsync();
         var service = new LearningProgressService(db);
 
-        var both = await service.GetAsync(UserId, DictionaryId, chapterIds: [1, 2]);
-        var book = await service.GetAsync(UserId, DictionaryId);
+        var both = await service.GetAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [1, 2]);
+        var book = await service.GetAsync(UserId, TestWords.Uk, DictionaryId);
 
         Assert.Equal(book, both with { Boxes = book.Boxes });
         Assert.Equal(book.Boxes, both.Boxes);
@@ -154,7 +154,7 @@ public class LearningProgressServiceTests
     {
         await using var db = await ArrangeAsync();
 
-        var three = await new LearningProgressService(db).GetAsync(UserId, DictionaryId, chapterIds: [3]);
+        var three = await new LearningProgressService(db).GetAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [3]);
 
         Assert.Equal(0, three.Total);
         Assert.Equal(LearningProgress.Empty.Boxes, three.Boxes);
@@ -174,8 +174,8 @@ public class LearningProgressServiceTests
         foreach (var scope in new IReadOnlyList<long>?[] { null, [1], [2], [1, 2], [3] })
         {
             Assert.Equal(
-                await selection.CountLearnableAsync(UserId, DictionaryId, scope),
-                (await progress.GetAsync(UserId, DictionaryId, scope)).NotStarted);
+                await selection.CountLearnableAsync(UserId, TestWords.Uk, DictionaryId, scope),
+                (await progress.GetAsync(UserId, TestWords.Uk, DictionaryId, scope)).NotStarted);
         }
     }
 
@@ -185,13 +185,13 @@ public class LearningProgressServiceTests
         await using var db = await ArrangeAsync();
         var service = new LearningProgressService(db);
 
-        var byChapter = await service.GetByChapterAsync(UserId, DictionaryId);
+        var byChapter = await service.GetByChapterAsync(UserId, TestWords.Uk, DictionaryId);
 
         Assert.Equal(new long[] { 1, 2 }, byChapter.Keys.OrderBy(id => id));
 
         foreach (var chapterId in new long[] { 1, 2 })
         {
-            var direct = await service.GetAsync(UserId, DictionaryId, chapterIds: [chapterId]);
+            var direct = await service.GetAsync(UserId, TestWords.Uk, DictionaryId, chapterIds: [chapterId]);
             Assert.Equal(direct.NotStarted, byChapter[chapterId].NotStarted);
             Assert.Equal(direct.Boxes, byChapter[chapterId].Boxes);
             Assert.Equal(direct.Learned, byChapter[chapterId].Learned);

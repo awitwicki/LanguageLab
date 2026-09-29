@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations.Schema;
+using LanguageLab.Domain.Languages;
 using LanguageLab.Domain.Training;
 
 namespace LanguageLab.Domain.Entities;
@@ -10,6 +11,12 @@ public class Training : BaseEntity
     public DateTime? FinishedAt { get; set; }
 
     public TrainingMode Mode { get; set; }
+
+    /// <summary>
+    /// The language the session was built in. Questions, options, cards and the summary are
+    /// rendered in it, so switching languages mid-session never shows an empty button.
+    /// </summary>
+    public string Language { get; set; } = LearnerLanguages.DefaultCode;
 
     public TelegramUser User { get; set; } = null!;
     [ForeignKey(nameof(User))]

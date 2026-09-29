@@ -51,7 +51,7 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
 
-        var added = await Service(db).AddAsync(UserId, "  Apple ", " яблуко ", Now);
+        var added = await Service(db).AddAsync(UserId, TestWords.Uk, "  Apple ", " яблуко ", Now);
 
         Assert.NotNull(added);
         Assert.Equal("apple", added.Word);
@@ -68,7 +68,7 @@ public class PersonalDictionaryServiceTests
         Assert.True(await db.UnknownWords.AnyAsync(u => u.UserId == UserId && u.WordPairId == pair.Id));
 
         // Shelved "don't know" with a translation and no progress: exactly what a new batch picks up.
-        Assert.Equal(1, await new WordSelectionService(db).CountLearnableAsync(UserId, dictionary.Id));
+        Assert.Equal(1, await new WordSelectionService(db).CountLearnableAsync(UserId, TestWords.Uk, dictionary.Id));
     }
 
     [Fact]
@@ -77,8 +77,8 @@ public class PersonalDictionaryServiceTests
         await using var db = await NewContextAsync();
         var service = Service(db);
 
-        await service.AddAsync(UserId, "apple", "яблуко", Now);
-        var again = await service.AddAsync(UserId, "APPLE", "інше", Now);
+        await service.AddAsync(UserId, TestWords.Uk, "apple", "яблуко", Now);
+        var again = await service.AddAsync(UserId, TestWords.Uk, "APPLE", "інше", Now);
 
         Assert.Null(again);
         Assert.Equal(1, await db.Words.CountAsync());
@@ -93,7 +93,7 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
 
-        await Assert.ThrowsAsync<ArgumentException>(() => Service(db).AddAsync(UserId, word, translation, Now));
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(db).AddAsync(UserId, TestWords.Uk, word, translation, Now));
         Assert.Equal(0, await db.Words.CountAsync());
     }
 
@@ -104,8 +104,8 @@ public class PersonalDictionaryServiceTests
         await using var db = await NewContextAsync();
         var service = Service(db);
 
-        var mine = await service.AddAsync(UserId, "apple", "яблуко", Now);
-        var theirs = await service.AddAsync(OtherId, "apple", "яблучко", Now);
+        var mine = await service.AddAsync(UserId, TestWords.Uk, "apple", "яблуко", Now);
+        var theirs = await service.AddAsync(OtherId, TestWords.Uk, "apple", "яблучко", Now);
 
         Assert.NotNull(mine);
         Assert.NotNull(theirs);
@@ -118,7 +118,7 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
         var service = Service(db);
-        var added = (await service.AddAsync(UserId, "apple", "яблуко", Now))!;
+        var added = (await service.AddAsync(UserId, TestWords.Uk, "apple", "яблуко", Now))!;
         var dictionary = await db.Dictionaries.SingleAsync();
 
         db.WordProgresses.Add(new WordProgress
@@ -129,7 +129,7 @@ public class PersonalDictionaryServiceTests
         db.TrainingQuestions.Add(new TrainingQuestion
         {
             Id = 1, UserId = UserId, TrainingId = 1, WordPairId = added.WordPairId, Order = 0, CreatedAt = Now,
-            Direction = QuestionDirection.EnToUa, OptionIds = [added.WordPairId],
+            Direction = QuestionDirection.EnToNative, OptionIds = [added.WordPairId],
         });
         await db.SaveChangesAsync();
 
@@ -148,7 +148,7 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
         var service = Service(db);
-        var theirs = (await service.AddAsync(OtherId, "apple", "яблуко", Now))!;
+        var theirs = (await service.AddAsync(OtherId, TestWords.Uk, "apple", "яблуко", Now))!;
 
         Assert.False(await service.RemoveAsync(UserId, theirs.WordPairId));
         Assert.Equal(1, await db.Words.CountAsync());
@@ -171,7 +171,7 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
         var service = Service(db);
-        var added = (await service.AddAsync(UserId, "apple", "яблуко", Now))!;
+        var added = (await service.AddAsync(UserId, TestWords.Uk, "apple", "яблуко", Now))!;
 
         db.WordProgresses.Add(new WordProgress
         {
@@ -179,7 +179,7 @@ public class PersonalDictionaryServiceTests
         });
         await db.SaveChangesAsync();
 
-        var updated = await service.UpdateTranslationAsync(UserId, added.WordPairId, "  яблуко, яблуня  ");
+        var updated = await service.UpdateTranslationAsync(UserId, TestWords.Uk, added.WordPairId, "  яблуко, яблуня  ");
 
         Assert.NotNull(updated);
         Assert.Equal(added.WordPairId, updated.WordPairId);
@@ -188,7 +188,7 @@ public class PersonalDictionaryServiceTests
         Assert.Equal(2, updated.Box);
         Assert.False(updated.IsLearned);
 
-        Assert.Equal("яблуко, яблуня", (await db.Words.SingleAsync()).Translation);
+        Assert.Equal("яблуко, яблуня", (await db.WordTranslations.SingleAsync(t => t.WordPairId == added.WordPairId)).Text);
         Assert.True(await db.UnknownWords.AnyAsync(u => u.UserId == UserId && u.WordPairId == added.WordPairId));
         Assert.Equal(2, (await db.WordProgresses.SingleAsync()).Box);
     }
@@ -199,15 +199,15 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
         var service = Service(db);
-        var added = (await service.AddAsync(UserId, "apple", "яблуко", Now))!;
+        var added = (await service.AddAsync(UserId, TestWords.Uk, "apple", "яблуко", Now))!;
 
-        var pair = await db.Words.SingleAsync();
-        pair.TranslationOrigin = TranslationOrigin.Machine;
+        var translation = await db.WordTranslations.SingleAsync(t => t.WordPairId == added.WordPairId);
+        translation.Origin = TranslationOrigin.Machine;
         await db.SaveChangesAsync();
 
-        await service.UpdateTranslationAsync(UserId, added.WordPairId, "яблуня");
+        await service.UpdateTranslationAsync(UserId, TestWords.Uk, added.WordPairId, "яблуня");
 
-        Assert.Equal(TranslationOrigin.Manual, (await db.Words.SingleAsync()).TranslationOrigin);
+        Assert.Equal(TranslationOrigin.Manual, (await db.WordTranslations.SingleAsync(t => t.WordPairId == added.WordPairId)).Origin);
     }
 
     [Fact]
@@ -215,12 +215,12 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
         var service = Service(db);
-        var added = (await service.AddAsync(UserId, "apple", "яблуко", Now))!;
+        var added = (await service.AddAsync(UserId, TestWords.Uk, "apple", "яблуко", Now))!;
 
         await Assert.ThrowsAsync<ArgumentException>(
-            () => service.UpdateTranslationAsync(UserId, added.WordPairId, "   "));
+            () => service.UpdateTranslationAsync(UserId, TestWords.Uk, added.WordPairId, "   "));
 
-        Assert.Equal("яблуко", (await db.Words.SingleAsync()).Translation);
+        Assert.Equal("яблуко", (await db.WordTranslations.SingleAsync(t => t.WordPairId == added.WordPairId)).Text);
     }
 
     [Fact]
@@ -228,10 +228,10 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
         var service = Service(db);
-        var theirs = (await service.AddAsync(OtherId, "apple", "яблуко", Now))!;
+        var theirs = (await service.AddAsync(OtherId, TestWords.Uk, "apple", "яблуко", Now))!;
 
-        Assert.Null(await service.UpdateTranslationAsync(UserId, theirs.WordPairId, "не моє"));
-        Assert.Equal("яблуко", (await db.Words.SingleAsync()).Translation);
+        Assert.Null(await service.UpdateTranslationAsync(UserId, TestWords.Uk, theirs.WordPairId, "не моє"));
+        Assert.Equal("яблуко", (await db.WordTranslations.SingleAsync(t => t.WordPairId == theirs.WordPairId)).Text);
     }
 
     [Fact]
@@ -239,7 +239,7 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
 
-        Assert.Null(await Service(db).UpdateTranslationAsync(UserId, 999, "яблуко"));
+        Assert.Null(await Service(db).UpdateTranslationAsync(UserId, TestWords.Uk, 999, "яблуко"));
     }
 
     [Fact]
@@ -247,16 +247,16 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
         var service = Service(db);
-        var apple = (await service.AddAsync(UserId, "apple", "яблуко", Now))!;
-        var run = (await service.AddAsync(UserId, "run", "бігти", Now))!;
-        var learned = (await service.AddAsync(UserId, "done", "готово", Now))!;
+        var apple = (await service.AddAsync(UserId, TestWords.Uk, "apple", "яблуко", Now))!;
+        var run = (await service.AddAsync(UserId, TestWords.Uk, "run", "бігти", Now))!;
+        var learned = (await service.AddAsync(UserId, TestWords.Uk, "done", "готово", Now))!;
 
         db.WordProgresses.AddRange(
             new WordProgress { Id = 1, UserId = UserId, WordPairId = apple.WordPairId, Box = 2, DueAt = Now.AddDays(-1), LastSeenAt = Now },
             new WordProgress { Id = 2, UserId = UserId, WordPairId = learned.WordPairId, Box = 5, DueAt = null, IsLearned = true, LastSeenAt = Now });
         await db.SaveChangesAsync();
 
-        var view = await service.GetAsync(UserId, Now);
+        var view = await service.GetAsync(UserId, TestWords.Uk, Now);
 
         Assert.Equal(PersonalDictionaryService.Name, view.Name);
         Assert.Equal(3, view.WordsCount);
@@ -276,7 +276,7 @@ public class PersonalDictionaryServiceTests
     {
         await using var db = await NewContextAsync();
 
-        var view = await Service(db).GetAsync(UserId, Now);
+        var view = await Service(db).GetAsync(UserId, TestWords.Uk, Now);
 
         Assert.Empty(view.Words);
         Assert.Equal(0, view.WordsCount);
@@ -284,13 +284,46 @@ public class PersonalDictionaryServiceTests
     }
 
     [Fact]
+    public async Task A_word_is_saved_in_the_learners_language()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+
+        var added = await service.AddAsync(UserId, "pl", "apple", "jabłko", Now);
+
+        Assert.Equal("jabłko", added!.Translation);
+        var row = db.WordTranslations.Single(t => t.WordPairId == added.WordPairId);
+        Assert.Equal(("pl", "jabłko", TranslationOrigin.Manual), (row.Language, row.Text, row.Origin));
+    }
+
+    /// <summary>Review focus 5.</summary>
+    [Fact]
+    public async Task Editing_after_a_switch_adds_the_new_language_and_keeps_the_old()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+
+        var added = await service.AddAsync(UserId, "uk", "apple", "яблуко", Now);
+
+        var listed = (await service.GetAsync(UserId, "pl", Now)).Words.Single();
+        Assert.Equal("", listed.Translation);
+        Assert.Equal(0, (await service.GetAsync(UserId, "pl", Now)).LearnableCount);
+
+        var edited = await service.UpdateTranslationAsync(UserId, "pl", added!.WordPairId, "jabłko");
+
+        Assert.Equal("jabłko", edited!.Translation);
+        Assert.Equal("яблуко", db.WordTranslations.Single(t => t.WordPairId == added.WordPairId && t.Language == "uk").Text);
+        Assert.Equal(1, (await service.GetAsync(UserId, "pl", Now)).LearnableCount);
+    }
+
+    [Fact]
     public async Task AddMany_adds_new_words_and_reports_duplicates()
     {
         await using var db = await NewContextAsync();
         var service = Service(db);
-        await service.AddAsync(UserId, "apple", "яблуко", Now);
+        await service.AddAsync(UserId, TestWords.Uk, "apple", "яблуко", Now);
 
-        var outcomes = await service.AddManyAsync(UserId,
+        var outcomes = await service.AddManyAsync(UserId, TestWords.Uk,
         [
             new BulkWordEntry("apple", "інше"),
             new BulkWordEntry("Banana", " банан "),
@@ -321,7 +354,7 @@ public class PersonalDictionaryServiceTests
         await using var db = await NewContextAsync();
         var service = Service(db);
 
-        var outcomes = await service.AddManyAsync(UserId,
+        var outcomes = await service.AddManyAsync(UserId, TestWords.Uk,
         [
             new BulkWordEntry("bad!", "щось"),
             new BulkWordEntry("kiwi", "   "),
@@ -351,7 +384,7 @@ public class PersonalDictionaryServiceTests
             .ToList();
 
         var error = await Assert.ThrowsAsync<ArgumentException>(
-            () => service.AddManyAsync(userId: 1, entries, DateTime.UtcNow));
+            () => service.AddManyAsync(userId: 1, TestWords.Uk, entries, DateTime.UtcNow));
 
         Assert.Contains("at a time", error.Message);
         Assert.False(await db.Words.AnyAsync());

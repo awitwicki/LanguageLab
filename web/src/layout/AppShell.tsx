@@ -14,6 +14,9 @@ interface Props {
   screenKey: string
   onHome: () => void
   onAdmin: () => void
+  onLanguage: () => void
+  /** The learner language's own name, for the account menu's Language row. */
+  languageName: string
   onSignOut: () => void
   onDeleteAccount: () => Promise<void>
   children: ReactNode
@@ -27,6 +30,8 @@ export function AppShell({
   screenKey,
   onHome,
   onAdmin,
+  onLanguage,
+  languageName,
   onSignOut,
   onDeleteAccount,
   children,
@@ -56,6 +61,8 @@ export function AppShell({
           onSelectMode={onSelectMode}
           onHome={onHome}
           onAdmin={onAdmin}
+          onLanguage={onLanguage}
+          languageName={languageName}
           onSignOut={onSignOut}
           onDeleteAccount={onDeleteAccount}
         />

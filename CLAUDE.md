@@ -8,19 +8,21 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 - Do not run `git add`, `git commit`, `git push`, or any history-rewriting command on your own.
 - When the user has allowed committing step-by-step during multi-step work (e.g. executing a plan — one commit per task), once all steps are done, squash those commits into one (`git reset --soft` to the state before the first of them, then commit again as a single commit) **before considering the work done**. The user reviews one commit before push, not a series. This is squashing intermediate commits within already-approved work, not standalone permission for a new commit — but the push itself still waits for a separate request.
 - Creating migrations is fine (`dotnet ef ... migrations add`), but `--startup-project` is now `LanguageLab.Api`.
-- Everything in the project — code, comments, doc-comments, commit messages, documentation — is English. The one exception: the vocabulary translation shown to the learner (`WordPair.Translation`) stays Ukrainian, since teaching Ukrainian-speaking learners English is the whole point of the app. UI copy in the SPA is also English now (see "Frontend conventions" below).
+- **Model per phase.** Brainstorming, writing specs and writing plans want a strong reasoning model. Implementing a plan (native execution) wants Sonnet — cheaper, and the plan already carries the design. Before starting implementation of an approved plan, **stop and remind the user to switch to Sonnet** if a stronger model is currently active; wait for their go-ahead (they'll say once it's switched) rather than switching yourself or guessing from context which model is live.
+- Everything in the project — code, comments, doc-comments, commit messages, documentation — is English. The one exception: the vocabulary translation shown to the learner (`WordTranslation.Text`) is in their chosen language (`TelegramUser.Language`, a `LearnerLanguages` code), since teaching English to speakers of that language is the whole point of the app. UI copy in the SPA is also English now (see "Frontend conventions" below).
 
 ## Project layout
 
 | Path | What it is |
 |---|---|
-| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation and IPA catalogs. No dependencies on infrastructure. |
+| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation and IPA catalogs and the `LearnerLanguages` language catalog. No dependencies on infrastructure. |
 | `LanguageLab.Infrastructure/` | EF Core `ApplicationDbContext`, PostgreSQL provider, migrations. |
-| `LanguageLab.Application/` | Services on top of the domain: word selection, training sessions, book import, sorting, Leitner progress, translation, the reader's services, the two trainers. |
+| `LanguageLab.Application/` | Services on top of the domain: word selection, training sessions, book import and the fb2/epub parsers behind it (`Books/`), sorting, Leitner progress, translation, the reader's services, the two trainers. |
 | `LanguageLab.Api/` | ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. `Auth/` holds the claims, session validation and OIDC handlers. |
 | `LanguageLab.TgBot/` | The Telegram bot: a long-polling Generic Host console app, no database, no project references. |
 | `web/` | React + Vite SPA: book import in the browser, dictionary stats, word sorting, Reading mode (`src/reader/`, `src/books/`). |
 | `extract.py` | Python/spaCy pipeline that pulls base-form words from `.fb2` books into dictionaries under `dictionaries/`. |
+| `scripts/build_lexicon.py` | Generates the English lexicon (`english-lexicon.txt`, form → lemmas) from SCOWL + AGID; `scripts/lexicon-overrides.txt` holds the hand-kept fixes. Stdlib-only Python, run with `uv`. |
 
 The full map — every service's responsibility and the whole endpoint inventory — is in
 [docs/architecture.md](docs/architecture.md).
@@ -32,12 +34,23 @@ These hold wherever you are working, whatever you are changing:
 - **Shared vocabulary is `OwnerId IS NULL`.** Any lookup by word text must filter on it; a
   `WordPair` with `OwnerId` set belongs to one user's personal dictionary (unique on
   `(Word, OwnerId)`, `NULLS NOT DISTINCT`).
-- **Training requires a non-empty `WordPair.Translation`** — for batch words and distractors alike.
-- **Import validation** (`BookImportService`, `LanguageLab.Domain`): a word must be lowercase ASCII
-  letters, 3-64 characters (`ImportWordText`) or it is dropped; an import where more than 20% of its
-  distinct words are invalid is refused outright. Caps: 50,000 distinct words, 2,000 chapters,
-  300-character names and chapter titles (`TitleText.MaxLength`), a 16 MB request body, and 500
-  entries per bulk personal-word import.
+- **Training requires a `WordTranslation` in the learner's language** — for batch words and
+  distractors alike; a session renders in `Training.Language`.
+- **Russian is never a learner language**: it is absent from `LearnerLanguages`, and the
+  irregular-verbs trainer is Ukrainian-only.
+- **Import validation** (`BookFileImportService`, `ImportTokenizer`, `BookImportService`,
+  `LanguageLab.Domain`): the server parses the uploaded file itself (`IBookParser`), tokenizes it
+  and keeps only lemmas the English lexicon knows (`IEnglishLexicon`) — a stored word is lowercase
+  ASCII letters, 2-64 characters (`ImportWordText`), and an upload whose text is less than half
+  lexicon-known occurrences is refused as not English. Caps: 50,000 distinct words, 2,000
+  chapters, 300-character names and chapter titles (`TitleText.MaxLength`), a 16 MB upload,
+  1 import/day (admins exempt), and 500 entries per bulk personal-word import.
+- **`english-lexicon.txt` is generated.** It has two copies, `LanguageLab.Domain/Lexicon/` and
+  `web/public/lexicon/`, written by `scripts/build_lexicon.py` — never edit it by hand; fix a lemma
+  in `scripts/lexicon-overrides.txt` and rerun; a test keeps the two copies identical.
+- **Book parsing exists twice** — `web/src/books/` + `web/src/fb2/chapters.ts` (the reader and the
+  import preview) and `LanguageLab.Application/Books/` (the server's import) — and both must agree
+  on chapters and text; change them together.
 - **`GET /api/auth/dev-login` is fenced off from production three times over** — `#if DEBUG` plus a
   Release publish, `IsDevelopment()`, and `import.meta.env.DEV`
   (`LanguageLab.Api/Auth/DevLogin.cs`). Weakening any fence is a security change.
@@ -89,7 +102,7 @@ Nothing below is loaded for you automatically — open the one that matches the 
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | You need the project map, what a service owns, the endpoint inventory, or the Postgres/config setup. |
 | [docs/auth.md](docs/auth.md) | Touching sign-in, the `ll_session` cookie, dev-login, the Mini App and its full-screen insets, or roles. |
-| [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md) | Working on import, publication and moderation, the personal dictionary, translation providers and budgets, or Leitner batches. |
+| [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md) | Working on import, publication and moderation, the personal dictionary, the LLM translator, the background translation queue and per-user limits, or Leitner batches. |
 | [docs/reader.md](docs/reader.md) | Working in Reading mode: `ReaderBook` and position sync, the word panel, chapter windowing, fb2/epub parsing. |
 | [docs/trainers.md](docs/trainers.md) | Working on the irregular-verbs or the pronunciation trainer. |
 | [web/README.md](web/README.md) | You need SPA specifics beyond the conventions above. |

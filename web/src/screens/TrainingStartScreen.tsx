@@ -1,4 +1,5 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
+import { useLearnerLanguage } from '../account/learnerLanguage'
 import { api, type TrainingStarted } from '../api/client'
 import { LeitnerScale } from '../components/LeitnerScale'
 import { formatInt, wordsLabel } from '../lib/format'
@@ -9,6 +10,8 @@ const BATCH_SIZES = [5, 10, 20] as const
 export const DEFAULT_BATCH_SIZE = 10
 
 const NO_WORDS = 'No words to learn in this set — mark words as “don’t know” while sorting.'
+const NO_TRANSLATIONS =
+  'No translated words in this set yet — look words up while reading, or add translations in My words.'
 
 interface Props {
   dictionaryId: number
@@ -20,6 +23,7 @@ interface Props {
 }
 
 export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, scopeTitle, onStarted, onBack }: Props) {
+  const learnerLanguage = useLearnerLanguage()
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const { preview, rows, batchIds, batchSize, setBatchSize, crossOut, bringBack, pendingId, error } = useBatchPreview({
@@ -134,7 +138,9 @@ export function TrainingStartScreen({ dictionaryId, dictionaryName, chapterIds, 
         <p className="footnote">Fewer words than selected — the batch will have {wordsLabel(learnableCount)}.</p>
       )}
 
-      {preview && learnableCount === 0 && <p className="footnote training-start-notice">{NO_WORDS}</p>}
+      {preview && learnableCount === 0 && (
+        <p className="footnote training-start-notice">{learnerLanguage === 'uk' ? NO_WORDS : NO_TRANSLATIONS}</p>
+      )}
 
       {notice && <p className="footnote training-start-notice">{notice}</p>}
 

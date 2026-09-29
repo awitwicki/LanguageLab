@@ -66,7 +66,7 @@ public class UserLoginServiceTests
     {
         await using var db = NewContext();
         db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 777, CreatedAt = Now });
-        db.Words.Add(new WordPair { Id = 1, Word = "abide", Translation = "дотримуватися" });
+        db.Words.Add(TestWords.Pair(1, "abide", "дотримуватися"));
         db.KnownWords.Add(new KnownWord { Id = 1, UserId = 1, WordPairId = 1, CreatedAt = Now });
         await db.SaveChangesAsync();
 
@@ -108,5 +108,29 @@ public class UserLoginServiceTests
         Assert.Equal("new", user.Username);
         Assert.Equal(later, user.LastLoginAt);
         Assert.Equal(Now, user.CreatedAt);
+    }
+
+    [Fact]
+    public async Task Telegrams_language_code_is_kept_as_a_suggestion_not_as_the_language()
+    {
+        await using var db = NewContext();
+        var service = new UserLoginService(db);
+
+        var result = await service.LoginAsync(Identity(777) with { LanguageCode = "pl" }, Now);
+
+        Assert.Equal("pl", result.User.TelegramLanguageCode);
+        Assert.Null(result.User.Language);
+    }
+
+    [Fact]
+    public async Task A_login_without_a_language_code_keeps_the_last_one()
+    {
+        await using var db = NewContext();
+        var service = new UserLoginService(db);
+
+        await service.LoginAsync(Identity(777) with { LanguageCode = "pl" }, Now);
+        var second = await service.LoginAsync(Identity(777), Now);
+
+        Assert.Equal("pl", second.User.TelegramLanguageCode);
     }
 }

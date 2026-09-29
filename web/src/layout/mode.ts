@@ -7,11 +7,17 @@ export const MODES: { mode: AppMode; label: string }[] = [
   { mode: 'verbs', label: 'Irregular verbs' },
 ]
 
-/** Which top-level mode a screen belongs to; null for screens outside all of them (admin). */
+/** The top bar's modes for this learner: irregular verbs are Ukrainian-only (their translations are). */
+export function visibleModes(language: string | null): typeof MODES {
+  return MODES.filter((m) => m.mode !== 'verbs' || language === 'uk')
+}
+
+/** Which top-level mode a screen belongs to; null for screens outside all of them (admin, language). */
 export function modeOf(routeName: string): AppMode | null {
   if (routeName.startsWith('reader')) return 'reading'
   if (routeName.startsWith('pronunciation')) return 'pronunciation'
   if (routeName.startsWith('verbs')) return 'verbs'
   if (routeName === 'admin') return null
+  if (routeName === 'language') return null
   return 'words'
 }

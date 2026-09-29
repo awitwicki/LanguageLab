@@ -1,9 +1,9 @@
 namespace LanguageLab.Domain.Entities;
 
 /// <summary>
-/// Where a WordPair's translation came from. Manual (the default, and every row that existed
-/// before this column): imported or typed by a person. Machine: filled in by the translation
-/// provider on a lookup. A Manual translation is never replaced by a Machine one.
+/// Where a WordTranslation's text came from. Manual: imported or typed by a person. Machine:
+/// filled in by the translation provider on a lookup. A Manual translation is never replaced by
+/// a Machine one.
 /// </summary>
 public enum TranslationOrigin
 {

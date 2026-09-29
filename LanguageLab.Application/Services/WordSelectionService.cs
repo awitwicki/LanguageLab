@@ -1,4 +1,6 @@
+using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Training;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +20,8 @@ public sealed record ReviewAvailability(int DueCount, DateTime? NextDueAt)
 
 /// <summary>
 /// Decides which words to show. The "don't learn what I already know" rule lives here:
-/// a word enters a new batch only if it is in this dictionary, has a translation, is marked
+/// a word enters a new batch only if it is in this dictionary, has a translation in the learner's
+/// language, is marked
 /// by the user as "want to learn", is not marked as known, is not excluded by the user and has never been trained.
 /// </summary>
 public class WordSelectionService
@@ -41,10 +44,10 @@ public class WordSelectionService
     /// deterministic (frequency, word, id) because the start screen's preview must match the batch.
     /// </summary>
     public async Task<IReadOnlyList<Candidate>> GetCandidatesAsync(
-        long userId, long dictionaryId, IReadOnlyList<long>? chapterIds, int take)
+        long userId, string language, long dictionaryId, IReadOnlyList<long>? chapterIds, int take)
     {
         take = Math.Clamp(take, 1, MaxCandidates);
-        var learnable = LearnableQuery(userId, dictionaryId, chapterIds);
+        var learnable = LearnableQuery(userId, language, dictionaryId, chapterIds);
 
         var ranked = chapterIds is { Count: > 0 }
             ? learnable.Join(
@@ -54,12 +57,24 @@ public class WordSelectionService
                     .Select(g => new { WordPairId = g.Key, Frequency = g.Sum(cw => cw.Count) }),
                 w => w.Id,
                 f => f.WordPairId,
-                (w, f) => new { w.Id, w.Word, w.Translation, f.Frequency })
+                (w, f) => new
+                {
+                    w.Id,
+                    w.Word,
+                    Translation = w.Translations.Where(t => t.Language == language).Select(t => t.Text).FirstOrDefault() ?? "",
+                    f.Frequency,
+                })
             : learnable.Join(
                 _dbContext.DictionaryWords.Where(dw => dw.DictionaryId == dictionaryId),
                 w => w.Id,
                 dw => dw.WordPairId,
-                (w, dw) => new { w.Id, w.Word, w.Translation, dw.Frequency });
+                (w, dw) => new
+                {
+                    w.Id,
+                    w.Word,
+                    Translation = w.Translations.Where(t => t.Language == language).Select(t => t.Text).FirstOrDefault() ?? "",
+                    dw.Frequency,
+                });
 
         var rows = await ranked
             .OrderByDescending(x => x.Frequency)
@@ -71,11 +86,11 @@ public class WordSelectionService
         return rows.Select(x => new Candidate(x.Id, x.Word, x.Translation, x.Frequency)).ToList();
     }
 
-    /// <summary>The first size candidates as WordPair, in the same order. QuestionQueueBuilder shuffles the quiz order.</summary>
-    public async Task<IReadOnlyList<WordPair>> GetNewBatchAsync(
-        long userId, long dictionaryId, int size, IReadOnlyList<long>? chapterIds = null)
+    /// <summary>The first size candidates, in the same order. QuestionQueueBuilder shuffles the quiz order.</summary>
+    public async Task<IReadOnlyList<TranslatedWord>> GetNewBatchAsync(
+        long userId, string language, long dictionaryId, int size, IReadOnlyList<long>? chapterIds = null)
     {
-        var candidates = await GetCandidatesAsync(userId, dictionaryId, chapterIds, size);
+        var candidates = await GetCandidatesAsync(userId, language, dictionaryId, chapterIds, size);
 
         if (candidates.Count == 0)
         {
@@ -86,6 +101,7 @@ public class WordSelectionService
 
         var words = await _dbContext.Words
             .Where(w => ids.Contains(w.Id))
+            .Translated(language)
             .ToListAsync();
 
         // Loading by a set of ids does not preserve order — restore the candidates' order.
@@ -96,8 +112,8 @@ public class WordSelectionService
     /// The subset of ids still learnable in the scope, in ids order, without duplicates. Foreign or
     /// vanished ids (crossed out in another tab, already trained) are dropped silently — a race, not a client error.
     /// </summary>
-    public async Task<IReadOnlyList<WordPair>> GetLearnableByIdsAsync(
-        long userId, long dictionaryId, IReadOnlyList<long>? chapterIds, IReadOnlyList<long> ids)
+    public async Task<IReadOnlyList<TranslatedWord>> GetLearnableByIdsAsync(
+        long userId, string language, long dictionaryId, IReadOnlyList<long>? chapterIds, IReadOnlyList<long> ids)
     {
         var wanted = ids.Distinct().ToList();
 
@@ -106,25 +122,27 @@ public class WordSelectionService
             return [];
         }
 
-        var words = await LearnableQuery(userId, dictionaryId, chapterIds)
+        var words = await LearnableQuery(userId, language, dictionaryId, chapterIds)
             .Where(w => wanted.Contains(w.Id))
+            .Translated(language)
             .ToListAsync();
 
         return wanted
             .Select(id => words.FirstOrDefault(w => w.Id == id))
-            .OfType<WordPair>()
+            .OfType<TranslatedWord>()
             .ToList();
     }
 
     /// <summary>
     /// Overdue, unlearned words, earliest due first. Without a scope this is the global
     /// review; with one it is a chapter's (or a book's) own review — the same words, just
-    /// filtered, so the Leitner schedule is honoured either way.
+    /// filtered, so the Leitner schedule is honoured either way. A due word with no translation
+    /// in the language is left out: it cannot be asked.
     /// </summary>
-    public async Task<IReadOnlyList<WordPair>> GetDueWordsAsync(
-        long userId, DateTime nowUtc, int size, long? dictionaryId = null, IReadOnlyList<long>? chapterIds = null)
+    public async Task<IReadOnlyList<TranslatedWord>> GetDueWordsAsync(
+        long userId, string language, DateTime nowUtc, int size, long? dictionaryId = null, IReadOnlyList<long>? chapterIds = null)
     {
-        var dueIds = await InProgressQuery(userId, dictionaryId, chapterIds)
+        var dueIds = await InProgressQuery(userId, language, dictionaryId, chapterIds)
             .Where(p => p.DueAt <= nowUtc)
             .OrderBy(p => p.DueAt)
             .Take(size)
@@ -138,6 +156,7 @@ public class WordSelectionService
 
         var words = await _dbContext.Words
             .Where(w => dueIds.Contains(w.Id))
+            .Translated(language)
             .ToListAsync();
 
         // The DueAt order is lost when the words are loaded — restore it.
@@ -147,12 +166,13 @@ public class WordSelectionService
     }
 
     /// <summary>
-    /// Random translated words to serve as wrong options. The dictionary's own words first —
+    /// Random words translated into the language to serve as wrong options. The dictionary's own words first —
     /// natural distractors for a book — topped up from the rest of the vocabulary when the
     /// dictionary is smaller than the pool, so a three-word personal dictionary (or a top-100
     /// list) still fills every question. Other users' personal words never appear.
     /// </summary>
-    public async Task<IReadOnlyList<WordPair>> GetDistractorPoolAsync(long userId, long? dictionaryId, int size, Random rng)
+    public async Task<IReadOnlyList<TranslatedWord>> GetDistractorPoolAsync(
+        long userId, string language, long? dictionaryId, int size, Random rng)
     {
         // Only words the user could meet on their own screens. The top-up branch below used to
         // reach the whole table, so any translated shared row — including one cached by someone
@@ -160,7 +180,7 @@ public class WordSelectionService
         // Deliberately not the admin superset: an admin's exercise reads better from the books
         // they can actually see, and a distractor is not a curation tool.
         var visible = _dbContext.Words
-            .Where(w => w.Translation != "")
+            .TranslatedInto(language)
             .Where(w => w.OwnerId == null || w.OwnerId == userId)
             .Where(w => w.Dictionaries.Any(d => d.PublicationStatus == PublicationStatus.Published || d.OwnerId == userId));
 
@@ -193,27 +213,29 @@ public class WordSelectionService
 
         var words = await _dbContext.Words
             .Where(w => picked.Contains(w.Id))
+            .Translated(language)
             .ToListAsync();
 
         // Loading by a set of ids loses the order — restore the shuffled one.
         return picked.Select(id => words.First(w => w.Id == id)).ToList();
     }
 
-    public Task<int> CountLearnableAsync(long userId, long dictionaryId, IReadOnlyList<long>? chapterIds = null) =>
-        LearnableQuery(userId, dictionaryId, chapterIds).CountAsync();
+    public Task<int> CountLearnableAsync(
+        long userId, string language, long dictionaryId, IReadOnlyList<long>? chapterIds = null) =>
+        LearnableQuery(userId, language, dictionaryId, chapterIds).CountAsync();
 
     public Task<int> CountDueAsync(
-        long userId, DateTime nowUtc, long? dictionaryId = null, IReadOnlyList<long>? chapterIds = null) =>
-        InProgressQuery(userId, dictionaryId, chapterIds).CountAsync(p => p.DueAt <= nowUtc);
+        long userId, string language, DateTime nowUtc, long? dictionaryId = null, IReadOnlyList<long>? chapterIds = null) =>
+        InProgressQuery(userId, language, dictionaryId, chapterIds).CountAsync(p => p.DueAt <= nowUtc);
 
     /// <summary>
     /// All chapters of a dictionary in one grouped query rather than a COUNT per chapter. A
     /// chapter with nothing in progress has no entry; a word in two chapters counts in each.
     /// </summary>
     public async Task<IReadOnlyDictionary<long, ReviewAvailability>> GetReviewAvailabilityByChapterAsync(
-        long userId, long dictionaryId, DateTime nowUtc)
+        long userId, string language, long dictionaryId, DateTime nowUtc)
     {
-        var rows = await InProgressQuery(userId, dictionaryId, chapterIds: null)
+        var rows = await InProgressQuery(userId, language, dictionaryId, chapterIds: null)
             .Join(
                 _dbContext.ChapterWords.Where(cw => cw.Chapter.DictionaryId == dictionaryId),
                 p => p.WordPairId,
@@ -232,14 +254,18 @@ public class WordSelectionService
     }
 
     /// <summary>
-    /// Unlearned progress rows with a due date, optionally narrowed to a dictionary and to
-    /// chapters. The chapter filter is the same one LearnableQuery uses: an empty list means
-    /// the whole book.
+    /// Unlearned progress rows with a due date whose word has a translation in the language,
+    /// optionally narrowed to a dictionary and to chapters. The chapter filter is the same one
+    /// LearnableQuery uses: an empty list means the whole book.
     /// </summary>
-    private IQueryable<WordProgress> InProgressQuery(long userId, long? dictionaryId, IReadOnlyList<long>? chapterIds)
+    private IQueryable<WordProgress> InProgressQuery(
+        long userId, string language, long? dictionaryId, IReadOnlyList<long>? chapterIds)
     {
         var query = _dbContext.WordProgresses
-            .Where(p => p.UserId == userId && !p.IsLearned && p.DueAt != null);
+            .Where(p => p.UserId == userId && !p.IsLearned && p.DueAt != null)
+            // A word with no translation in the learner's language cannot be asked — it waits,
+            // due, until they switch back or it gets one.
+            .Where(p => _dbContext.WordTranslations.Any(t => t.WordPairId == p.WordPairId && t.Language == language));
 
         if (dictionaryId.HasValue)
         {
@@ -262,11 +288,12 @@ public class WordSelectionService
         return query;
     }
 
-    private IQueryable<WordPair> LearnableQuery(long userId, long dictionaryId, IReadOnlyList<long>? chapterIds)
+    private IQueryable<WordPair> LearnableQuery(
+        long userId, string language, long dictionaryId, IReadOnlyList<long>? chapterIds)
     {
         var query = _dbContext.Words
             .Where(w => w.Dictionaries.Any(d => d.Id == dictionaryId))
-            .Where(w => w.Translation != "")
+            .TranslatedInto(language)
             .Where(w => _dbContext.UnknownWords.Any(u => u.UserId == userId && u.WordPairId == w.Id))
             .Where(w => !_dbContext.KnownWords.Any(k => k.UserId == userId && k.WordPairId == w.Id))
             .Where(w => !_dbContext.ExcludedWords.Any(e => e.UserId == userId && e.WordPairId == w.Id))

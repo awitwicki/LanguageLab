@@ -1,3 +1,4 @@
+using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Training;
 using LanguageLab.Infrastructure.Database;
@@ -19,7 +20,7 @@ public sealed record LearningProgress(int NotStarted, IReadOnlyList<int> Boxes, 
 
 /// <summary>
 /// "Words the user decided to learn" within a scope: in the dictionary (and in one of the given
-/// chapters), translated, not excluded, and either on the "don't know" shelf or already holding
+/// chapters), translated into the learner's language, not excluded, and either on the "don't know" shelf or already holding
 /// a WordProgress row. By construction NotStarted equals WordSelectionService.CountLearnableAsync
 /// for the same scope — the same predicate minus "already has progress"; the
 /// NotStarted_equals_CountLearnable test pins that.
@@ -34,9 +35,9 @@ public class LearningProgressService
     }
 
     public async Task<LearningProgress> GetAsync(
-        long userId, long dictionaryId, IReadOnlyList<long>? chapterIds = null)
+        long userId, string language, long dictionaryId, IReadOnlyList<long>? chapterIds = null)
     {
-        var tracked = TrackedWords(userId, dictionaryId);
+        var tracked = TrackedWords(userId, language, dictionaryId);
 
         // Chapter scope as in WordSortingService.ScopedQuery: an empty list means "the whole book".
         if (chapterIds is { Count: > 0 })
@@ -64,9 +65,10 @@ public class LearningProgressService
     }
 
     /// <summary>Every chapter of a dictionary: two queries per dictionary, not per chapter. A word in two chapters counts in each.</summary>
-    public async Task<IReadOnlyDictionary<long, LearningProgress>> GetByChapterAsync(long userId, long dictionaryId)
+    public async Task<IReadOnlyDictionary<long, LearningProgress>> GetByChapterAsync(
+        long userId, string language, long dictionaryId)
     {
-        var tracked = TrackedWords(userId, dictionaryId);
+        var tracked = TrackedWords(userId, language, dictionaryId);
 
         var chapterWords = _dbContext.ChapterWords
             .Where(cw => cw.Chapter.DictionaryId == dictionaryId)
@@ -104,10 +106,10 @@ public class LearningProgressService
         return result;
     }
 
-    private IQueryable<WordPair> TrackedWords(long userId, long dictionaryId) =>
+    private IQueryable<WordPair> TrackedWords(long userId, string language, long dictionaryId) =>
         _dbContext.Words
             .Where(w => w.Dictionaries.Any(d => d.Id == dictionaryId))
-            .Where(w => w.Translation != "")
+            .TranslatedInto(language)
             .Where(w => !_dbContext.ExcludedWords.Any(e => e.UserId == userId && e.WordPairId == w.Id))
             .Where(w => _dbContext.UnknownWords.Any(u => u.UserId == userId && u.WordPairId == w.Id)
                      || _dbContext.WordProgresses.Any(p => p.UserId == userId && p.WordPairId == w.Id));

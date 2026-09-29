@@ -53,7 +53,8 @@ public static class TrainingEndpoints
             WordSelectionService selection,
             LearningProgressService learningProgress,
             DictionaryAccessService access,
-            ICurrentUserContext currentUser) =>
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var (userId, role) = currentUser.Require();
 
@@ -63,26 +64,29 @@ public static class TrainingEndpoints
             }
 
             var chapters = QueryParsing.ParseChapterIds(chapterIds);
+            var code = language.Require().Code;
 
-            var learning = await learningProgress.GetAsync(userId, dictionaryId, chapters);
-            var learnable = await selection.CountLearnableAsync(userId, dictionaryId, chapters);
+            var learning = await learningProgress.GetAsync(userId, code, dictionaryId, chapters);
+            var learnable = await selection.CountLearnableAsync(userId, code, dictionaryId, chapters);
             var candidates = await selection.GetCandidatesAsync(
-                userId, dictionaryId, chapters, take ?? WordSelectionService.MaxCandidates);
+                userId, code, dictionaryId, chapters, take ?? WordSelectionService.MaxCandidates);
 
             return Results.Ok(new BatchPreview(learning, learnable, candidates));
         });
 
         // The user's Leitner standing across every book: per-box counts of words in progress,
         // learned, and what is due right now. Fed to the home screen.
-        group.MapGet("/stats", async (TrainingSessionService sessions, ICurrentUser currentUser) =>
-            Results.Ok(await sessions.GetStatsAsync(await currentUser.GetIdAsync(), DateTime.UtcNow)));
+        group.MapGet("/stats", async (TrainingSessionService sessions, ICurrentUser currentUser, ICurrentLanguage language) =>
+            Results.Ok(await sessions.GetStatsAsync(
+                await currentUser.GetIdAsync(), language.Require().Code, DateTime.UtcNow)));
 
         group.MapPost("/new-batch", async (
             NewBatchRequest request,
             TrainingSessionService sessions,
             ApplicationDbContext db,
             DictionaryAccessService access,
-            ICurrentUserContext currentUser) =>
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var (userId, role) = currentUser.Require();
 
@@ -92,7 +96,8 @@ public static class TrainingEndpoints
             }
 
             var training = await sessions.StartNewBatchAsync(
-                userId, request.DictionaryId, DateTime.UtcNow, request.ChapterIds, request.BatchSize, request.WordPairIds);
+                userId, language.Require().Code, request.DictionaryId, DateTime.UtcNow,
+                request.ChapterIds, request.BatchSize, request.WordPairIds);
 
             return training == null
                 ? Results.NoContent()
@@ -104,7 +109,8 @@ public static class TrainingEndpoints
             TrainingSessionService sessions,
             ApplicationDbContext db,
             DictionaryAccessService access,
-            ICurrentUserContext currentUser) =>
+            ICurrentUserContext currentUser,
+            ICurrentLanguage language) =>
         {
             var (userId, role) = currentUser.Require();
 
@@ -114,7 +120,7 @@ public static class TrainingEndpoints
             }
 
             var training = await sessions.StartReviewAsync(
-                userId, DateTime.UtcNow, request?.DictionaryId, request?.ChapterIds);
+                userId, language.Require().Code, DateTime.UtcNow, request?.DictionaryId, request?.ChapterIds);
 
             return training == null
                 ? Results.NoContent()
@@ -150,7 +156,7 @@ public static class TrainingEndpoints
 
             var view = await sessions.GetNextQuestionViewAsync(id);
 
-            return Results.Ok(new NextQuestion(ToDto(view.Question, view.Options), view.Answered, view.Total));
+            return Results.Ok(new NextQuestion(ToDto(view.Question, view.Target, view.Options), view.Answered, view.Total));
         });
 
         group.MapPost("/{id:long}/answer", async (
@@ -238,7 +244,8 @@ public static class TrainingEndpoints
         return owner is { } other && other != trainingId;
     }
 
-    private static QuestionDto? ToDto(TrainingQuestion? question, IReadOnlyList<WordPair> options)
+    private static QuestionDto? ToDto(
+        TrainingQuestion? question, TranslatedWord? target, IReadOnlyList<TranslatedWord> options)
     {
         if (question == null)
         {
@@ -246,11 +253,11 @@ public static class TrainingEndpoints
         }
 
         // The direction only decides which side of the pair goes in the question and which on the buttons.
-        var enToUa = question.Direction == QuestionDirection.EnToUa;
-        var prompt = enToUa ? question.WordPair.Word : question.WordPair.Translation;
+        var enToNative = question.Direction == QuestionDirection.EnToNative;
+        var prompt = enToNative ? target!.Word : target!.Translation;
 
         var labels = options
-            .Select(o => new QuestionOption(o.Id, enToUa ? o.Translation : o.Word))
+            .Select(o => new QuestionOption(o.Id, enToNative ? o.Translation : o.Word))
             .ToList();
 
         return new QuestionDto(question.Id, question.WordPairId, question.Direction, prompt, labels);

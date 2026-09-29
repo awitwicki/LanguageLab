@@ -1,5 +1,6 @@
 import { act } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { LearnerLanguageContext } from '../account/learnerLanguage'
 import type { BatchCandidate, BatchPreview, TrainingStarted } from '../api/client'
 import { click, flush, render } from '../test/render'
 import { TrainingStartScreen } from './TrainingStartScreen'
@@ -154,6 +155,30 @@ describe('TrainingStartScreen — preview', () => {
     expect(container.querySelector('.batch-preview')).toBeNull()
     expect(container.textContent).toContain('No words to learn in this set')
     expect(buttons(container).find((b) => b.textContent === 'Start')!.disabled).toBe(true)
+  })
+
+  // A Ukrainian learner's near-total translation coverage means an empty set is really about
+  // sorting, unlike a non-Ukrainian learner (see the next test) — so this copy must stay put.
+  it('an empty preview for a Ukrainian learner keeps the sorting hint', async () => {
+    apiMock.previewBatch.mockResolvedValue(emptyPreview)
+    const { container } = await render(
+      <LearnerLanguageContext.Provider value="uk">{screen()}</LearnerLanguageContext.Provider>,
+    )
+    await flush()
+
+    expect(container.textContent).toContain('No words to learn in this set')
+    expect(container.textContent).not.toContain('No translated words in this set yet')
+  })
+
+  it('an empty preview for a non-Ukrainian learner explains the missing translations instead', async () => {
+    apiMock.previewBatch.mockResolvedValue(emptyPreview)
+    const { container } = await render(
+      <LearnerLanguageContext.Provider value="pl">{screen()}</LearnerLanguageContext.Provider>,
+    )
+    await flush()
+
+    expect(container.textContent).toContain('No translated words in this set yet')
+    expect(container.textContent).not.toContain('No words to learn in this set')
   })
 
   it('fewer words than the batch size — a warning', async () => {

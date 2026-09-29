@@ -7,11 +7,13 @@ public class ImportWordTextTests
     [Theory]
     [InlineData("silo")]
     [InlineData("abide")]
+    [InlineData("go")]                 // 2-letter lexicon lemmas are importable since C3
+    [InlineData("ox")]
     public void Plain_lowercase_words_are_valid(string word) => Assert.True(ImportWordText.IsValid(word));
 
     [Theory]
     [InlineData("")]
-    [InlineData("go")]                 // shorter than the tokenizer ever emits
+    [InlineData("a")]                  // shorter than the tokenizer ever emits
     [InlineData("Silo")]               // not normalized
     [InlineData("don't")]              // the tokenizer keeps apostrophes out of lemmas
     [InlineData("give up")]            // a space is a phrase, not a book word

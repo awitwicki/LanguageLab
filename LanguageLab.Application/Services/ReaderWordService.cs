@@ -1,5 +1,6 @@
 using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,10 +16,12 @@ public enum LearnTarget
 /// <summary>
 /// CanReset: whether the panel may undo the button the word currently sits under. Off when there
 /// is nothing to undo, and off for a word with a Leitner row — undoing would throw progress away.
+/// RetryAfterSeconds: set only when Source is RateLimited — the panel still answers, without a
+/// translation, so its buttons keep working.
 /// </summary>
 public sealed record ReaderWordView(
     string Lemma, string? Translation, TranslationSource Source, ReaderWordShelf Shelf, bool CanReset,
-    LearnTarget LearnTarget);
+    LearnTarget LearnTarget, int? RetryAfterSeconds = null);
 
 public enum ResetOutcome
 {
@@ -41,8 +44,10 @@ public enum LearnOutcome
 /// (WordText). "Add to training" shelves a word only in the dictionary of the book being read:
 /// training pulls new words from one dictionary at a time, so a word shelved in some other book
 /// would surface only if the learner happened to train that book. Everything else goes to
-/// "My words". "I know it" and "Ignore" shelve the shared row, creating it untranslated when the
-/// word has none — names often don't, because the provider echoes them back.
+/// "My words". The learn-target rule: Book when the book's dictionary holds the lemma's shared
+/// row translated into the learner's language, Personal otherwise. "I know it" and "Ignore" shelve
+/// the shared row, creating it untranslated when the word has none — names often don't, because
+/// the provider echoes them back.
 /// </summary>
 public class ReaderWordService
 {
@@ -71,44 +76,49 @@ public class ReaderWordService
 
     /// <summary>dictionaryId: the dictionary of the book being read, if it has one.</summary>
     public async Task<ReaderWordView> GetAsync(
-        long userId, UserRole role, string lemma, long? dictionaryId, CancellationToken cancellationToken)
+        long userId, UserRole role, LearnerLanguage language, string lemma, long? dictionaryId,
+        CancellationToken cancellationToken)
     {
         // First: the lookup may create the shared row, and the target check must see it.
-        var lookup = await _translation.LookupAsync(lemma, cancellationToken);
+        var lookup = await _translation.LookupAsync(userId, lemma, language, cancellationToken);
         var shelf = await _statuses.GetShelfAsync(userId, lemma);
-        var target = await LearnTargetAsync(userId, role, lemma, dictionaryId);
+        var target = await LearnTargetAsync(userId, role, language.Code, lemma, dictionaryId);
         var canReset = shelf.Shelf != ReaderWordShelf.New && !shelf.InTraining;
 
-        return new ReaderWordView(lemma, lookup.Translation, lookup.Source, shelf.Shelf, canReset, target);
+        return new ReaderWordView(
+            lemma, lookup.Translation, lookup.Source, shelf.Shelf, canReset, target, lookup.RetryAfterSeconds);
     }
 
     /// <summary>
-    /// Book when the book's dictionary is visible to the user and holds the lemma's shared,
-    /// translated row; Personal otherwise.
+    /// Book when the book's dictionary is visible to the user and holds the lemma's shared row
+    /// translated into the learner's language; Personal otherwise.
     /// </summary>
-    public async Task<LearnTarget> LearnTargetAsync(long userId, UserRole role, string lemma, long? dictionaryId)
+    public async Task<LearnTarget> LearnTargetAsync(long userId, UserRole role, string language, string lemma, long? dictionaryId)
     {
         if (dictionaryId is not { } id || !await _access.IsVisibleAsync(id, userId, role))
         {
             return LearnTarget.Personal;
         }
 
-        var inBook = await _dbContext.Words.AnyAsync(w =>
-            w.OwnerId == null && w.Word == lemma && w.Translation != "" && w.Dictionaries.Any(d => d.Id == id));
+        var inBook = await _dbContext.Words
+            .Where(w => w.OwnerId == null && w.Word == lemma && w.Dictionaries.Any(d => d.Id == id))
+            .TranslatedInto(language)
+            .AnyAsync();
 
         return inBook ? LearnTarget.Book : LearnTarget.Personal;
     }
 
     /// <summary>ArgumentException with a user-facing message when a translation has to be typed first.</summary>
     public async Task<LearnOutcome> LearnAsync(
-        long userId, UserRole role, string lemma, long? dictionaryId, string? translation, DateTime nowUtc)
+        long userId, UserRole role, string language, string lemma, long? dictionaryId, string? translation, DateTime nowUtc)
     {
         var shared = await _dbContext.Words
-            .Where(w => w.OwnerId == null && w.Word == lemma && w.Translation != "")
-            .Select(w => new { w.Id, w.Translation })
+            .Where(w => w.OwnerId == null && w.Word == lemma)
+            .TranslatedInto(language)
+            .Translated(language)
             .FirstOrDefaultAsync();
 
-        if (shared != null && await LearnTargetAsync(userId, role, lemma, dictionaryId) == LearnTarget.Book)
+        if (shared != null && await LearnTargetAsync(userId, role, language, lemma, dictionaryId) == LearnTarget.Book)
         {
             await _sorting.MarkAsync(userId, shared.Id, SortStatus.Unknown, nowUtc);
             return LearnOutcome.Shelved;
@@ -123,7 +133,7 @@ public class ReaderWordService
         }
 
         // Null means the word is already in the user's list — already learning, nothing to do.
-        await _personal.AddAsync(userId, lemma, toUse, nowUtc);
+        await _personal.AddAsync(userId, language, lemma, toUse, nowUtc);
         return LearnOutcome.AddedToPersonal;
     }
 
@@ -185,7 +195,7 @@ public class ReaderWordService
             return id;
         }
 
-        var row = new WordPair { Word = lemma, Translation = string.Empty };
+        var row = new WordPair { Word = lemma };
         _dbContext.Words.Add(row);
 
         try

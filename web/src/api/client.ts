@@ -1,3 +1,5 @@
+import { formatShortWait, formatWait } from '../lib/format'
+
 export type UserRole = 'user' | 'admin'
 
 export interface CurrentUser {
@@ -7,9 +9,21 @@ export interface CurrentUser {
   username: string | null
   photoUrl: string | null
   role: UserRole
+  /** The learner's language code; null until they pick one on first sign-in. */
+  language: string | null
+  /** From Telegram's language_code, only while language is null — preselects the picker. */
+  suggestedLanguage: string | null
 }
 
-export interface AdminUser extends CurrentUser {
+/** One entry of the server's language catalog. */
+export interface Language {
+  code: string
+  englishName: string
+  nativeName: string
+}
+
+/** The admin list's row: the account, without the learner-language fields /me carries. */
+export interface AdminUser extends Omit<CurrentUser, 'language' | 'suggestedLanguage'> {
   isBanned: boolean
   createdAt: string
   lastLoginAt: string | null
@@ -75,6 +89,11 @@ export interface TopWord {
 
 export type PublicationStatus = 'private' | 'pending' | 'published' | 'rejected'
 
+export interface TranslationProgress {
+  done: number
+  total: number
+}
+
 export interface DictionaryDetail {
   id: number
   name: string
@@ -86,6 +105,7 @@ export interface DictionaryDetail {
   chapters: ChapterView[]
   topWords: TopWord[]
   status: PublicationStatus
+  translation: TranslationProgress | null
 }
 
 /** A row in the admin's moderation queue — a dictionary its owner offered for publication. */
@@ -106,7 +126,8 @@ export interface PendingDictionaryPage {
   pageSize: number
 }
 
-export type TranslationSource = 'dictionary' | 'myMemory' | 'none'
+/** 'rateLimited' reaches the client only in the reader's word panel; GET /api/translate answers it with a 429. */
+export type TranslationSource = 'dictionary' | 'llm' | 'none' | 'rateLimited'
 
 export interface TranslationLookup {
   word: string
@@ -140,6 +161,7 @@ export interface ReaderBookDto {
 
 export interface ReaderCapabilities {
   sentenceTranslation: boolean
+  importRetryAfterSeconds: number | null
 }
 
 export interface WordStatusesDto {
@@ -158,11 +180,13 @@ export interface ReaderWord {
   /** Whether tapping the marked button undoes it: off for a new word and for one in training. */
   canReset: boolean
   learnTarget: LearnTarget
+  /** Set only when source is 'rateLimited': seconds until a lookup may reach the translator again. */
+  retryAfterSeconds: number | null
 }
 
 export type SentenceTranslationResult =
   | { status: 'ok'; translation: string }
-  | { status: 'limit' }
+  | { status: 'limit'; retryAfterSeconds: number | null }
   | { status: 'quota' }
   | { status: 'tooLong' }
   | { status: 'failed' }
@@ -199,23 +223,13 @@ export interface BulkWordOutcome {
   error: string | null
 }
 
-export interface ImportWord {
-  word: string
-  count: number
-}
-
-export interface ImportChapter {
-  order: number
-  title: string
-  words: ImportWord[]
-}
-
 export interface ImportResult {
   dictionaryId: number
   totalWords: number
   newWords: number
   reusedWords: number
   droppedWords: number
+  translationQueued: boolean
 }
 
 export interface QueueWord {
@@ -315,7 +329,7 @@ export interface RecentActivity {
   sorting: RecentSorting[]
 }
 
-export type QuestionDirection = 'enToUa' | 'uaToEn'
+export type QuestionDirection = 'enToNative' | 'nativeToEn'
 
 export interface BatchWord {
   wordPairId: number
@@ -580,9 +594,24 @@ export function setUnauthorizedHandler(handler: () => void) {
   unauthorizedHandler = handler
 }
 
+/** A Retry-After header in seconds, or null when it is missing or not a number. */
+function retryAfterSeconds(header: string | null): number | null {
+  const seconds = header === null ? Number.NaN : Number(header)
+
+  return Number.isFinite(seconds) ? seconds : null
+}
+
 // Guarded actions answer 409 with { message }: the reason is written for the user, so show
 // it instead of the status code.
 async function errorMessage(response: Response, method: string, path: string) {
+  if (response.status === 429) {
+    const seconds = retryAfterSeconds(response.headers.get('Retry-After'))
+
+    return seconds === null
+      ? 'Too many requests. Try again later.'
+      : `Too many requests. Try again in ${formatShortWait(seconds)}.`
+  }
+
   try {
     const body = (await response.json()) as { message?: string }
 
@@ -621,17 +650,17 @@ export type UploadProgress = (sent: number, total: number) => void
 
 /**
  * A POST with upload progress. fetch cannot report bytes sent, and a book is a megabyte or
- * two of JSON that a phone on mobile data pushes slowly enough for a bare "Uploading…" to
- * look stuck — so this one request goes over XMLHttpRequest. Failures are named: the
- * server's own message when it sends one, a size hint for a 413 (the proxy in front of the
- * API refuses big bodies, not the API), and a dropped connection instead of silence.
+ * two that a phone on mobile data pushes slowly enough for a bare "Uploading…" to look stuck
+ * — so this one request goes over XMLHttpRequest. Failures are named: the server's own message
+ * when it sends one, the Retry-After header's exact wait on a 429, a size hint for a 413 (the
+ * proxy in front of the API refuses big bodies, not the API), and a dropped connection instead
+ * of silence.
  */
-function uploadJson<T>(path: string, payload: unknown, onProgress?: UploadProgress): Promise<T> {
+function uploadForm<T>(path: string, form: FormData, onProgress?: UploadProgress): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const xhr = new XMLHttpRequest()
 
     xhr.open('POST', path)
-    xhr.setRequestHeader('Content-Type', 'application/json')
 
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) {
@@ -657,14 +686,22 @@ function uploadJson<T>(path: string, payload: unknown, onProgress?: UploadProgre
         unauthorizedHandler()
       }
 
-      reject(new Error(uploadErrorMessage(xhr.status, xhr.responseText, path)))
+      reject(new Error(uploadErrorMessage(xhr.status, xhr.responseText, path, xhr.getResponseHeader('Retry-After'))))
     }
 
-    xhr.send(JSON.stringify(payload))
+    xhr.send(form)
   })
 }
 
-function uploadErrorMessage(status: number, body: string, path: string): string {
+function uploadErrorMessage(status: number, body: string, path: string, retryAfterHeader: string | null): string {
+  if (status === 429) {
+    const seconds = retryAfterSeconds(retryAfterHeader)
+
+    return seconds === null
+      ? 'You already imported a book today. Try again later.'
+      : `You already imported a book today. Try again in ${formatWait(seconds)}.`
+  }
+
   try {
     const parsed = JSON.parse(body) as { message?: string }
 
@@ -687,6 +724,11 @@ export const api = {
 
   getDictionary: (id: number) =>
     request<DictionaryDetail>(`/api/dictionaries/${id}`) as Promise<DictionaryDetail>,
+
+  // Read-only: unlike getDictionary, this never re-enqueues, so the dictionary screen's poll
+  // uses this instead of getDictionary (final review, finding 1).
+  getTranslationProgress: (id: number) =>
+    request<TranslationProgress | null>(`/api/dictionaries/${id}/translation`) as Promise<TranslationProgress | null>,
 
   deleteDictionary: (id: number) => request<null>(`/api/dictionaries/${id}`, { method: 'DELETE' }),
 
@@ -780,7 +822,7 @@ export const api = {
     }
 
     if (response.status === 429) {
-      return { status: 'limit' }
+      return { status: 'limit', retryAfterSeconds: retryAfterSeconds(response.headers.get('Retry-After')) }
     }
 
     if (response.status === 413) {
@@ -818,15 +860,22 @@ export const api = {
 
   /** onUploadProgress gets the bytes sent so far and the body size, as the browser pushes the book out. */
   importDictionary: (
-    payload: {
-      name: string
-      chapters?: ImportChapter[]
-      words?: ImportWord[]
-      requestPublication?: boolean
-      fileHash?: string
-    },
+    file: File,
+    options: { chapterMode?: number; requestPublication: boolean },
     onUploadProgress?: UploadProgress,
-  ) => uploadJson<ImportResult>('/api/dictionaries/import', payload, onUploadProgress),
+  ) => {
+    const form = new FormData()
+
+    form.append('file', file)
+
+    if (options.chapterMode !== undefined) {
+      form.append('chapterMode', String(options.chapterMode))
+    }
+
+    form.append('requestPublication', String(options.requestPublication))
+
+    return uploadForm<ImportResult>('/api/dictionaries/import', form, onUploadProgress)
+  },
 
   getQueue: (dictionaryId: number, chapterIds: number[] | null, take = 50) => {
     const params = new URLSearchParams({ dictionaryId: String(dictionaryId), take: String(take) })
@@ -985,6 +1034,11 @@ export const api = {
 
   /** Answers 409 { message } when refused — the last-admin rule. */
   deleteMe: () => request<null>('/api/auth/me', { method: 'DELETE' }),
+
+  listLanguages: () => request<Language[]>('/api/languages') as Promise<Language[]>,
+
+  setLanguage: (code: string) =>
+    request<null>('/api/auth/me/language', { method: 'PUT', body: JSON.stringify({ code }) }),
 
   /** Page size is the server's default; the answer says what it was. */
   listUsers: (params: { search?: string; page: number }) => {
