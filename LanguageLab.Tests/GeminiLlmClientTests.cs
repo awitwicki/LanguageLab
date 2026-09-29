@@ -160,6 +160,44 @@ public class GeminiLlmClientTests
         AssertNothingLeaked(error, log);
     }
 
+    /// <summary>
+    /// error.status is Google's own machine-readable code — distinct from the classic bad-API-key
+    /// case, but any 400 caused by a bad or wrong-project key surfaces this way too, and right now
+    /// that reason is thrown away along with the (rightly never-logged) message.
+    /// </summary>
+    [Fact]
+    public async Task A_failing_status_names_googles_error_code_when_present()
+    {
+        var body = JsonSerializer.Serialize(new
+        {
+            error = new { code = 400, status = "INVALID_ARGUMENT", message = $"{EchoedBody} {UserText}" },
+        });
+        var handler = new StubHttpHandler(_ => StubHttpHandler.Json(body, HttpStatusCode.BadRequest));
+        var (client, log) = Create(handler);
+
+        var error = await Assert.ThrowsAsync<LlmUnavailableException>(
+            () => client.CompleteJsonAsync(Request(), CancellationToken.None));
+
+        Assert.Equal("Gemini answered 400 (INVALID_ARGUMENT).", error.Message);
+        Assert.Equal(error.Message, Assert.Single(log.Entries).Message);
+        AssertNothingLeaked(error, log);
+    }
+
+    /// <summary>A status that isn't a clean code (defense in depth, like ReasonCode elsewhere) never quotes it raw.</summary>
+    [Fact]
+    public async Task An_unrecognised_error_status_is_never_quoted_raw()
+    {
+        var body = JsonSerializer.Serialize(new { error = new { code = 400, status = $"{EchoedBody} {UserText}" } });
+        var handler = new StubHttpHandler(_ => StubHttpHandler.Json(body, HttpStatusCode.BadRequest));
+        var (client, log) = Create(handler);
+
+        var error = await Assert.ThrowsAsync<LlmUnavailableException>(
+            () => client.CompleteJsonAsync(Request(), CancellationToken.None));
+
+        Assert.Equal("Gemini answered 400 (unrecognised).", error.Message);
+        AssertNothingLeaked(error, log);
+    }
+
     public static TheoryData<string, string> UnusableAnswers => new()
     {
         { """{"promptFeedback":{"blockReason":"SAFETY"}}""", "Gemini blocked the prompt: SAFETY." },
