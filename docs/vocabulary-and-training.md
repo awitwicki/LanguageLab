@@ -95,11 +95,18 @@ and `Origin` is `Manual` or `Machine`. A row exists only when there is a transla
 more "untranslated" sentinel value, only the absence of a row for that language. A shared `WordPair`
 can carry a different translation per language at once; a personal word (`OwnerId` set) keeps one
 translation per language too, so switching languages does not lose what was typed for another one.
+`Text` is at most `WordTranslation.MaxTextLength` (200) characters — enforced where text comes in
+(typed in `PersonalDictionaryService`, or a model answer in `TranslationService`), not in the schema,
+so a migration never fails on an old row.
 
 Single-word lookups (`TranslationService.LookupAsync`, used by `GET /api/translate`, the reader's
 word panel and the sorting "don't know" mark) are cached into the shared vocabulary as a `Machine`
 `WordTranslation` in the language asked for, so the same word costs the model at most once per
-language. A `Manual` translation already there for that language is never overwritten, and a hit
+language. A lookup adds a *new* shared word only under the rule book import follows — an English
+lemma, one `ImportWordText` accepts and `IEnglishLexicon` knows as its own lemma; a word already in
+the shared vocabulary is translated in place whatever the lexicon says. A phrase, an inflected form
+or a made-up string (where a prompt injection would live) is translated and answered but never
+stored, so the reader's "Add to training" sends that translation along with the word. A model answer longer than `MaxTextLength` counts as no answer. A `Manual` translation already there for that language is never overwritten, and a hit
 in one language says nothing about any other. A hit is free; a miss spends the user's
 [uncached-translation slot](#uncached-translation-limit).
 
@@ -152,9 +159,11 @@ polling every 4 seconds until it clears.
 
 ### Uncached translation limit
 
-One translation that reaches the model per user every 10 seconds, admins included
-(`UncachedTranslationLimiter`: one timestamp per user, claimed by compare-and-swap, so two
-concurrent misses cannot both get through). Sentences and word-lookup misses share the slot. It is
+One translation that reaches the model per user every 10 seconds, and at most
+`UncachedTranslationLimiter.DailyLimit` (300) per UTC day, admins included
+(`UncachedTranslationLimiter`: one entry per user, claimed by compare-and-swap, so two concurrent
+misses cannot both get through). Sentences and word-lookup misses share the slot and the budget; a
+refusal past the daily cap names the wait until UTC midnight. It is
 checked inside `TranslationService.LookupAsync` at the cache-miss point, and by
 `POST /api/translate/sentence` before every model call — there is no server-side sentence cache,
 so every sentence spends it. How a refusal looks:
@@ -177,10 +186,13 @@ Also in memory — a restart forgives everybody — and per day:
 | `POST /api/dictionaries/import` | 20 attempts | `UserRateLimits.ImportAttempts` |
 | `GET /api/translate` | 500 lookups | `UserRateLimits.Translate` |
 | bulk personal-word import | 20 requests | `UserRateLimits.BulkWords` |
+| single-word writes: add / edit a personal word, the reader's learn / known / ignore | 2,000 requests | `UserRateLimits.WordWrites` |
+| model calls, every path | 300 (and one per 10 s) | `UncachedTranslationLimiter` |
 
 `ImportQuota` counts only an import that succeeded, so a wrong file, DRM or a non-English book is
 immediately retryable: `TryReserve` checks and reserves the slot in one atomic step and a failed
-import releases it. The looser 20-attempt policy, checked by the middleware before the handler
+import releases it — but only up to the save: once the dictionary is saved the slot stays spent,
+even if the client hangs up before the translation enqueue (which ignores the request's token). The looser 20-attempt policy, checked by the middleware before the handler
 runs, stops a script from hammering the endpoint with garbage. `GET /api/reader/capabilities` reports
 the wait as `importRetryAfterSeconds` (a read-only peek), so the reader's **Build dictionary**
 button can show it without a click.

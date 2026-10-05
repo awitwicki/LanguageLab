@@ -24,6 +24,8 @@
       - .env
     environment:
       ASPNETCORE_URLS: "http://+:8080"
+      # Host filtering: a request for any other Host header gets a 400.
+      AllowedHosts: "l.kodzuverse.com"
 #      ConnectionStrings__DefaultConnection: 'Host=dbpostgres;Port=5432;Database=LanguageLabTgBot;Username=postgres;Password=${POSTGRES_PASSWORD};'
     networks:
       - kodzuverse

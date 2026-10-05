@@ -71,8 +71,9 @@ export function useAuth() {
         }
 
         // Inside Telegram there is a second way in: the launch parameters Telegram signed for
-        // this page. The cookie is asked first, so a web view kept open past their 24-hour
-        // window keeps working on the session it already has.
+        // this page. The cookie is asked first, so a web view kept open past their one-hour
+        // window keeps working on the session it already has (until it is signed out elsewhere —
+        // then only reopening the Mini App brings fresh ones).
         if (!initialInitData) {
           setState({ status: 'anonymous' })
           return

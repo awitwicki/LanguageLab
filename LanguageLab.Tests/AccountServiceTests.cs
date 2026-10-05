@@ -40,6 +40,33 @@ public class AccountServiceTests
         return db;
     }
 
+    /// <summary>The in-memory provider has no transactions and no concurrency: no lock, nothing to commit.</summary>
+    [Fact]
+    public async Task The_admin_lock_is_a_no_op_off_a_relational_database()
+    {
+        await using var db = await SeedAsync();
+
+        Assert.Null(await UserRules.LockAdminsAsync(db));
+    }
+
+    [Fact]
+    public async Task Revoking_sessions_bumps_the_version()
+    {
+        await using var db = await SeedAsync();
+
+        Assert.True(await NewService(db).RevokeSessionsAsync(MemberId));
+
+        Assert.Equal(1, (await db.Users.AsNoTracking().SingleAsync(u => u.Id == MemberId)).SessionVersion);
+    }
+
+    [Fact]
+    public async Task Revoking_sessions_of_an_unknown_user_is_false()
+    {
+        await using var db = await SeedAsync();
+
+        Assert.False(await NewService(db).RevokeSessionsAsync(999));
+    }
+
     [Fact]
     public async Task A_member_can_delete_their_own_account()
     {

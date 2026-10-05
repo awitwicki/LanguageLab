@@ -106,7 +106,7 @@ public static class DictionaryEndpoints
             return added == null
                 ? Results.Json(new DictionaryError("Already in your dictionary."), statusCode: StatusCodes.Status409Conflict)
                 : Results.Created($"/api/dictionaries/personal/words/{added.WordPairId}", added);
-        });
+        }).RequireRateLimiting(UserRateLimits.WordWrites);
 
         group.MapPost("/personal/words/import", async (
             AddPersonalWordsRequest request, PersonalDictionaryService personal, ICurrentUser currentUser, ICurrentLanguage language) =>
@@ -151,7 +151,7 @@ public static class DictionaryEndpoints
             }
 
             return updated == null ? Results.NotFound() : Results.Ok(updated);
-        });
+        }).RequireRateLimiting(UserRateLimits.WordWrites);
 
         group.MapDelete("/personal/words/{wordPairId:long}", async (
             long wordPairId, PersonalDictionaryService personal, ICurrentUser currentUser) =>
@@ -305,11 +305,11 @@ public static class DictionaryEndpoints
                 return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status400BadRequest);
             }
         })
-          // Form binding demands antiforgery or an explicit opt-out; the API's CSRF story is the
-          // SameSite session cookie, same as every other endpoint here (docs/auth.md).
+          // Form binding demands antiforgery or an explicit opt-out; the API's CSRF defence is
+          // SameOriginGuard, same as every other endpoint here (docs/auth.md).
           .DisableAntiforgery()
-          // A book file is a few megabytes; the global 64 MB is headroom this endpoint does not
-          // need, and it is the only one a stranger can make large.
+          // A book file is a few megabytes: this raises the API's 256 KB default for the one
+          // endpoint that needs it.
           .WithMetadata(new RequestSizeLimitAttribute(16L * 1024 * 1024))
           // A loose attempts ceiling, independent of ImportQuota's 1-success/day: the middleware
           // rejects before the body is even read, so a spent-quota or repeatedly-wrong-file
@@ -321,7 +321,8 @@ public static class DictionaryEndpoints
         // never touches one, so its id falls through to the ordinary NotFound path, not a 403.
         group.MapDelete("/{id:long}", async (long id, DictionaryDeletionService deletion) =>
             await deletion.DeleteAsync(id) ? Results.NoContent() : Results.NotFound())
-            .RequireAuthorization(AuthPolicies.Admin);
+            .RequireAuthorization(AuthPolicies.Admin)
+            .WithAdminAudit();
 
         group.MapPatch("/{id:long}", async (long id, StatusRequest request, DictionaryPublicationService publication) =>
         {
@@ -331,7 +332,8 @@ public static class DictionaryEndpoints
             }
 
             return MapPublication(await publication.SetStatusAsync(id, request.Status));
-        }).RequireAuthorization(AuthPolicies.Admin);
+        }).RequireAuthorization(AuthPolicies.Admin)
+          .WithAdminAudit();
 
         // The owner offers a dictionary for publication and may take the offer back; the
         // decision itself is an admin's — the PATCH handler above, or the moderation queue under

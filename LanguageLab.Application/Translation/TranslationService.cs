@@ -1,5 +1,7 @@
+using LanguageLab.Domain;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Languages;
+using LanguageLab.Domain.Lexicon;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,7 +11,7 @@ public enum TranslationSource
 {
     /// <summary>A shared word already carried this translation; the provider was not asked.</summary>
     Dictionary,
-    /// <summary>The language model answered; the translation is now in the shared vocabulary.</summary>
+    /// <summary>The language model answered; for an English word the translation is now in the shared vocabulary.</summary>
     Llm,
     /// <summary>The model was asked and had no answer.</summary>
     None,
@@ -24,8 +26,8 @@ public sealed record TranslationLookup(
 /// <summary>
 /// Suggests a translation for a word: the shared vocabulary first (2 797 shelf words were
 /// translated by hand on 2026-09-07 and never need the network), the provider after. A
-/// provider's answer is kept in the shared vocabulary as a Machine WordTranslation in the
-/// learner's language, so the next lookup of the same word in the same language by anyone costs
+/// provider's answer for an English word (one the lexicon knows) is kept in the shared vocabulary
+/// as a Machine WordTranslation in the learner's language, so the next lookup of the same word in the same language by anyone costs
 /// nothing and the word becomes trainable. A translation already there is never replaced, so a
 /// hand-made one always wins. Only a miss is paced — one per user every
 /// UncachedTranslationLimiter.Window; a hit is always free.
@@ -35,12 +37,15 @@ public class TranslationService
     private readonly ApplicationDbContext _dbContext;
     private readonly ITranslator _translator;
     private readonly UncachedTranslationLimiter _limiter;
+    private readonly IEnglishLexicon _lexicon;
 
-    public TranslationService(ApplicationDbContext dbContext, ITranslator translator, UncachedTranslationLimiter limiter)
+    public TranslationService(
+        ApplicationDbContext dbContext, ITranslator translator, UncachedTranslationLimiter limiter, IEnglishLexicon lexicon)
     {
         _dbContext = dbContext;
         _translator = translator;
         _limiter = limiter;
+        _lexicon = lexicon;
     }
 
     /// <summary>Expects an already normalized, valid word (see WordText) — the same form the personal dictionary stores.</summary>
@@ -67,9 +72,18 @@ public class TranslationService
 
         var translated = await _translator.TranslateAsync(word, language, cancellationToken);
 
-        if (translated == null)
+        if (translated == null || translated.Length > WordTranslation.MaxTextLength)
         {
             return new TranslationLookup(word, null, TranslationSource.None);
+        }
+
+        // The shared vocabulary is what everybody's lookups and trainings read, so a lookup adds a
+        // new word to it only under the rule book import follows: an English lemma. A phrase, an
+        // inflected form or a made-up string (where a prompt injection would live) is answered but
+        // never kept. A word already there — from an older import, say — is translated in place.
+        if (shared == null && !IsImportableLemma(word))
+        {
+            return new TranslationLookup(word, translated, TranslationSource.Llm);
         }
 
         shared ??= _dbContext.Words.Add(new WordPair { Word = word }).Entity;
@@ -97,4 +111,6 @@ public class TranslationService
 
         return new TranslationLookup(word, translated, TranslationSource.Llm);
     }
+
+    private bool IsImportableLemma(string word) => ImportWordText.IsValid(word) && _lexicon.LemmaOf(word) == word;
 }

@@ -109,6 +109,36 @@ public class ServerSideStateFormatTests
         Assert.Equal(1, format.PendingCount);
     }
 
+    /// <summary>Anyone can start a handshake, so the store has a ceiling instead of growing with a flood.</summary>
+    [Fact]
+    public void The_store_reports_full_at_its_cap()
+    {
+        var format = new ServerSideStateFormat(new TestTimeProvider(DateTimeOffset.UnixEpoch));
+
+        for (var i = 0; i < ServerSideStateFormat.MaxPending; i++)
+        {
+            format.Protect(SampleProperties());
+        }
+
+        Assert.True(format.IsFull);
+    }
+
+    [Fact]
+    public void Expired_handles_free_a_full_store()
+    {
+        var time = new TestTimeProvider(DateTimeOffset.UnixEpoch);
+        var format = new ServerSideStateFormat(time);
+
+        for (var i = 0; i < ServerSideStateFormat.MaxPending; i++)
+        {
+            format.Protect(SampleProperties());
+        }
+
+        time.UtcNow += ServerSideStateFormat.Lifetime + TimeSpan.FromMinutes(1);
+
+        Assert.False(format.IsFull);
+    }
+
     private sealed class TestTimeProvider(DateTimeOffset utcNow) : TimeProvider
     {
         public DateTimeOffset UtcNow { get; set; } = utcNow;

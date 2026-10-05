@@ -161,7 +161,10 @@ export function WordPanel({ lemma, form, count, dictionaryId, onClose, onStatusC
       if (undo) {
         await api.resetWord(lemma)
       } else if (action === 'learn') {
-        await api.learnWord(lemma, word.translation ? undefined : typed.trim(), dictionaryId)
+        // A shared translation is the server's to use. A model one goes along: a word outside the
+        // lexicon is translated but never kept in the shared vocabulary, so there is nothing to fall back on.
+        const translation = word.source === 'dictionary' ? undefined : (word.translation ?? typed.trim())
+        await api.learnWord(lemma, translation, dictionaryId)
       } else if (action === 'know') {
         await api.knowWord(lemma)
       } else {

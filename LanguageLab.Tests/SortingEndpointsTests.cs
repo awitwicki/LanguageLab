@@ -14,7 +14,7 @@ public class SortingEndpointsTests
     private const long User = 5;
 
     private static TranslationService Translation(ApplicationDbContext db, ITranslator translator) =>
-        new(db, translator, new UncachedTranslationLimiter(TimeProvider.System));
+        new(db, translator, new UncachedTranslationLimiter(TimeProvider.System), FakeEnglishLexicon.Knowing("apple", "orphan", "waif"));
 
     private sealed class FakeTranslator : ITranslator
     {
@@ -152,7 +152,8 @@ public class SortingEndpointsTests
         await db.SaveChangesAsync();
         var translator = new FakeTranslator("x");
         var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-09-29T12:00:00Z"));
-        var translation = new TranslationService(db, translator, new UncachedTranslationLimiter(clock));
+        var translation = new TranslationService(
+            db, translator, new UncachedTranslationLimiter(clock), FakeEnglishLexicon.Knowing("apple", "orphan", "waif"));
         var sorting = new WordSortingService(db);
 
         await SortingEndpoints.TranslateIfUnknownAsync(sorting, translation, SortStatus.Unknown, 1, User, Uk, CancellationToken.None);

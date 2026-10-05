@@ -19,6 +19,10 @@ public sealed class FakeEnglishLexicon : IEnglishLexicon
     {
     }
 
+    /// <summary>A lexicon where each of <paramref name="lemmas"/> is its own form.</summary>
+    public static FakeEnglishLexicon Knowing(params string[] lemmas) =>
+        new(lemmas.ToDictionary(lemma => lemma, lemma => lemma, StringComparer.Ordinal));
+
     public IReadOnlyList<string> LemmasOf(string lowercaseForm) =>
         _formToLemmas.TryGetValue(lowercaseForm, out var lemmas) ? lemmas : Array.Empty<string>();
 

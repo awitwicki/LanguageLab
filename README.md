@@ -10,7 +10,7 @@ Web app for learning new words from books
 
 - [docs/architecture.md](docs/architecture.md) — the project map: what each project and service
   owns, the endpoint inventory, the Postgres and config setup.
-- [docs/auth.md](docs/auth.md) — Telegram sign-in over OIDC, the `ll_session` cookie, dev-login,
+- [docs/auth.md](docs/auth.md) — Telegram sign-in over OIDC, the session cookie, dev-login,
   the Mini App, roles.
 - [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md) — import and publication
   review, the personal dictionary, the LLM translator, background translation and per-user
@@ -54,6 +54,7 @@ add one line here **in the same set of changes**. Done items are marked `[x]`.
 - [x] The verbs drill's word count lives in `localStorage` per device rather than on the account, so
   a learner sets it again on a second device (`web/src/verbs/sessionSettings.ts`)
 - [ ] Offline reading: the book file and its parsing already live client-side (`web/src/reader/bookStore.ts`, `readerBook.ts`), so a previously opened book could be read with no network — needs a service worker/PWA manifest to load the app shell offline, plus making `useReaderPosition`, `ReaderWordStatusService` lookups and `POST /api/translate/sentence` degrade gracefully (skip or queue) when offline instead of blocking. Word-status highlights and training actions still need the server for Leitner progress, so this covers reading only, not training
+- [ ] Encrypt the Data Protection keys at rest (`Program.cs` `PersistKeysToDbContext` without `ProtectKeysWith*`): anyone who can read the `DataProtectionKeys` table — a backup, a replica — can forge a session cookie for any user; needs a certificate or key vault provisioned in the deployment
 
 ## Development
 
@@ -149,13 +150,21 @@ older `.env` — nothing reads them any more.
   reader offers no sentence translation. Leave `Model` and `BaseUrl` out rather than empty: an
   empty value stops startup.
 
-  Every user gets one translation that reaches the model every 10 seconds (sentences and word
-  lookups the shared vocabulary cannot answer share it; a cached word is free), and one successful
-  book import a day (admins exempt). See
+  Every user gets one translation that reaches the model every 10 seconds and 300 a day
+  (sentences and word lookups the shared vocabulary cannot answer share them; a cached word is
+  free), and one successful book import a day (admins exempt). See
   [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md#uncached-translation-limit).
 
+* `Proxy:KnownNetworks` - optional, e.g. `172.18.0.0/16` (several separated by `;`): the only
+  networks whose `X-Forwarded-For` / `X-Forwarded-Proto` are believed. Unset, any sender on the
+  Docker network is trusted (see `Program.cs`).
+* `AllowedHosts` - set to `l.kodzuverse.com` in `compose.yaml`; a request for any other host gets
+  a 400.
+
 For a local run, fill in `LanguageLab.Api/appsettings.Development.json` (see the example
-below). In Docker the same values are passed via env vars using the standard
+below), or keep the secrets out of the working tree with `dotnet user-secrets` (the API project
+has a `UserSecretsId`). `.dockerignore` keeps `appsettings.Development.json` out of image builds —
+keep it that way, or a locally built image ships your keys. In Docker the same values are passed via env vars using the standard
 ASP.NET Core convention (`__` instead of `:`): `ConnectionStrings__DefaultConnection`,
 `Telegram__ClientId`, `Telegram__ClientSecret`, `Telegram__BotToken`,
 `Translation__Gemini__ApiKey`.
@@ -181,10 +190,13 @@ the deployed one, or a tunnel — so the usual local loop is the API plus Vite, 
 Sign-in is Telegram over OpenID Connect ([docs](https://core.telegram.org/bots/telegram-login)) —
 there is no password. The browser goes to `/api/auth/telegram/start`, authorises at
 `oauth.telegram.org`, and comes back to `/api/auth/telegram/callback`, where the app exchanges
-the code, validates the `id_token` and issues its own `ll_session` cookie. The cookie holds an
-internal user id and a role, never Telegram's claims.
+the code, validates the `id_token` and issues its own session cookie (`__Host-ll_session`;
+`ll_session` in Development). The cookie holds an internal user id, a role and a session stamp,
+never Telegram's claims. Logging out signs the account out on every device, and a session ends
+after 90 days however active it stays.
 
-The first person to sign in successfully becomes the administrator; everyone after them is a
+The first person to sign in becomes the administrator — only on an instance with no other account;
+admin is never handed to whoever signs in while no admin happens to exist. Everyone else is a
 regular user. Importing a book takes no role at all — every signed-in user may, and what they
 import stays private until an admin approves it from the moderation queue. Only an admin's own
 import is published without review, and deleting or re-publishing a dictionary stays with
@@ -219,9 +231,9 @@ button) opens the app in Telegram's own web view. Telegram hands that page signe
 parameters — `window.Telegram.WebApp.initData`, a query string whose `hash` is an HMAC-SHA256
 over the other fields keyed by the bot token — and the SPA posts them to
 `POST /api/auth/telegram/webapp`. The server recomputes the hash
-(`LanguageLab.Api/Auth/WebAppInitData.cs`), refuses launches older than 24 hours, and then runs
+(`LanguageLab.Api/Auth/WebAppInitData.cs`), refuses launches older than an hour, and then runs
 the same login as the OIDC callback: first login registers, the first account is the admin, a
-ban answers 403, and the session is the same `ll_session` cookie. There is no login screen on
+ban answers 403, and the session is the same cookie. There is no login screen on
 that path; the OIDC flow is only for a browser.
 
 At boot the SPA asks `/api/auth/me` first and posts the launch parameters only on a 401, so a

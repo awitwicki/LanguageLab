@@ -86,6 +86,14 @@ The endpoints are inventoried below.
 unknown `/api/...` path answers 404 rather than the page; everything else no file matches gets
 `index.html`.
 
+Every response carries `SecurityHeaders` — a Content-Security-Policy listing exactly what the SPA
+loads (its own files, Telegram's Mini App bridge, https avatars; framing only by Telegram Web),
+`X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin` — plus HSTS outside
+Development. `SameOriginGuard` refuses cross-site and same-site `/api` requests (CSRF, see
+[auth.md](auth.md#csrf)). A request body is capped at 256 KB unless the endpoint raises it (book
+import 16 MB, bulk personal words 1 MB), and request decompression is off. `AdminAudit` logs every
+admin write under the `LanguageLab.Audit` category.
+
 ### `LanguageLab.TgBot/`
 
 The Telegram bot: a Generic Host console app on `Telegram.Bot` (long polling), with no database

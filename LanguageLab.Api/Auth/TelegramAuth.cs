@@ -15,6 +15,12 @@ public static class TelegramAuth
 {
     public const string Scheme = "Telegram";
 
+    /// <summary>Refused sign-ins, from here and from the Mini App endpoint. Reasons and ids only — never a code, token or initData.</summary>
+    public const string LogCategory = "LanguageLab.Auth";
+
+    internal static ILogger Log(HttpContext context) =>
+        context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger(LogCategory);
+
     public static async Task OnTokenValidatedAsync(TokenValidatedContext context)
     {
         var identity = ReadIdentity(context.Principal);
@@ -30,6 +36,8 @@ public static class TelegramAuth
 
         if (result.Outcome == LoginOutcome.Banned)
         {
+            Log(context.HttpContext).LogInformation("Banned user {UserId} tried to sign in", result.User.Id);
+
             // The callback is a redirect, not a fetch, so there is no 403 body to send.
             // The SPA reads this parameter once at boot and shows the banned screen.
             context.HandleResponse();
@@ -39,12 +47,15 @@ public static class TelegramAuth
 
         // The session carries our identity, not Telegram's: the id_token's claims stop here,
         // and the cookie holds only an internal user id and a role.
-        context.Principal = PrincipalFactory.Create(result.User.Id, result.User.Role);
+        context.Principal = PrincipalFactory.Create(
+            result.User.Id, result.User.Role, result.User.SessionVersion, DateTimeOffset.UtcNow);
     }
 
     /// <summary>A cancelled consent or a provider error should land on the login screen, not a stack trace.</summary>
     public static Task OnRemoteFailureAsync(RemoteFailureContext context)
     {
+        Log(context.HttpContext).LogWarning("Telegram sign-in failed: {Reason}", context.Failure?.Message);
+
         context.HandleResponse();
         context.Response.Redirect("/?error=login");
 

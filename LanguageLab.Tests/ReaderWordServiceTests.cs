@@ -60,7 +60,8 @@ public class ReaderWordServiceTests
         new(
             db,
             new TranslationService(
-                db, new FakeTranslator(providerAnswer), limiter ?? new UncachedTranslationLimiter(TimeProvider.System)),
+                db, new FakeTranslator(providerAnswer), limiter ?? new UncachedTranslationLimiter(TimeProvider.System),
+                FakeEnglishLexicon.Knowing("adjust", "orphan", "silo", "cold", "hidden", "frank", "waif")),
             new ReaderWordStatusService(db),
             new WordSortingService(db),
             new PersonalDictionaryService(db, new WordSelectionService(db), new LearningProgressService(db)),

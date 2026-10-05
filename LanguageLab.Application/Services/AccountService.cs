@@ -48,6 +48,8 @@ public class AccountService
     /// </summary>
     public async Task<AccountDeleteResult> DeleteOwnAsync(long userId)
     {
+        await using var adminLock = await UserRules.LockAdminsAsync(_dbContext);
+
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
 
         if (user == null)
@@ -64,7 +66,27 @@ public class AccountService
         _dbContext.Users.Remove(user);
         await _dbContext.SaveChangesAsync();
 
+        if (adminLock != null)
+        {
+            await adminLock.CommitAsync();
+        }
+
         return AccountDeleteResult.Ok;
+    }
+
+    /// <summary>Signs the user out everywhere: every cookie issued so far stops validating. False for an unknown user.</summary>
+    public async Task<bool> RevokeSessionsAsync(long userId)
+    {
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user == null)
+        {
+            return false;
+        }
+
+        user.SessionVersion++;
+        await _dbContext.SaveChangesAsync();
+        return true;
     }
 
     /// <summary>Only a catalog code is accepted — Russian is not in the catalog, so it is refused like any unknown code.</summary>

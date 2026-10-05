@@ -20,7 +20,7 @@ public class AuthPoliciesTests
             .BuildServiceProvider();
 
         var result = await services.GetRequiredService<IAuthorizationService>()
-            .AuthorizeAsync(PrincipalFactory.Create(1, role), null, policy);
+            .AuthorizeAsync(PrincipalFactory.Create(1, role, 0, DateTimeOffset.UtcNow), null, policy);
 
         return result.Succeeded;
     }

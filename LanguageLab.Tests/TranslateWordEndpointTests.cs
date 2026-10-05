@@ -46,7 +46,7 @@ public class TranslateWordEndpointTests
         await using var db = NewContext();
         var clock = new ManualTimeProvider(DateTimeOffset.Parse("2026-09-29T12:00:00Z"));
         var translator = new FakeTranslator();
-        var translation = new TranslationService(db, translator, new UncachedTranslationLimiter(clock));
+        var translation = new TranslationService(db, translator, new UncachedTranslationLimiter(clock), FakeEnglishLexicon.Knowing("orphan"));
 
         var first = await Call(translation, "orphan");
         clock.Advance(TimeSpan.FromSeconds(1));
@@ -64,7 +64,8 @@ public class TranslateWordEndpointTests
     {
         await using var db = NewContext();
         var translation = new TranslationService(
-            db, new FakeTranslator(), new UncachedTranslationLimiter(new ManualTimeProvider(DateTimeOffset.UnixEpoch)));
+            db, new FakeTranslator(), new UncachedTranslationLimiter(new ManualTimeProvider(DateTimeOffset.UnixEpoch)),
+            FakeEnglishLexicon.Knowing("orphan"));
 
         await Call(translation, "orphan");
         var again = await Call(translation, "orphan");
@@ -77,7 +78,8 @@ public class TranslateWordEndpointTests
     {
         await using var db = NewContext();
         var translation = new TranslationService(
-            db, new FakeTranslator(), new UncachedTranslationLimiter(new ManualTimeProvider(DateTimeOffset.UnixEpoch)));
+            db, new FakeTranslator(), new UncachedTranslationLimiter(new ManualTimeProvider(DateTimeOffset.UnixEpoch)),
+            FakeEnglishLexicon.Knowing("orphan"));
 
         Assert.IsType<BadRequest>(await Call(translation, "   "));
     }

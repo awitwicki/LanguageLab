@@ -25,6 +25,12 @@ public class TelegramUser : BaseEntity
     /// <summary>A banned user keeps their data but cannot sign in, and an existing session dies on the next request.</summary>
     public bool IsBanned { get; set; }
 
+    /// <summary>
+    /// Every session cookie carries the version it was issued under; bumping this (logout) makes
+    /// all of them invalid on their next request — the cookie alone cannot be revoked otherwise.
+    /// </summary>
+    public int SessionVersion { get; set; }
+
     /// <summary>UTC.</summary>
     public DateTime CreatedAt { get; set; }
 

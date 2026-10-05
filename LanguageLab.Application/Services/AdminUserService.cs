@@ -117,6 +117,8 @@ public class AdminUserService
             return AdminActionResult.SelfAction;
         }
 
+        await using var adminLock = await UserRules.LockAdminsAsync(_dbContext);
+
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == targetId);
 
         if (user == null)
@@ -131,6 +133,11 @@ public class AdminUserService
 
         user.Role = role;
         await _dbContext.SaveChangesAsync();
+
+        if (adminLock != null)
+        {
+            await adminLock.CommitAsync();
+        }
 
         return AdminActionResult.Ok;
     }
@@ -147,6 +154,8 @@ public class AdminUserService
             return AdminActionResult.SelfAction;
         }
 
+        await using var adminLock = await UserRules.LockAdminsAsync(_dbContext);
+
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == targetId);
 
         if (user == null)
@@ -162,6 +171,11 @@ public class AdminUserService
         UserRules.RemovePersonalDictionary(_dbContext, targetId);
         _dbContext.Users.Remove(user);
         await _dbContext.SaveChangesAsync();
+
+        if (adminLock != null)
+        {
+            await adminLock.CommitAsync();
+        }
 
         return AdminActionResult.Ok;
     }

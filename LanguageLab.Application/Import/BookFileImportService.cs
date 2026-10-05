@@ -71,6 +71,8 @@ public partial class BookFileImportService
             throw new ImportQuotaExceededException(retryAfter);
         }
 
+        ImportResult result;
+
         // The reservation above already counts as today's spend; release it on any failure below
         // so a wrong file, DRM or a non-English book leaves the day's slot untouched.
         try
@@ -93,25 +95,30 @@ public partial class BookFileImportService
                 RequestPublication: requestPublication,
                 FileHash: hash);
 
-            var result = await _import.ImportAsync(
+            // Last point where a hung-up client costs nothing: the dictionary is not saved yet.
+            cancellationToken.ThrowIfCancellationRequested();
+
+            result = await _import.ImportAsync(
                 request, ownerId, BookImportService.StatusFor(role, requestPublication));
-
-            if (language is null)
-            {
-                return result;
-            }
-
-            // After the core's SaveChangesAsync and outside any transaction — the queue saves on the
-            // shared DbContext (ITranslationQueue's contract).
-            await _queue.EnqueueAsync(result.DictionaryId, language, cancellationToken);
-
-            return result with { TranslationQueued = true };
         }
         catch
         {
             _quota.ReleaseReservation(ownerId);
             throw;
         }
+
+        if (language is null)
+        {
+            return result;
+        }
+
+        // The dictionary is saved, so the day's import is spent whatever happens next: a client
+        // that hangs up here must not get its reservation back, which is why the enqueue ignores
+        // the request's token. After the core's SaveChangesAsync and outside any transaction — the
+        // queue saves on the shared DbContext (ITranslationQueue's contract).
+        await _queue.EnqueueAsync(result.DictionaryId, language, CancellationToken.None);
+
+        return result with { TranslationQueued = true };
     }
 
     /// <summary>A port of stripBookExtension (web/src/books/format.ts) — the fallback title C2 left to this stream.</summary>

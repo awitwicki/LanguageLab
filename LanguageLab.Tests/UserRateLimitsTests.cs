@@ -8,6 +8,28 @@ namespace LanguageLab.Tests;
 public class UserRateLimitsTests
 {
     [Fact]
+    public void Anonymous_requests_are_partitioned_by_client_ip()
+    {
+        var context = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        context.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("203.0.113.7");
+
+        Assert.Equal("ip:203.0.113.7", UserRateLimits.IpPartitionKey(context));
+    }
+
+    /// <summary>One IPv6 subscriber holds a whole /64; per-address buckets would give them unlimited ones.</summary>
+    [Fact]
+    public void Ipv6_clients_share_a_bucket_per_64_block()
+    {
+        var first = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        first.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("2001:db8:1:2:aaaa::1");
+        var second = new Microsoft.AspNetCore.Http.DefaultHttpContext();
+        second.Connection.RemoteIpAddress = System.Net.IPAddress.Parse("2001:db8:1:2:bbbb::9");
+
+        Assert.Equal("ip:2001:db8:1:2::/64", UserRateLimits.IpPartitionKey(first));
+        Assert.Equal(UserRateLimits.IpPartitionKey(first), UserRateLimits.IpPartitionKey(second));
+    }
+
+    [Fact]
     public void A_user_may_spend_the_permits_and_no_more()
     {
         using var limiter = UserRateLimits.CreateLimiter(permits: 3);
@@ -39,7 +61,7 @@ public class UserRateLimitsTests
     [Fact]
     public void A_signed_in_principal_partitions_by_its_user_id()
     {
-        var principal = PrincipalFactory.Create(42, UserRole.User);
+        var principal = PrincipalFactory.Create(42, UserRole.User, 0, DateTimeOffset.UtcNow);
 
         Assert.Equal("user:42", UserRateLimits.PartitionKey(principal));
     }
