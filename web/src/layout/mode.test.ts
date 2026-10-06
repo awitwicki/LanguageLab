@@ -32,8 +32,13 @@ describe('modeOf', () => {
     expect(modeOf('reader-book')).toBe('reading')
   })
 
-  it('offers Reading right after Words', () => {
-    expect(MODES.map((m) => m.mode)).toEqual(['words', 'reading', 'pronunciation', 'verbs'])
+  it('offers Reading right after Words, and Grammar last', () => {
+    expect(MODES.map((m) => m.mode)).toEqual(['words', 'reading', 'pronunciation', 'verbs', 'grammar'])
+  })
+
+  it('puts the grammar screens under Grammar', () => {
+    expect(modeOf('grammar')).toBe('grammar')
+    expect(modeOf('grammar-topic')).toBe('grammar')
   })
 })
 
@@ -41,5 +46,11 @@ describe('visibleModes', () => {
   it('offers irregular verbs to Ukrainian learners only', () => {
     expect(visibleModes('uk').map((m) => m.mode)).toContain('verbs')
     expect(visibleModes('pl').map((m) => m.mode)).not.toContain('verbs')
+  })
+
+  it('offers grammar to every learner language', () => {
+    for (const language of ['uk', 'pl', 'de', null]) {
+      expect(visibleModes(language).map((m) => m.mode)).toContain('grammar')
+    }
   })
 })

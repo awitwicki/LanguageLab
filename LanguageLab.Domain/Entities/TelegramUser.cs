@@ -1,3 +1,4 @@
+using LanguageLab.Domain.Grammar;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace LanguageLab.Domain.Entities;
@@ -54,6 +55,12 @@ public class TelegramUser : BaseEntity
     /// Null for an account that has never started one — the client falls back to its own default.
     /// </summary>
     public int? VerbsWordCount { get; set; }
+
+    /// <summary>
+    /// The CEFR level the learner is aiming for in Grammar; the topic list shows topics up to it.
+    /// Null until they pick one, which reads as A1.
+    /// </summary>
+    public GrammarLevel? GrammarGoal { get; set; }
 
     /// <summary>
     /// What to call this person on screen. Lives here rather than in a view mapper because

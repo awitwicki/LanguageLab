@@ -1,0 +1,70 @@
+.grammar-intro {
+  color: var(--text-2);
+  margin: 0 0 24px;
+}
+
+.grammar-goal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px;
+}
+
+.grammar-goal {
+  display: flex;
+  gap: 8px;
+}
+
+.grammar-section {
+  margin: 0 0 24px;
+}
+
+.grammar-topics {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grammar-topic {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.grammar-topic-level {
+  color: var(--text-2);
+  font-weight: 600;
+}
+
+.grammar-topic-title {
+  flex: 1;
+}
+
+.grammar-topic .footnote {
+  margin: 0;
+}
+
+.grammar-topic.is-planned {
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: default;
+}
+
+.grammar-topic.is-planned .grammar-topic-level,
+.grammar-topic.is-planned .footnote {
+  color: var(--text-3);
+}

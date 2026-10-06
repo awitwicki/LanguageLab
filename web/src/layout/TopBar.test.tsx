@@ -6,7 +6,7 @@ import type { AppMode } from './mode'
 import { TopBar } from './TopBar'
 
 const user: CurrentUser = { id: 1, telegramUserId: 1, displayName: 'Ada', username: null, photoUrl: null, role: 'user',
-  language: 'uk', suggestedLanguage: null, verbsWordCount: null }
+  language: 'uk', suggestedLanguage: null, verbsWordCount: null, grammarGoal: 'A1' }
 
 function topBar(mode: AppMode | null, onSelectMode: (mode: AppMode) => void = () => {}, who: CurrentUser = user) {
   return (
@@ -40,7 +40,7 @@ describe('TopBar — brand', () => {
 })
 
 describe('TopBar — mode tabs', () => {
-  it('offers the four modes in order and marks the current one', async () => {
+  it('offers the five modes in order and marks the current one', async () => {
     const { container } = await render(topBar('pronunciation'))
 
     expect(tabs(container).map((t) => t.textContent)).toEqual([
@@ -48,14 +48,15 @@ describe('TopBar — mode tabs', () => {
       'Reading',
       'Pronunciation',
       'Irregular verbs',
+      'Grammar',
     ])
-    expect(tabs(container).map((t) => t.getAttribute('aria-current'))).toEqual([null, null, 'page', null])
+    expect(tabs(container).map((t) => t.getAttribute('aria-current'))).toEqual([null, null, 'page', null, null])
   })
 
   it('marks no tab when the screen belongs to no mode', async () => {
     const { container } = await render(topBar(null))
 
-    expect(tabs(container).map((t) => t.getAttribute('aria-current'))).toEqual([null, null, null, null])
+    expect(tabs(container).map((t) => t.getAttribute('aria-current'))).toEqual([null, null, null, null, null])
   })
 
   it('reports the chosen mode', async () => {
@@ -71,6 +72,6 @@ describe('TopBar — mode tabs', () => {
   it('hides irregular verbs from a learner of another language', async () => {
     const { container } = await render(topBar('words', () => {}, { ...user, language: 'pl' }))
 
-    expect(tabs(container).map((t) => t.textContent)).toEqual(['Words', 'Reading', 'Pronunciation'])
+    expect(tabs(container).map((t) => t.textContent)).toEqual(['Words', 'Reading', 'Pronunciation', 'Grammar'])
   })
 })

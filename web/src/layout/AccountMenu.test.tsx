@@ -14,6 +14,7 @@ const member: CurrentUser = {
   language: 'uk',
   suggestedLanguage: null,
   verbsWordCount: null,
+  grammarGoal: 'A1',
 }
 
 const admin: CurrentUser = { ...member, id: 1, displayName: 'Ada Vance', role: 'admin' }

@@ -315,6 +315,7 @@ app.MapSortingEndpoints();
 app.MapTrainingEndpoints();
 app.MapAdminEndpoints();
 app.MapIrregularVerbEndpoints();
+app.MapGrammarEndpoints();
 app.MapPronunciationEndpoints();
 app.MapTranslationEndpoints();
 app.MapReaderEndpoints();

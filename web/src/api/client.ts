@@ -15,6 +15,8 @@ export interface CurrentUser {
   suggestedLanguage: string | null
   /** Word count last chosen for an irregular-verbs round; null until they've started one. */
   verbsWordCount: number | null
+  /** The CEFR level Grammar aims for, "A1"…"B2"; A1 until they pick one. */
+  grammarGoal: string
 }
 
 /** One entry of the server's language catalog. */
@@ -24,8 +26,8 @@ export interface Language {
   nativeName: string
 }
 
-/** The admin list's row: the account, without the learner-language and verbs-drill fields /me carries. */
-export interface AdminUser extends Omit<CurrentUser, 'language' | 'suggestedLanguage' | 'verbsWordCount'> {
+/** The admin list's row: the account, without the learner-language, verbs-drill and grammar fields /me carries. */
+export interface AdminUser extends Omit<CurrentUser, 'language' | 'suggestedLanguage' | 'verbsWordCount' | 'grammarGoal'> {
   isBanned: boolean
   createdAt: string
   lastLoginAt: string | null
@@ -496,6 +498,30 @@ export interface VerbStage {
   total: number
   passed: number
   mastery: number
+}
+
+/** One pick-the-form exercise; `sentence` holds one `___`. */
+export interface GrammarExercise {
+  sentence: string
+  options: string[]
+  answer: string
+  /** One line shown after a wrong pick. */
+  why: string
+}
+
+/**
+ * A grammar topic from the syllabus; [brackets] in `explanation` and `examples` mark what is shown
+ * in bold. A `planned` topic is not written yet: its three lists are empty.
+ */
+export interface GrammarTopic {
+  key: string
+  section: string
+  level: string
+  title: string
+  planned: boolean
+  explanation: string[]
+  examples: string[]
+  exercises: GrammarExercise[]
 }
 
 export interface VerbsProgress {
@@ -970,6 +996,8 @@ export const api = {
 
   getVerbsProgress: () => request<VerbsProgress>('/api/irregular-verbs/progress') as Promise<VerbsProgress>,
 
+  getGrammarTopics: () => request<GrammarTopic[]>('/api/grammar/topics') as Promise<GrammarTopic[]>,
+
   /** Null when ordinary training has passed every verb of its stage. */
   getVerbSession: (query: DrillQuery) => {
     const params = new URLSearchParams({ mode: query.mode })
@@ -1052,6 +1080,9 @@ export const api = {
 
   setVerbsWordCount: (words: number) =>
     request<null>('/api/auth/me/verbs-word-count', { method: 'PUT', body: JSON.stringify({ words }) }),
+
+  setGrammarGoal: (level: string) =>
+    request<null>('/api/auth/me/grammar-goal', { method: 'PUT', body: JSON.stringify({ level }) }),
 
   /** Page size is the server's default; the answer says what it was. */
   listUsers: (params: { search?: string; page: number }) => {

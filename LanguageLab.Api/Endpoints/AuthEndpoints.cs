@@ -2,6 +2,7 @@ using LanguageLab.Api;
 using LanguageLab.Api.Auth;
 using LanguageLab.Application.Services;
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Grammar;
 using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication;
@@ -33,7 +34,7 @@ public sealed record TelegramWebAppOptions(string BotToken)
 
 public sealed record CurrentUserView(
     long Id, long TelegramUserId, string DisplayName, string? Username, string? PhotoUrl, UserRole Role,
-    string? Language, string? SuggestedLanguage, int? VerbsWordCount);
+    string? Language, string? SuggestedLanguage, int? VerbsWordCount, string GrammarGoal);
 
 /// <summary>The body of POST /api/auth/telegram/webapp: window.Telegram.WebApp.initData, verbatim.</summary>
 public sealed record WebAppLoginRequest(string? InitData);
@@ -43,6 +44,10 @@ public sealed record SetLanguageRequest(string? Code);
 public sealed record SetVerbsWordCountRequest(int Words);
 
 public sealed record WordCountError(string Error);
+
+public sealed record SetGrammarGoalRequest(string? Level);
+
+public sealed record GrammarGoalError(string Error);
 
 public static class AuthEndpoints
 {
@@ -102,6 +107,15 @@ public static class AuthEndpoints
 
         // Server-side, not just the browser's copy: a copied cookie dies too. That signs this
         // account out on every device — the price of a cookie that cannot be revoked one by one.
+        group.MapPut("/me/grammar-goal", async (
+            SetGrammarGoalRequest body, ICurrentUserContext currentUser, AccountService accounts) =>
+            await accounts.SetGrammarGoalAsync(currentUser.Require().Id, body.Level) switch
+            {
+                SetGrammarGoalResult.Saved => Results.NoContent(),
+                SetGrammarGoalResult.NotFound => Results.Unauthorized(),
+                _ => Results.Json(new GrammarGoalError("invalid_value"), statusCode: StatusCodes.Status400BadRequest),
+            }).RequireAuthorization();
+
         group.MapPost("/logout", async (HttpContext http, ICurrentUserContext currentUser, AccountService accounts) =>
         {
             await accounts.RevokeSessionsAsync(currentUser.Require().Id);
@@ -208,5 +222,6 @@ public static class AuthEndpoints
         new(user.Id, user.TelegramUserId, user.DisplayName, user.Username, user.PhotoUrl, user.Role,
             user.Language,
             user.Language == null ? LearnerLanguages.FromTelegram(user.TelegramLanguageCode)?.Code : null,
-            user.VerbsWordCount);
+            user.VerbsWordCount,
+            (user.GrammarGoal ?? GrammarLevel.A1).ToString());
 }

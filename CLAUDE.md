@@ -16,7 +16,7 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 
 | Path | What it is |
 |---|---|
-| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation and IPA catalogs and the `LearnerLanguages` language catalog. No dependencies on infrastructure. |
+| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation, IPA and grammar catalogs and the `LearnerLanguages` language catalog. No dependencies on infrastructure. |
 | `LanguageLab.Infrastructure/` | EF Core `ApplicationDbContext`, PostgreSQL provider, migrations. |
 | `LanguageLab.Application/` | Services on top of the domain: word selection, training sessions, book import and the fb2/epub parsers behind it (`Books/`), sorting, Leitner progress, translation, the reader's services, the two trainers. |
 | `LanguageLab.Api/` | ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. `Auth/` holds the claims, session validation and OIDC handlers. |
@@ -109,6 +109,7 @@ Nothing below is loaded for you automatically — open the one that matches the 
 | [docs/auth.md](docs/auth.md) | Touching sign-in, the session cookie, CSRF (`SameOriginGuard`), dev-login, the Mini App and its full-screen insets, or roles. |
 | [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md) | Working on import, publication and moderation, the personal dictionary, the LLM translator, the background translation queue and per-user limits, or Leitner batches. |
 | [docs/reader.md](docs/reader.md) | Working in Reading mode: `ReaderBook` and position sync, the word panel, chapter windowing, fb2/epub parsing. |
-| [docs/trainers.md](docs/trainers.md) | Working on the irregular-verbs or the pronunciation trainer. |
+| [docs/trainers.md](docs/trainers.md) | Working on the irregular-verbs, pronunciation or grammar trainer. |
+| [docs/grammar-roadmap.md](docs/grammar-roadmap.md) | Planning grammar content or the next grammar phase: the A1–B1 syllabus and the copyright rules. |
 | [web/README.md](web/README.md) | You need SPA specifics beyond the conventions above. |
 | [README.md](README.md) | Running the app, Docker, versioning, and the TODO backlog itself. |

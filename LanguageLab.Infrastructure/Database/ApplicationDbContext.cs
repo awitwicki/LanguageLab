@@ -73,6 +73,8 @@ public class ApplicationDbContext : DbContext, IDataProtectionKeyContext
         builder.Entity<WordTranslation>().Property(t => t.Language).HasMaxLength(LearnerLanguages.CodeMaxLength);
         builder.Entity<TelegramUser>().Property(u => u.Language).HasMaxLength(LearnerLanguages.CodeMaxLength);
         builder.Entity<TelegramUser>().Property(u => u.TelegramLanguageCode).HasMaxLength(16);
+        // Stored as its name ("B1") so a reordered enum cannot change what a saved goal means.
+        builder.Entity<TelegramUser>().Property(u => u.GrammarGoal).HasConversion<string>().HasMaxLength(2);
         builder.Entity<Training>().Property(t => t.Language)
             .HasMaxLength(LearnerLanguages.CodeMaxLength)
             .HasDefaultValue(LearnerLanguages.DefaultCode);

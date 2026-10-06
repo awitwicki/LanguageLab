@@ -5,7 +5,7 @@ import { render } from '../test/render'
 import { AppShell } from './AppShell'
 
 const user: CurrentUser = { id: 1, telegramUserId: 1, displayName: 'Ada', username: null, photoUrl: null, role: 'user',
-  language: 'uk', suggestedLanguage: null, verbsWordCount: null }
+  language: 'uk', suggestedLanguage: null, verbsWordCount: null, grammarGoal: 'A1' }
 
 function shell(screenKey: string, children: ReactNode = 'content', sidebar: ReactNode = <nav />) {
   return (

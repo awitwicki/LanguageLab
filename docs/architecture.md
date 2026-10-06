@@ -17,9 +17,9 @@ Entities (`Dictionary`, `WordPair`, `WordTranslation`, `KnownWord`, `UnknownWord
 [vocabulary-and-training.md](vocabulary-and-training.md#translation) — and `Training.Language`
 records the language a session was built and renders in.
 
-It also holds the three catalogs that live entirely in code rather than in the database —
-`IrregularVerbs/IrregularVerbCatalog`, `Pronunciation/PronunciationCatalog` and the IPA chart
-`Pronunciation/IpaCatalog` (see [trainers.md](trainers.md)) — plus the `Languages/LearnerLanguages`
+It also holds the four catalogs that live entirely in code rather than in the database —
+`IrregularVerbs/IrregularVerbCatalog`, `Pronunciation/PronunciationCatalog`, the IPA chart
+`Pronunciation/IpaCatalog` and `Grammar/GrammarSyllabus` and `Grammar/GrammarCatalog` (see [trainers.md](trainers.md)) — plus the `Languages/LearnerLanguages`
 catalog of learner languages (see [auth.md](auth.md#learner-language)), and the value types that
 guard imported text (`ImportWordText`, `WordText`, `TitleText`) and the role predicate
 `Entities/UserRoles.CanPublishDirectly`.
@@ -121,6 +121,8 @@ does the rest), dictionary stats, word sorting.
 - `src/lexicon/lexicon.ts` — `loadLexicon()`: the English lexicon, fetched once per page load
   from `/lexicon/english-lexicon.txt` (a copy of the server's file) and parsed into
   `lemmasOf`/`lemmaOf`; the reader's highlights and word panel resolve lemmas with it.
+- `src/grammar/` — the Grammar mode: topic list, topic screen and the client-side drill (`drill.ts`).
+  See [trainers.md](trainers.md#grammar).
 - Tests are `*.test.ts(x)` next to the code they cover (vitest + jsdom, helper
   `src/test/render.ts`).
 
@@ -244,7 +246,7 @@ model is configured. Nothing is stored. See [reader.md](reader.md#sentence-trans
 
 ### Trainers
 
-`/api/irregular-verbs` and `/api/pronunciation` — see [trainers.md](trainers.md).
+`/api/irregular-verbs`, `/api/pronunciation` and `/api/grammar` (`GET /topics`) — see [trainers.md](trainers.md).
 
 ## Configuration and database
 

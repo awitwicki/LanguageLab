@@ -13,6 +13,7 @@ const user = {
   language: 'uk',
   suggestedLanguage: null,
   verbsWordCount: null,
+  grammarGoal: 'A1',
 }
 
 function respond(routes: Record<string, { status: number; body?: unknown }>) {

@@ -1,3 +1,4 @@
+using LanguageLab.Domain.Grammar;
 using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,13 @@ public enum SetLanguageResult
 }
 
 public enum SetVerbsWordCountResult
+{
+    Saved,
+    InvalidValue,
+    NotFound,
+}
+
+public enum SetGrammarGoalResult
 {
     Saved,
     InvalidValue,
@@ -130,5 +138,30 @@ public class AccountService
         user.VerbsWordCount = words;
         await _dbContext.SaveChangesAsync();
         return SetVerbsWordCountResult.Saved;
+    }
+
+    /// <summary>
+    /// Only a level the picker offers, spelled exactly — <c>Enum.TryParse</c> alone would take "b1",
+    /// "2" and an undefined number.
+    /// </summary>
+    public async Task<SetGrammarGoalResult> SetGrammarGoalAsync(long userId, string? level)
+    {
+        if (level == null
+            || !Enum.TryParse<GrammarLevel>(level, out var parsed)
+            || parsed.ToString() != level)
+        {
+            return SetGrammarGoalResult.InvalidValue;
+        }
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+        if (user == null)
+        {
+            return SetGrammarGoalResult.NotFound;
+        }
+
+        user.GrammarGoal = parsed;
+        await _dbContext.SaveChangesAsync();
+        return SetGrammarGoalResult.Saved;
     }
 }

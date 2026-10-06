@@ -10,6 +10,7 @@ const baseUser = {
   role: 'user' as const,
   suggestedLanguage: null as string | null,
   verbsWordCount: null as number | null,
+  grammarGoal: 'A1',
 }
 
 const languages = [
