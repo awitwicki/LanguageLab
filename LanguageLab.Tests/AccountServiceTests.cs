@@ -1,5 +1,6 @@
 using LanguageLab.Application.Services;
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Grammar;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.EntityFrameworkCore;
 
@@ -38,6 +39,33 @@ public class AccountServiceTests
         await db.SaveChangesAsync();
 
         return db;
+    }
+
+    /// <summary>The in-memory provider has no transactions and no concurrency: no lock, nothing to commit.</summary>
+    [Fact]
+    public async Task The_admin_lock_is_a_no_op_off_a_relational_database()
+    {
+        await using var db = await SeedAsync();
+
+        Assert.Null(await UserRules.LockAdminsAsync(db));
+    }
+
+    [Fact]
+    public async Task Revoking_sessions_bumps_the_version()
+    {
+        await using var db = await SeedAsync();
+
+        Assert.True(await NewService(db).RevokeSessionsAsync(MemberId));
+
+        Assert.Equal(1, (await db.Users.AsNoTracking().SingleAsync(u => u.Id == MemberId)).SessionVersion);
+    }
+
+    [Fact]
+    public async Task Revoking_sessions_of_an_unknown_user_is_false()
+    {
+        await using var db = await SeedAsync();
+
+        Assert.False(await NewService(db).RevokeSessionsAsync(999));
     }
 
     [Fact]
@@ -170,5 +198,34 @@ public class AccountServiceTests
         await using var db = NewContext();
 
         Assert.Equal(SetVerbsWordCountResult.NotFound, await NewService(db).SetVerbsWordCountAsync(99, 5));
+    }
+
+    [Theory]
+    [InlineData("A1", SetGrammarGoalResult.Saved, GrammarLevel.A1)]
+    [InlineData("B2", SetGrammarGoalResult.Saved, GrammarLevel.B2)]
+    [InlineData("b1", SetGrammarGoalResult.InvalidValue, null)]
+    [InlineData("C1", SetGrammarGoalResult.InvalidValue, null)]
+    [InlineData("2", SetGrammarGoalResult.InvalidValue, null)]
+    [InlineData("", SetGrammarGoalResult.InvalidValue, null)]
+    [InlineData(null, SetGrammarGoalResult.InvalidValue, null)]
+    public async Task Setting_the_grammar_goal_accepts_only_the_offered_levels_spelled_exactly(
+        string? level, SetGrammarGoalResult expected, GrammarLevel? stored)
+    {
+        await using var db = NewContext();
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 11 });
+        await db.SaveChangesAsync();
+
+        var result = await NewService(db).SetGrammarGoalAsync(1, level);
+
+        Assert.Equal(expected, result);
+        Assert.Equal(stored, (await db.Users.SingleAsync()).GrammarGoal);
+    }
+
+    [Fact]
+    public async Task Setting_the_grammar_goal_of_a_missing_user_is_not_found()
+    {
+        await using var db = NewContext();
+
+        Assert.Equal(SetGrammarGoalResult.NotFound, await NewService(db).SetGrammarGoalAsync(99, "A2"));
     }
 }

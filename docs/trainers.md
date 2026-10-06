@@ -1,7 +1,7 @@
-# The irregular-verbs and pronunciation trainers
+# The irregular-verbs, pronunciation and grammar trainers
 
-Both are domains of their own, separate from dictionaries and from each other: their content lives
-in code, and neither touches `WordPair` or needs seeding.
+Each is a domain of its own, separate from dictionaries and from each other: their content lives
+in code, and none touches `WordPair` or needs seeding.
 
 ## Irregular verbs
 
@@ -146,3 +146,30 @@ r-coloured `ɚ` for the schwa — and search matches them too.
 
 `GET /api/pronunciation/alphabet` serves the chart, built once at startup: it reads no user state,
 so there is nothing per-request to compute.
+
+## Grammar
+
+Every topic, written or not, is in `LanguageLab.Domain/Grammar/GrammarSyllabus`: 86 topics from
+A1 to B2, in learning order, each with its section, `GrammarLevel` and title. The content —
+explanations and exercises — lives in `GrammarCatalog`, which holds six A1 topics so far (`be`,
+`there is / are`, `have / have got`, present simple, present continuous, past simple) with five
+exercises each; tests hold each written topic to its syllabus entry. The phases still to come are
+in [grammar-roadmap.md](grammar-roadmap.md). Explanations are English, so the mode is open to every
+learner language.
+
+An exercise is a sentence with one `___` and 2–4 options, exactly one of them right
+(`GrammarCatalogTests`); square brackets in explanations and examples mark what the client shows
+in bold.
+
+`GET /api/grammar/topics` hands the whole syllabus to the browser, answers included; a topic without content comes with `planned: true` and empty lists, and the list shows it greyed out as "Coming later" (a route to it goes back to the list). The browser
+judges the picks itself (`web/src/grammar/drill.ts`) and **nothing is stored** — no table, no
+`POST`; a reload starts a topic over. A topic screen keeps the explanation beside the exercises (above them on narrow screens), which
+run in shuffled order with shuffled options (keys `1`–`4`; a right pick moves on after 600 ms, a wrong
+one shows the right form and the exercise's `Why` until Next), then the score and the missed
+sentences.
+
+The list shows the topics at or below the learner's **goal** — A1, A2, B1 or B2, picked in a row of
+buttons above it, A1 until they pick one. The goal is `TelegramUser.GrammarGoal`, saved by
+`PUT /api/auth/me/grammar-goal` (`{ "level": "B1" }`; anything but those four names spelled exactly
+is `400`) and read back as `grammarGoal` from `GET /api/auth/me`. The list follows a pick at once; a
+failed save puts the saved goal back and shows the error.

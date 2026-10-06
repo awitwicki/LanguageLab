@@ -60,6 +60,36 @@ public class UserLoginServiceTests
         Assert.Equal(1, await db.Users.CountAsync());
     }
 
+    /// <summary>
+    /// Admin is never handed to whoever signs in while no admin exists: after the last admin is
+    /// gone (a race between two self-deletions, say), the next stranger must not inherit it.
+    /// </summary>
+    [Fact]
+    public async Task Losing_every_admin_does_not_hand_admin_to_the_next_login()
+    {
+        await using var db = NewContext();
+        db.Users.Add(new TelegramUser { Id = 1, TelegramUserId = 555, Role = UserRole.User, CreatedAt = Now });
+        await db.SaveChangesAsync();
+
+        var stranger = await new UserLoginService(db).LoginAsync(Identity(999, "stranger"), Now);
+
+        Assert.Equal(UserRole.User, stranger.User.Role);
+    }
+
+    [Fact]
+    public async Task An_existing_member_does_not_become_admin_while_others_exist()
+    {
+        await using var db = NewContext();
+        db.Users.AddRange(
+            new TelegramUser { Id = 1, TelegramUserId = 555, Role = UserRole.User, CreatedAt = Now },
+            new TelegramUser { Id = 2, TelegramUserId = 777, Role = UserRole.User, CreatedAt = Now });
+        await db.SaveChangesAsync();
+
+        var result = await new UserLoginService(db).LoginAsync(Identity(777), Now);
+
+        Assert.Equal(UserRole.User, result.User.Role);
+    }
+
     /// <summary>Signing in with the same Telegram id must land on the same account, shelves included.</summary>
     [Fact]
     public async Task Existing_telegram_id_reuses_the_row_and_keeps_its_data()

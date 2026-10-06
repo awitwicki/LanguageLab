@@ -1,20 +1,44 @@
 # Authentication and roles
 
 Sign-in is Telegram, in three flavours — OpenID Connect in a browser, the Mini App handshake
-inside Telegram, and a development-only shortcut — all of which end in the same `ll_session`
-cookie.
+inside Telegram, and a development-only shortcut — all of which end in the same session cookie:
+`__Host-ll_session`, or `ll_session` in Development (`SessionCookie.NameFor`), where http://localhost
+cannot carry the `__Host-` prefix.
 
 ## The session cookie
 
-Auth is Telegram over OpenID Connect, resulting in an HttpOnly `ll_session` cookie that holds an
-internal user id and a role. `ICurrentUser` reads those claims; `ICurrentUserContext` adds the
-role. The first successful login becomes the admin.
+Auth is Telegram over OpenID Connect, resulting in an HttpOnly session cookie that holds an
+internal user id, a role and a session stamp — the `TelegramUser.SessionVersion` it was issued
+under and when (`PrincipalFactory`). `ICurrentUser` reads those claims; `ICurrentUserContext` adds
+the role. Only the instance's first account becomes the admin (`UserLoginService`): never whoever
+signs in while no admin happens to exist.
 
-Bans take effect on the next request, through the cookie's `OnValidatePrincipal`.
+`SessionValidator` (the cookie's `OnValidatePrincipal`) rejects a session on the next request when
+the user is banned or deleted, when the session version has moved on, or when the session is older
+than `SessionValidator.AbsoluteLifetime` (90 days) however active it stayed. `POST /api/auth/logout`
+bumps the version, so it signs the account out on every device — a copied cookie dies with the one
+the browser dropped. A role change re-issues the cookie with the same stamp.
 
 The cookie is persistent — 30 days, sliding, with `OnSigningIn` setting `IsPersistent` — and the
 Data Protection keys that encrypt it live in the `DataProtectionKeys` table, so a redeploy does not
-sign everyone out.
+sign everyone out. Those keys are stored unencrypted (see README → TODO).
+
+## CSRF
+
+`SameSite=Lax` alone stops other sites' POSTs, but not a sibling `*.kodzuverse.com` subdomain's
+(same-site), and not a cross-site top-level GET. `SameOriginGuard`
+(`LanguageLab.Api/Auth/SameOriginGuard.cs`) refuses with 403 every `/api` request whose
+`Sec-Fetch-Site` is anything but `same-origin` or `none`; a browser that sends no fetch metadata
+falls back to an `Origin` check on writes. The OIDC callback is the one exempt route — Telegram
+redirects to it from oauth.telegram.org. A new cross-site entry point is a security change.
+
+## Abuse limits on sign-in
+
+`GET /api/auth/telegram/start` and `POST /api/auth/telegram/webapp` take no session, so they are
+rate-limited per client address (`UserRateLimits.AnonymousAuth`, 30 a minute). The handshakes in
+flight live in `ServerSideStateFormat`, capped at `MaxPending` (10,000); at the cap the start
+endpoint answers 503. Refused sign-ins are logged under `LanguageLab.Auth` — the reason and the user
+id, never a code, token or initData — and every admin write under `LanguageLab.Audit` (`AdminAudit`).
 
 ## Development sign-in
 
@@ -33,7 +57,8 @@ Telegram credentials are therefore optional in Development and required everywhe
 Opened inside Telegram, the SPA posts `window.Telegram.WebApp.initData` to
 `POST /api/auth/telegram/webapp`. `LanguageLab.Api/Auth/WebAppInitData.cs` checks the HMAC-SHA256
 against `Telegram:BotToken` — required outside Development, like the OIDC credentials — refuses
-launches older than 24 hours, and issues the same `ll_session` cookie via `UserLoginService`.
+launches older than an hour (`WebAppInitData.MaxAge`), and issues the same session cookie via
+`UserLoginService`.
 
 The SPA asks `/api/auth/me` first and posts only on a 401 (`web/src/auth/useAuth.ts`;
 `web/src/auth/telegram.ts` is the only file that touches `window.Telegram`).

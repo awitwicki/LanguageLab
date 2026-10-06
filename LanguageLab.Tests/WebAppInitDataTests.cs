@@ -98,14 +98,15 @@ public class WebAppInitDataTests
         Assert.Null(WebAppInitData.Validate(unsigned, Token, Now).Identity);
     }
 
-    // 24 hours is Telegram's own default (@telegram-apps/init-data-node). A live cookie wins
-    // over initData at boot, so the window only ever bites on a cold sign-in.
+    // A live cookie wins over initData at boot, so the window only ever bites on a cold sign-in,
+    // right after Telegram signed fresh parameters; an hour is plenty, and a leaked launch dies sooner.
     [Fact]
     public void Rejects_a_launch_older_than_the_window()
     {
-        Assert.NotNull(WebAppInitData.Validate(Signed, Token, AuthDate.AddHours(23)).Identity);
+        Assert.Equal(TimeSpan.FromHours(1), WebAppInitData.MaxAge);
+        Assert.NotNull(WebAppInitData.Validate(Signed, Token, AuthDate.AddMinutes(59)).Identity);
 
-        var stale = WebAppInitData.Validate(Signed, Token, AuthDate.AddHours(24).AddMinutes(1));
+        var stale = WebAppInitData.Validate(Signed, Token, AuthDate.AddHours(1).AddMinutes(1));
 
         Assert.Null(stale.Identity);
         Assert.Contains("old", stale.Error);

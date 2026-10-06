@@ -94,7 +94,7 @@ var authentication = builder.Services
     })
     .AddCookie(options =>
     {
-        options.Cookie.Name = "ll_session";
+        options.Cookie.Name = SessionCookie.NameFor(builder.Environment.IsDevelopment());
         options.Cookie.HttpOnly = true;
 
         // Lax is required, not merely chosen: the OIDC callback arrives as a cross-site
@@ -222,7 +222,7 @@ builder.Services.AddWordTranslation();
 // The reader's sentence translation, on ILlmClient too.
 builder.Services.AddSentenceTranslation();
 builder.Services.AddScoped<TranslationService>();
-// One uncached translation per user every 10 s — sentences and word-lookup misses alike. Its
+// One uncached translation per user every 10 s and 300 a day — sentences and word-lookup misses alike. Its
 // TimeProvider comes from AddTranslationQueue below.
 builder.Services.AddSingleton<UncachedTranslationLimiter>();
 // A dictionary's missing translations, filled in the background per learner language.
@@ -238,17 +238,16 @@ builder.Services.AddBookParser();
 builder.Services.AddSingleton<ImportQuota>();
 builder.Services.AddScoped<BookFileImportService>();
 
-builder.Services.AddRequestDecompression();
-
 // SortStatus travels as a string ("known"), not a number: the JSON should be readable by eye.
 // CamelCase is mandatory: without a naming policy serialization would produce "Known",
 // while the client is typed against 'known' | 'unknown' | 'excluded'.
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 
-// A 6k-word book is 1-2 MB of JSON; Kestrel's default 30 MB leaves plenty of headroom,
-// but an explicit limit beats a surprise on a big book.
-builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 64L * 1024 * 1024);
+// Every JSON body this API takes is a few kilobytes; the two that are not set their own limit
+// (book import 16 MB, bulk personal words 1 MB). A small default keeps an anonymous request —
+// the Mini App sign-in — from making the server hold tens of megabytes.
+builder.WebHost.ConfigureKestrel(options => options.Limits.MaxRequestBodySize = 256L * 1024);
 
 var app = builder.Build();
 
@@ -278,9 +277,28 @@ var forwardedHeaders = new ForwardedHeadersOptions
 forwardedHeaders.KnownIPNetworks.Clear();
 forwardedHeaders.KnownProxies.Clear();
 
+// Proxy__KnownNetworks="172.18.0.0/16" (several separated by ';') narrows that trust to the
+// proxy's subnet; unset keeps the whole-network trust described above.
+foreach (var network in (builder.Configuration["Proxy:KnownNetworks"] ?? "")
+             .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+{
+    forwardedHeaders.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+}
+
 app.UseForwardedHeaders(forwardedHeaders);
 
-app.UseRequestDecompression();
+if (!app.Environment.IsDevelopment())
+{
+    // Sent only over https (as the forwarded proto above says), so a local http run is unaffected.
+    app.UseHsts();
+}
+
+app.UseSecurityHeaders();
+
+// After the forwarded headers, so the Origin fallback compares against the real scheme; before
+// authentication, so a refused request never reaches a handler.
+app.UseSameOriginGuard();
+
 app.UseSpaFiles();
 
 app.UseAuthentication();
@@ -297,6 +315,7 @@ app.MapSortingEndpoints();
 app.MapTrainingEndpoints();
 app.MapAdminEndpoints();
 app.MapIrregularVerbEndpoints();
+app.MapGrammarEndpoints();
 app.MapPronunciationEndpoints();
 app.MapTranslationEndpoints();
 app.MapReaderEndpoints();

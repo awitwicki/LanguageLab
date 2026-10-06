@@ -25,9 +25,24 @@ public static class UserRateLimits
     /// </summary>
     public const string ImportAttempts = "import-attempts";
 
+    /// <summary>
+    /// The two anonymous ways into a session. There is no user to partition by yet, so the client
+    /// address is the key — after UseForwardedHeaders, the real client behind the proxy.
+    /// </summary>
+    public const string AnonymousAuth = "anonymous-auth";
+
+    /// <summary>
+    /// Single-word writes: adding or correcting a personal word, and the reader's learn / known /
+    /// ignore (known and ignore may create an untranslated shared row). Generous for a person,
+    /// a ceiling for a script filling the database.
+    /// </summary>
+    public const string WordWrites = "word-writes";
+
     public const int TranslationsPerDay = 500;
     public const int BulkRequestsPerDay = 20;
     public const int ImportAttemptsPerDay = 20;
+    public const int AnonymousAuthPerMinute = 30;
+    public const int WordWritesPerDay = 2000;
 
     /// <summary>
     /// The signed-in user's id, or one shared anonymous bucket. A request that reaches a limited
@@ -37,6 +52,29 @@ public static class UserRateLimits
     /// </summary>
     public static string PartitionKey(ClaimsPrincipal? user) =>
         PrincipalFactory.Read(user) is { } context ? $"user:{context.Id}" : "anonymous";
+
+    /// <summary>
+    /// The client's address, or its /64 for IPv6 — one subscriber is handed a whole /64, so a
+    /// per-address bucket would give them as many buckets as they care to use.
+    /// </summary>
+    public static string IpPartitionKey(HttpContext context)
+    {
+        var address = context.Connection.RemoteIpAddress;
+
+        if (address is { IsIPv4MappedToIPv6: true })
+        {
+            address = address.MapToIPv4();
+        }
+
+        if (address is not { AddressFamily: System.Net.Sockets.AddressFamily.InterNetworkV6 })
+        {
+            return $"ip:{address}";
+        }
+
+        var bytes = address.GetAddressBytes();
+        Array.Clear(bytes, 8, 8);
+        return $"ip:{new System.Net.IPAddress(bytes)}/64";
+    }
 
     /// <summary>
     /// Names the wait; without it a 429 is "try again when?". SlidingWindowRateLimiter's rejected
@@ -81,6 +119,16 @@ public static class UserRateLimits
         Add(options, Translate, TranslationsPerDay);
         Add(options, BulkWords, BulkRequestsPerDay);
         Add(options, ImportAttempts, ImportAttemptsPerDay);
+        Add(options, WordWrites, WordWritesPerDay);
+
+        options.AddPolicy(AnonymousAuth, context =>
+            RateLimitPartition.GetFixedWindowLimiter(IpPartitionKey(context), _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = AnonymousAuthPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
     }
 
     private static SlidingWindowRateLimiterOptions Window(int permits) => new()

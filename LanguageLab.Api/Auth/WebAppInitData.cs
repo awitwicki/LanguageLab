@@ -31,11 +31,13 @@ public sealed record InitDataResult(TelegramIdentity? Identity, string? Error)
 public static class WebAppInitData
 {
     /// <summary>
-    /// How old a launch may be. Telegram signs fresh parameters on every open, so a cold sign-in
-    /// always has young ones; the window is the 24 hours Telegram's own
-    /// @telegram-apps/init-data-node defaults to.
+    /// How old a launch may be. Telegram signs fresh parameters on every open, and the SPA asks for
+    /// its cookie first, so the parameters matter almost only right after launch — an hour is
+    /// plenty, and shorter than the 24 hours @telegram-apps/init-data-node defaults to, so a leaked
+    /// launch URL stops working sooner. A web view open longer than that and signed out elsewhere
+    /// has to be reopened.
     /// </summary>
-    public static readonly TimeSpan MaxAge = TimeSpan.FromHours(24);
+    public static readonly TimeSpan MaxAge = TimeSpan.FromHours(1);
 
     // In the first HMAC this literal is the key and the bot token is the message — the
     // documented order, and an easy one to get backwards.

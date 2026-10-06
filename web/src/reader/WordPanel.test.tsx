@@ -95,6 +95,15 @@ describe('WordPanel', () => {
     await closesAfterSlide(container, onClose)
   })
 
+  it("sends the model's translation along: a word outside the lexicon has no shared one to fall back on", async () => {
+    const { container } = await open({ ...adjust, lemma: 'grokked', translation: 'зрозумів', source: 'llm', learnTarget: 'personal' }, null)
+
+    await click(button(container, 'Add to training'))
+    await flush()
+
+    expect(apiMock.learnWord).toHaveBeenCalledWith('grokked', 'зрозумів', null)
+  })
+
   it('asks for a translation when none was found, and sends the typed one', async () => {
     const { container } = await open({ ...adjust, translation: null, source: 'none', learnTarget: 'personal' }, null)
 

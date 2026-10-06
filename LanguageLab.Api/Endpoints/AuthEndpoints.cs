@@ -2,6 +2,7 @@ using LanguageLab.Api;
 using LanguageLab.Api.Auth;
 using LanguageLab.Application.Services;
 using LanguageLab.Domain.Entities;
+using LanguageLab.Domain.Grammar;
 using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
 using Microsoft.AspNetCore.Authentication;
@@ -33,7 +34,7 @@ public sealed record TelegramWebAppOptions(string BotToken)
 
 public sealed record CurrentUserView(
     long Id, long TelegramUserId, string DisplayName, string? Username, string? PhotoUrl, UserRole Role,
-    string? Language, string? SuggestedLanguage, int? VerbsWordCount);
+    string? Language, string? SuggestedLanguage, int? VerbsWordCount, string GrammarGoal);
 
 /// <summary>The body of POST /api/auth/telegram/webapp: window.Telegram.WebApp.initData, verbatim.</summary>
 public sealed record WebAppLoginRequest(string? InitData);
@@ -44,6 +45,10 @@ public sealed record SetVerbsWordCountRequest(int Words);
 
 public sealed record WordCountError(string Error);
 
+public sealed record SetGrammarGoalRequest(string? Level);
+
+public sealed record GrammarGoalError(string Error);
+
 public static class AuthEndpoints
 {
     public static void MapAuthEndpoints(this WebApplication app)
@@ -53,14 +58,25 @@ public static class AuthEndpoints
         // The handler owns /api/auth/telegram/callback; this is only the way in. When the
         // credentials are absent the handler is not registered at all, so challenging its
         // scheme would throw — say what is wrong instead.
-        group.MapGet("/telegram/start", (TelegramLoginOptions telegram) => telegram.IsConfigured
-            ? Results.Challenge(new AuthenticationProperties { RedirectUri = "/" }, [TelegramAuth.Scheme])
-            : Results.Problem(
-                "Telegram sign-in is not configured: Telegram:ClientId and Telegram:ClientSecret " +
-                "are unset. Only possible in Development — use the local dev sign-in instead.",
-                statusCode: StatusCodes.Status503ServiceUnavailable));
+        // Both anonymous entry points are rate-limited per client address.
+        group.MapGet("/telegram/start", (TelegramLoginOptions telegram, ServerSideStateFormat state) =>
+        {
+            if (!telegram.IsConfigured)
+            {
+                return Results.Problem(
+                    "Telegram sign-in is not configured: Telegram:ClientId and Telegram:ClientSecret " +
+                    "are unset. Only possible in Development — use the local dev sign-in instead.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
 
-        group.MapPost("/telegram/webapp", SignInFromWebAppAsync);
+            return state.IsFull
+                ? Results.Problem(
+                    "Too many sign-ins in progress. Try again in a minute.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable)
+                : Results.Challenge(new AuthenticationProperties { RedirectUri = "/" }, [TelegramAuth.Scheme]);
+        }).RequireRateLimiting(UserRateLimits.AnonymousAuth);
+
+        group.MapPost("/telegram/webapp", SignInFromWebAppAsync).RequireRateLimiting(UserRateLimits.AnonymousAuth);
 
         group.MapGet("/me", async (ICurrentUserContext currentUser, ApplicationDbContext db) =>
         {
@@ -89,8 +105,20 @@ public static class AuthEndpoints
                 _ => Results.Json(new WordCountError("invalid_value"), statusCode: StatusCodes.Status400BadRequest),
             }).RequireAuthorization();
 
-        group.MapPost("/logout", async (HttpContext http) =>
+        // Server-side, not just the browser's copy: a copied cookie dies too. That signs this
+        // account out on every device — the price of a cookie that cannot be revoked one by one.
+        group.MapPut("/me/grammar-goal", async (
+            SetGrammarGoalRequest body, ICurrentUserContext currentUser, AccountService accounts) =>
+            await accounts.SetGrammarGoalAsync(currentUser.Require().Id, body.Level) switch
+            {
+                SetGrammarGoalResult.Saved => Results.NoContent(),
+                SetGrammarGoalResult.NotFound => Results.Unauthorized(),
+                _ => Results.Json(new GrammarGoalError("invalid_value"), statusCode: StatusCodes.Status400BadRequest),
+            }).RequireAuthorization();
+
+        group.MapPost("/logout", async (HttpContext http, ICurrentUserContext currentUser, AccountService accounts) =>
         {
+            await accounts.RevokeSessionsAsync(currentUser.Require().Id);
             await http.SignOutAsync(PrincipalFactory.Scheme);
             return Results.NoContent();
         }).RequireAuthorization();
@@ -137,7 +165,7 @@ public static class AuthEndpoints
 
                 await http.SignInAsync(
                     PrincipalFactory.Scheme,
-                    PrincipalFactory.Create(result.User.Id, result.User.Role));
+                    PrincipalFactory.Create(result.User.Id, result.User.Role, result.User.SessionVersion, DateTimeOffset.UtcNow));
 
                 return Results.Redirect("/");
             });
@@ -166,6 +194,8 @@ public static class AuthEndpoints
 
         if (!launch.IsValid)
         {
+            // Our own message (bad signature, too old…), never the initData itself.
+            TelegramAuth.Log(http).LogWarning("Mini App sign-in refused: {Reason}", launch.Error);
             return Results.Json(new AdminError(launch.Error), statusCode: StatusCodes.Status401Unauthorized);
         }
 
@@ -173,6 +203,7 @@ public static class AuthEndpoints
 
         if (result.Outcome == LoginOutcome.Banned)
         {
+            TelegramAuth.Log(http).LogInformation("Banned user {UserId} tried to sign in", result.User.Id);
             return Results.Json(
                 new AdminError("An administrator has suspended this account."),
                 statusCode: StatusCodes.Status403Forbidden);
@@ -180,7 +211,7 @@ public static class AuthEndpoints
 
         await http.SignInAsync(
             PrincipalFactory.Scheme,
-            PrincipalFactory.Create(result.User.Id, result.User.Role));
+            PrincipalFactory.Create(result.User.Id, result.User.Role, result.User.SessionVersion, DateTimeOffset.UtcNow));
 
         return Results.Ok(ToView(result.User));
     }
@@ -191,5 +222,6 @@ public static class AuthEndpoints
         new(user.Id, user.TelegramUserId, user.DisplayName, user.Username, user.PhotoUrl, user.Role,
             user.Language,
             user.Language == null ? LearnerLanguages.FromTelegram(user.TelegramLanguageCode)?.Code : null,
-            user.VerbsWordCount);
+            user.VerbsWordCount,
+            (user.GrammarGoal ?? GrammarLevel.A1).ToString());
 }

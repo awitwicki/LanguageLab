@@ -16,7 +16,7 @@ Web app for learning new words from books. Users pick a dictionary extracted fro
 
 | Path | What it is |
 |---|---|
-| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation and IPA catalogs and the `LearnerLanguages` language catalog. No dependencies on infrastructure. |
+| `LanguageLab.Domain/` | Entities (`Dictionary`, `WordPair`, `KnownWord`, `UnknownWord`, `TelegramUser`, `Training`, `TrainingEvent`) and interfaces, plus the code-only verb, pronunciation, IPA and grammar catalogs and the `LearnerLanguages` language catalog. No dependencies on infrastructure. |
 | `LanguageLab.Infrastructure/` | EF Core `ApplicationDbContext`, PostgreSQL provider, migrations. |
 | `LanguageLab.Application/` | Services on top of the domain: word selection, training sessions, book import and the fb2/epub parsers behind it (`Books/`), sorting, Leitner progress, translation, the reader's services, the two trainers. |
 | `LanguageLab.Api/` | ASP.NET Core Minimal API + serves the SPA. Runs DB migrations. `Auth/` holds the claims, session validation and OIDC handlers. |
@@ -55,6 +55,10 @@ These hold wherever you are working, whatever you are changing:
 - **`GET /api/auth/dev-login` is fenced off from production three times over** — `#if DEBUG` plus a
   Release publish, `IsDevelopment()`, and `import.meta.env.DEV`
   (`LanguageLab.Api/Auth/DevLogin.cs`). Weakening any fence is a security change.
+- **CSRF is `SameOriginGuard`** (`LanguageLab.Api/Auth/SameOriginGuard.cs`): every `/api` request
+  must be same-origin by `Sec-Fetch-Site` (or `Origin`, for writes from a browser that sends no
+  fetch metadata); only the OIDC callback is exempt. A new cross-site entry point is a security
+  change.
 - **`Admin` is the only named policy** (`LanguageLab.Api/Auth/AuthPolicies.cs`). Importing a book
   takes no role at all; the publication queue, not a role, is what keeps an unreviewed import out of
   other people's way.
@@ -102,9 +106,10 @@ Nothing below is loaded for you automatically — open the one that matches the 
 | File | Open it when |
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | You need the project map, what a service owns, the endpoint inventory, or the Postgres/config setup. |
-| [docs/auth.md](docs/auth.md) | Touching sign-in, the `ll_session` cookie, dev-login, the Mini App and its full-screen insets, or roles. |
+| [docs/auth.md](docs/auth.md) | Touching sign-in, the session cookie, CSRF (`SameOriginGuard`), dev-login, the Mini App and its full-screen insets, or roles. |
 | [docs/vocabulary-and-training.md](docs/vocabulary-and-training.md) | Working on import, publication and moderation, the personal dictionary, the LLM translator, the background translation queue and per-user limits, or Leitner batches. |
 | [docs/reader.md](docs/reader.md) | Working in Reading mode: `ReaderBook` and position sync, the word panel, chapter windowing, fb2/epub parsing. |
-| [docs/trainers.md](docs/trainers.md) | Working on the irregular-verbs or the pronunciation trainer. |
+| [docs/trainers.md](docs/trainers.md) | Working on the irregular-verbs, pronunciation or grammar trainer. |
+| [docs/grammar-roadmap.md](docs/grammar-roadmap.md) | Planning grammar content or the next grammar phase: the A1–B1 syllabus and the copyright rules. |
 | [web/README.md](web/README.md) | You need SPA specifics beyond the conventions above. |
 | [README.md](README.md) | Running the app, Docker, versioning, and the TODO backlog itself. |

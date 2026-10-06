@@ -1,6 +1,6 @@
 translate
 nltk
-lxml
+lxml>=5.0
 tqdm
 requests
 pytest

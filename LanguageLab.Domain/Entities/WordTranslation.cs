@@ -10,6 +10,12 @@ namespace LanguageLab.Domain.Entities;
 /// </summary>
 public class WordTranslation : BaseEntity
 {
+    /// <summary>
+    /// A translation is a word or a short phrase. Enforced where text comes in (typed, or a model's
+    /// answer), not in the schema: migrations run on startup and must not fail on old rows.
+    /// </summary>
+    public const int MaxTextLength = 200;
+
     public WordPair WordPair { get; set; } = null!;
     [ForeignKey(nameof(WordPair))]
     public long WordPairId { get; set; }

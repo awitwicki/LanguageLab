@@ -192,7 +192,9 @@ def extract_text_from_fb2(fb2_file: str) -> str:
     """Extract text content from FB2 file."""
     print("Parsing FB2 file...")
     try:
-        tree = etree.parse(fb2_file)
+        # An fb2 is untrusted input: no DTD, no entity expansion, no network.
+        parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False)
+        tree = etree.parse(fb2_file, parser)
         root = tree.getroot()
 
         # Define namespace for FB2

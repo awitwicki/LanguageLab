@@ -105,6 +105,11 @@ public class PersonalDictionaryService
             throw new ArgumentException("The translation cannot be empty.");
         }
 
+        if (translation.Length > WordTranslation.MaxTextLength)
+        {
+            throw new ArgumentException($"The translation must be at most {WordTranslation.MaxTextLength} characters.");
+        }
+
         if (await _dbContext.Words.AnyAsync(w => w.OwnerId == userId && w.Word == word))
         {
             return null;
@@ -203,6 +208,11 @@ public class PersonalDictionaryService
         if (translation.Length == 0)
         {
             throw new ArgumentException("The translation cannot be empty.");
+        }
+
+        if (translation.Length > WordTranslation.MaxTextLength)
+        {
+            throw new ArgumentException($"The translation must be at most {WordTranslation.MaxTextLength} characters.");
         }
 
         var pair = await _dbContext.Words

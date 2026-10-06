@@ -1,13 +1,17 @@
+using System.Globalization;
 using System.Security.Claims;
 using LanguageLab.Api.Auth;
 using LanguageLab.Api.Endpoints;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Infrastructure.Database;
+using LanguageLab.Tests.Fakes;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LanguageLab.Tests;
 
@@ -16,7 +20,7 @@ public class PrincipalFactoryTests
     [Fact]
     public void Create_then_Read_round_trips_id_and_role()
     {
-        var principal = PrincipalFactory.Create(42, UserRole.Admin);
+        var principal = PrincipalFactory.Create(42, UserRole.Admin, 0, DateTimeOffset.UtcNow);
         var result = PrincipalFactory.Read(principal);
 
         Assert.Equal(42, result!.Id);
@@ -94,6 +98,36 @@ public class SessionValidatorTests
 {
     private const long UserId = 7;
 
+    /// <summary>A refused sign-in is visible in the logs, with the reason and never the code or token.</summary>
+    [Fact]
+    public async Task A_failed_telegram_sign_in_is_logged_with_its_reason()
+    {
+        var logger = new ListLogger<object>();
+        var services = new ServiceCollection();
+        services.AddLogging(logging => logging.AddProvider(new SingleLoggerProvider(logger)));
+        await using var provider = services.BuildServiceProvider();
+        var httpContext = new DefaultHttpContext { RequestServices = provider };
+        var context = new RemoteFailureContext(
+            httpContext,
+            new AuthenticationScheme(TelegramAuth.Scheme, null, typeof(OpenIdConnectHandler)),
+            new OpenIdConnectOptions(),
+            new InvalidOperationException("Correlation failed."));
+
+        await TelegramAuth.OnRemoteFailureAsync(context);
+
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("Correlation failed."));
+        Assert.Equal("/?error=login", httpContext.Response.Headers.Location);
+    }
+
+    private sealed class SingleLoggerProvider(ILogger logger) : ILoggerProvider
+    {
+        public ILogger CreateLogger(string categoryName) => logger;
+
+        public void Dispose()
+        {
+        }
+    }
+
     private static async Task<CookieValidatePrincipalContext> ValidateAsync(
         ApplicationDbContext db, ClaimsPrincipal principal)
     {
@@ -132,7 +166,7 @@ public class SessionValidatorTests
         });
         await db.SaveChangesAsync();
 
-        var principal = PrincipalFactory.Create(UserId, UserRole.User);
+        var principal = PrincipalFactory.Create(UserId, UserRole.User, 0, DateTimeOffset.UtcNow);
 
         var context = await ValidateAsync(db, principal);
 
@@ -146,7 +180,7 @@ public class SessionValidatorTests
     {
         await using var db = NewDb();
 
-        var principal = PrincipalFactory.Create(UserId, UserRole.User);
+        var principal = PrincipalFactory.Create(UserId, UserRole.User, 0, DateTimeOffset.UtcNow);
 
         var context = await ValidateAsync(db, principal);
 
@@ -164,7 +198,7 @@ public class SessionValidatorTests
         await db.SaveChangesAsync();
 
         // The cookie still claims "User" — stale relative to a promotion that happened since sign-in.
-        var principal = PrincipalFactory.Create(UserId, UserRole.User);
+        var principal = PrincipalFactory.Create(UserId, UserRole.User, 0, DateTimeOffset.UtcNow);
 
         var context = await ValidateAsync(db, principal);
 
@@ -173,6 +207,82 @@ public class SessionValidatorTests
         Assert.Equal(UserId, updated!.Id);
         Assert.Equal(UserRole.Admin, updated.Role);
         Assert.True(context.ShouldRenew);
+    }
+
+    /// <summary>
+    /// The re-issued cookie keeps the session's version and original issue time: a new version
+    /// would log the user out, a new issue time would reset the absolute lifetime on every promotion.
+    /// </summary>
+    [Fact]
+    public async Task Role_change_keeps_the_session_stamp()
+    {
+        await using var db = NewDb();
+        db.Users.Add(new TelegramUser
+        {
+            Id = UserId, TelegramUserId = 111, Role = UserRole.Admin, SessionVersion = 3, CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        var issued = DateTimeOffset.UtcNow.AddDays(-5);
+
+        var context = await ValidateAsync(db, PrincipalFactory.Create(UserId, UserRole.User, 3, issued));
+
+        Assert.Equal(new SessionStamp(3, DateTimeOffset.FromUnixTimeSeconds(issued.ToUnixTimeSeconds())),
+            PrincipalFactory.ReadStamp(context.Principal));
+    }
+
+    /// <summary>Logout bumps the version: a copied cookie dies with the one the browser dropped.</summary>
+    [Fact]
+    public async Task A_session_from_before_a_logout_is_rejected()
+    {
+        await using var db = NewDb();
+        db.Users.Add(new TelegramUser
+        {
+            Id = UserId, TelegramUserId = 111, Role = UserRole.User, SessionVersion = 4, CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        var context = await ValidateAsync(db, PrincipalFactory.Create(UserId, UserRole.User, 3, DateTimeOffset.UtcNow));
+
+        Assert.Null(context.Principal);
+    }
+
+    /// <summary>The cookie slides while used; this caps it however active it stays.</summary>
+    [Fact]
+    public async Task A_session_past_its_absolute_lifetime_is_rejected()
+    {
+        await using var db = NewDb();
+        db.Users.Add(new TelegramUser
+        {
+            Id = UserId, TelegramUserId = 111, Role = UserRole.User, CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        var issued = DateTimeOffset.UtcNow - SessionValidator.AbsoluteLifetime - TimeSpan.FromMinutes(1);
+
+        var context = await ValidateAsync(db, PrincipalFactory.Create(UserId, UserRole.User, 0, issued));
+
+        Assert.Null(context.Principal);
+    }
+
+    /// <summary>A cookie minted before session stamps existed is not a session.</summary>
+    [Fact]
+    public async Task A_cookie_without_a_stamp_is_rejected()
+    {
+        await using var db = NewDb();
+        db.Users.Add(new TelegramUser
+        {
+            Id = UserId, TelegramUserId = 111, Role = UserRole.User, CreatedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        var legacy = new ClaimsPrincipal(new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.NameIdentifier, UserId.ToString(CultureInfo.InvariantCulture)),
+                new Claim(ClaimTypes.Role, nameof(UserRole.User)),
+            ],
+            PrincipalFactory.Scheme));
+
+        var context = await ValidateAsync(db, legacy);
+
+        Assert.Null(context.Principal);
     }
 
     [Fact]
@@ -185,7 +295,7 @@ public class SessionValidatorTests
         });
         await db.SaveChangesAsync();
 
-        var principal = PrincipalFactory.Create(UserId, UserRole.User);
+        var principal = PrincipalFactory.Create(UserId, UserRole.User, 0, DateTimeOffset.UtcNow);
 
         var context = await ValidateAsync(db, principal);
 

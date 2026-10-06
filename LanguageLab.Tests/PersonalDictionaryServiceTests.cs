@@ -167,6 +167,27 @@ public class PersonalDictionaryServiceTests
     /// already earned stay exactly where they were.
     /// </summary>
     [Fact]
+    public async Task An_overlong_translation_is_refused_on_add()
+    {
+        await using var db = await NewContextAsync();
+        var tooLong = new string('я', WordTranslation.MaxTextLength + 1);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => Service(db).AddAsync(UserId, TestWords.Uk, "apple", tooLong, Now));
+    }
+
+    [Fact]
+    public async Task An_overlong_translation_is_refused_on_update()
+    {
+        await using var db = await NewContextAsync();
+        var service = Service(db);
+        var added = (await service.AddAsync(UserId, TestWords.Uk, "apple", "яблуко", Now))!;
+        var tooLong = new string('я', WordTranslation.MaxTextLength + 1);
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            service.UpdateTranslationAsync(UserId, TestWords.Uk, added.WordPairId, tooLong));
+    }
+
+    [Fact]
     public async Task UpdateTranslation_rewrites_the_translation_and_keeps_the_shelf_and_progress()
     {
         await using var db = await NewContextAsync();

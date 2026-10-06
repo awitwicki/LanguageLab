@@ -17,9 +17,9 @@ Entities (`Dictionary`, `WordPair`, `WordTranslation`, `KnownWord`, `UnknownWord
 [vocabulary-and-training.md](vocabulary-and-training.md#translation) — and `Training.Language`
 records the language a session was built and renders in.
 
-It also holds the three catalogs that live entirely in code rather than in the database —
-`IrregularVerbs/IrregularVerbCatalog`, `Pronunciation/PronunciationCatalog` and the IPA chart
-`Pronunciation/IpaCatalog` (see [trainers.md](trainers.md)) — plus the `Languages/LearnerLanguages`
+It also holds the four catalogs that live entirely in code rather than in the database —
+`IrregularVerbs/IrregularVerbCatalog`, `Pronunciation/PronunciationCatalog`, the IPA chart
+`Pronunciation/IpaCatalog` and `Grammar/GrammarSyllabus` and `Grammar/GrammarCatalog` (see [trainers.md](trainers.md)) — plus the `Languages/LearnerLanguages`
 catalog of learner languages (see [auth.md](auth.md#learner-language)), and the value types that
 guard imported text (`ImportWordText`, `WordText`, `TitleText`) and the role predicate
 `Entities/UserRoles.CanPublishDirectly`.
@@ -86,6 +86,14 @@ The endpoints are inventoried below.
 unknown `/api/...` path answers 404 rather than the page; everything else no file matches gets
 `index.html`.
 
+Every response carries `SecurityHeaders` — a Content-Security-Policy listing exactly what the SPA
+loads (its own files, Telegram's Mini App bridge, https avatars; framing only by Telegram Web),
+`X-Content-Type-Options: nosniff` and `Referrer-Policy: same-origin` — plus HSTS outside
+Development. `SameOriginGuard` refuses cross-site and same-site `/api` requests (CSRF, see
+[auth.md](auth.md#csrf)). A request body is capped at 256 KB unless the endpoint raises it (book
+import 16 MB, bulk personal words 1 MB), and request decompression is off. `AdminAudit` logs every
+admin write under the `LanguageLab.Audit` category.
+
 ### `LanguageLab.TgBot/`
 
 The Telegram bot: a Generic Host console app on `Telegram.Bot` (long polling), with no database
@@ -113,6 +121,8 @@ does the rest), dictionary stats, word sorting.
 - `src/lexicon/lexicon.ts` — `loadLexicon()`: the English lexicon, fetched once per page load
   from `/lexicon/english-lexicon.txt` (a copy of the server's file) and parsed into
   `lemmasOf`/`lemmaOf`; the reader's highlights and word panel resolve lemmas with it.
+- `src/grammar/` — the Grammar mode: topic list, topic screen and the client-side drill (`drill.ts`).
+  See [trainers.md](trainers.md#grammar).
 - Tests are `*.test.ts(x)` next to the code they cover (vitest + jsdom, helper
   `src/test/render.ts`).
 
@@ -236,7 +246,7 @@ model is configured. Nothing is stored. See [reader.md](reader.md#sentence-trans
 
 ### Trainers
 
-`/api/irregular-verbs` and `/api/pronunciation` — see [trainers.md](trainers.md).
+`/api/irregular-verbs`, `/api/pronunciation` and `/api/grammar` (`GET /topics`) — see [trainers.md](trainers.md).
 
 ## Configuration and database
 

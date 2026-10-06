@@ -25,10 +25,32 @@ public sealed class ServerSideStateFormat(TimeProvider? time = null) : ISecureDa
     /// </summary>
     internal static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(15);
 
+    /// <summary>
+    /// Handshakes in flight are anonymous — anyone can start one — so the store is capped. Real
+    /// traffic never comes near it; at the cap /api/auth/telegram/start answers 503 rather than
+    /// letting a flood grow memory without bound.
+    /// </summary>
+    internal const int MaxPending = 10_000;
+
+    /// <summary>A sweep walks every entry, so it runs at most this often, not on every handshake.</summary>
+    private static readonly TimeSpan SweepInterval = TimeSpan.FromSeconds(30);
+
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private readonly ConcurrentDictionary<string, PendingState> _pending = new(StringComparer.Ordinal);
 
+    private long _lastSweepTicks;
+
     internal int PendingCount => _pending.Count;
+
+    /// <summary>True when no new handshake should start. Sweeps first, so expired handles never block one.</summary>
+    internal bool IsFull
+    {
+        get
+        {
+            SweepExpired();
+            return _pending.Count >= MaxPending;
+        }
+    }
 
     public string Protect(AuthenticationProperties data) => Protect(data, purpose: null);
 
@@ -39,7 +61,7 @@ public sealed class ServerSideStateFormat(TimeProvider? time = null) : ISecureDa
     public string Protect(AuthenticationProperties data, string? purpose)
     {
         // Handshakes that are started and never finished are the normal case (a user who closes
-        // Telegram's page), so the abandoned ones are dropped whenever a new one begins.
+        // Telegram's page), so the abandoned ones are dropped as new ones begin.
         SweepExpired();
 
         var handle = Base64Url.EncodeToString(RandomNumberGenerator.GetBytes(32));
@@ -65,6 +87,15 @@ public sealed class ServerSideStateFormat(TimeProvider? time = null) : ISecureDa
     private void SweepExpired()
     {
         var now = _time.GetUtcNow();
+        var last = Interlocked.Read(ref _lastSweepTicks);
+
+        // One sweep per interval, by whichever caller wins the swap — a flood of handshakes must
+        // not turn into a flood of full scans.
+        if (now.UtcTicks - last < SweepInterval.Ticks ||
+            Interlocked.CompareExchange(ref _lastSweepTicks, now.UtcTicks, last) != last)
+        {
+            return;
+        }
 
         foreach (var (handle, pending) in _pending)
         {

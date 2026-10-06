@@ -390,6 +390,10 @@ namespace LanguageLab.Infrastructure.Migrations
                     b.Property<string>("FirstName")
                         .HasColumnType("text");
 
+                    b.Property<string>("GrammarGoal")
+                        .HasMaxLength(2)
+                        .HasColumnType("character varying(2)");
+
                     b.Property<bool>("IsBanned")
                         .HasColumnType("boolean");
 
@@ -407,6 +411,9 @@ namespace LanguageLab.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.Property<int>("Role")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SessionVersion")
                         .HasColumnType("integer");
 
                     b.Property<string>("TelegramLanguageCode")

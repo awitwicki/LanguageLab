@@ -1,0 +1,124 @@
+.grammar-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.grammar-head .grammar-counter {
+  margin-left: auto;
+}
+
+.grammar-layout {
+  display: grid;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (min-width: 900px) {
+  .grammar-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    gap: 32px;
+  }
+
+  .grammar-lesson {
+    position: sticky;
+    top: 16px;
+  }
+}
+
+.grammar-lesson .grammar-examples {
+  margin-bottom: 0;
+}
+
+.grammar-explanation p {
+  margin: 0 0 12px;
+}
+
+.grammar-examples {
+  margin: 0 0 24px;
+  padding: 16px 16px 16px 36px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--text-2);
+}
+
+.grammar-examples li + li {
+  margin-top: 6px;
+}
+
+.grammar-examples strong {
+  color: var(--text);
+}
+
+.grammar-card {
+  display: grid;
+  gap: 20px;
+  justify-items: center;
+  text-align: center;
+  padding: 32px 20px;
+  background: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-card);
+}
+
+.grammar-sentence {
+  font-size: var(--fs-title);
+  line-height: var(--lh-title);
+  margin: 0;
+}
+
+.grammar-blank {
+  display: inline-block;
+  min-width: 3ch;
+  border-bottom: 2px solid var(--text-3);
+  font-weight: 600;
+}
+
+.grammar-blank.is-filled {
+  border-bottom-color: var(--known);
+}
+
+.grammar-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  width: 100%;
+  max-width: 480px;
+}
+
+.grammar-option {
+  min-width: 0;
+}
+
+.grammar-after {
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+  width: 100%;
+}
+
+.grammar-why {
+  color: var(--text-2);
+  margin: 0;
+}
+
+.grammar-score {
+  margin: 0;
+}
+
+.grammar-missed {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.grammar-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}

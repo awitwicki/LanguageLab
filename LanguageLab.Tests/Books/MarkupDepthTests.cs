@@ -31,4 +31,25 @@ public class MarkupDepthTests
         // name — the counter must not silently skip past a tag it fails to recognise as one.
         Assert.Equal(2, MarkupDepth.Of("<Ⅰ><Ⅰ></Ⅰ></Ⅰ>"));
     }
+
+    [Fact]
+    public void Unterminated_tags_cannot_make_the_scan_quadratic()
+    {
+        // Every "<a" has no '>' after it, so each one used to rescan to the end of the text:
+        // O(n²) — a 32 MB container.xml of these pinned a core for hours, past BookParser's deadline.
+        var markup = string.Concat(Enumerable.Repeat("<a", 100_000));
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        var depth = MarkupDepth.Of(markup);
+
+        stopwatch.Stop();
+        Assert.True(depth > MarkupDepth.Limit);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(2), $"took {stopwatch.Elapsed}");
+    }
+
+    [Fact]
+    public void A_few_stray_angle_brackets_still_scan_exactly()
+    {
+        Assert.Equal(1, MarkupDepth.Of("x < y < z <p>text"));
+    }
 }

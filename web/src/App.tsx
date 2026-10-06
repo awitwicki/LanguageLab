@@ -20,6 +20,8 @@ import { PersonalDictionaryScreen } from './screens/PersonalDictionaryScreen'
 import { VerbsScreen } from './verbs/VerbsScreen'
 import { VerbStageScreen } from './verbs/VerbStageScreen'
 import { VerbDrillScreen } from './verbs/VerbDrillScreen'
+import { GrammarScreen } from './grammar/GrammarScreen'
+import { GrammarTopicScreen } from './grammar/GrammarTopicScreen'
 import type { SavedSession } from './verbs/savedSession'
 import { PronunciationFamiliesScreen } from './pronunciation/PronunciationFamiliesScreen'
 import { PronunciationFamilyScreen } from './pronunciation/PronunciationFamilyScreen'
@@ -47,6 +49,8 @@ type Route =
   | { name: 'verbs' }
   | { name: 'verbs-stage'; group: number }
   | { name: 'verbs-drill'; query: DrillQuery; title: string; resume?: SavedSession }
+  | { name: 'grammar' }
+  | { name: 'grammar-topic'; key: string }
   | { name: 'pronunciation' }
   | { name: 'pronunciation-family'; key: string }
   | { name: 'pronunciation-alphabet' }
@@ -66,6 +70,7 @@ const MODE_LANDING: Record<AppMode, Route> = {
   reading: { name: 'reader' },
   pronunciation: { name: 'pronunciation' },
   verbs: { name: 'verbs' },
+  grammar: { name: 'grammar' },
 }
 
 export default function App() {
@@ -383,6 +388,18 @@ export default function App() {
               )
             }
           />
+        )}
+
+        {route.name === 'grammar' && (
+          <GrammarScreen
+            goal={state.user.grammarGoal}
+            onGoalSaved={() => void refreshUser()}
+            onOpenTopic={(key) => setRoute({ name: 'grammar-topic', key })}
+          />
+        )}
+
+        {route.name === 'grammar-topic' && (
+          <GrammarTopicScreen topicKey={route.key} onBack={() => setRoute({ name: 'grammar' })} />
         )}
 
         {route.name === 'pronunciation' && (

@@ -50,8 +50,11 @@ public class UserLoginService
             return new LoginResult(LoginOutcome.Banned, user);
         }
 
-        // Asked before the new row is added, so a first login sees an empty table.
-        var hasAdmin = await _dbContext.Users.AnyAsync(u => u.Role == UserRole.Admin);
+        // "The first registered user becomes the admin": only while this person is the instance's
+        // only account — an empty table, or the one row the old config-user path created before
+        // anyone logged in. Never "whoever signs in while no admin exists", which would hand admin
+        // to a stranger once the last admin was gone. Asked before the new row is added.
+        var isOnlyAccount = !await _dbContext.Users.AnyAsync(u => u.TelegramUserId != identity.TelegramUserId);
 
         if (user == null)
         {
@@ -59,9 +62,7 @@ public class UserLoginService
             _dbContext.Users.Add(user);
         }
 
-        // "The first registered user becomes the admin" — evaluated at login rather than
-        // at insert, because rows can predate logins (the old config-user path created one).
-        if (!hasAdmin)
+        if (isOnlyAccount)
         {
             user.Role = UserRole.Admin;
         }

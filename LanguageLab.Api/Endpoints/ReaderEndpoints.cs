@@ -146,7 +146,7 @@ public static class ReaderEndpoints
             {
                 return Results.Json(new DictionaryError(e.Message), statusCode: StatusCodes.Status400BadRequest);
             }
-        });
+        }).RequireRateLimiting(UserRateLimits.WordWrites);
 
         group.MapPost("/words/{lemma}/known", async (string lemma, ReaderWordService words, ICurrentUser currentUser) =>
         {
@@ -159,7 +159,7 @@ public static class ReaderEndpoints
 
             await words.MarkKnownAsync(await currentUser.GetIdAsync(), word, DateTime.UtcNow);
             return Results.NoContent();
-        });
+        }).RequireRateLimiting(UserRateLimits.WordWrites);
 
         group.MapPost("/words/{lemma}/ignore", async (string lemma, ReaderWordService words, ICurrentUser currentUser) =>
         {
@@ -172,7 +172,7 @@ public static class ReaderEndpoints
 
             await words.IgnoreAsync(await currentUser.GetIdAsync(), word, DateTime.UtcNow);
             return Results.NoContent();
-        });
+        }).RequireRateLimiting(UserRateLimits.WordWrites);
 
         // The panel's undo. 409 rather than a silent no-op: the panel only offers it when the
         // word it loaded had no Leitner row, so a refusal here means that view went stale.

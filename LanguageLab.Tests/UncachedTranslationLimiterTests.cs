@@ -83,4 +83,46 @@ public class UncachedTranslationLimiterTests
     {
         Assert.Equal(TimeSpan.FromSeconds(10), UncachedTranslationLimiter.Window);
     }
+
+    private static void SpendTheDay(UncachedTranslationLimiter limiter, ManualTimeProvider clock, long userId)
+    {
+        for (var i = 0; i < UncachedTranslationLimiter.DailyLimit; i++)
+        {
+            Assert.True(limiter.TryConsume(userId, out _));
+            clock.Advance(UncachedTranslationLimiter.Window);
+        }
+    }
+
+    [Fact]
+    public void The_daily_cap_refuses_until_utc_midnight()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var limiter = new UncachedTranslationLimiter(clock);
+        SpendTheDay(limiter, clock, 1);
+
+        Assert.False(limiter.TryConsume(1, out var wait));
+        Assert.Equal(DateTimeOffset.Parse("2026-09-30T00:00:00Z") - clock.GetUtcNow(), wait);
+    }
+
+    [Fact]
+    public void The_daily_cap_resets_the_next_utc_day()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var limiter = new UncachedTranslationLimiter(clock);
+        SpendTheDay(limiter, clock, 1);
+
+        clock.Advance(TimeSpan.FromHours(12));
+
+        Assert.True(limiter.TryConsume(1, out _));
+    }
+
+    [Fact]
+    public void One_users_daily_cap_does_not_touch_another()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var limiter = new UncachedTranslationLimiter(clock);
+        SpendTheDay(limiter, clock, 1);
+
+        Assert.True(limiter.TryConsume(2, out _));
+    }
 }

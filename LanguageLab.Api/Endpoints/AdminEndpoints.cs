@@ -15,7 +15,7 @@ public static class AdminEndpoints
 {
     public static void MapAdminEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/api/admin").RequireAuthorization(AuthPolicies.Admin);
+        var group = app.MapGroup("/api/admin").RequireAuthorization(AuthPolicies.Admin).WithAdminAudit();
 
         // Optional query: ?search=&page=&pageSize=. The service clamps whatever arrives.
         group.MapGet("/users", async (

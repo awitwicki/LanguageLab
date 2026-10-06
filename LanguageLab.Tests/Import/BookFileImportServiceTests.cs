@@ -3,6 +3,7 @@ using System.Text;
 using LanguageLab.Application.Books;
 using LanguageLab.Application.Import;
 using LanguageLab.Application.Services;
+using LanguageLab.Application.Translation;
 using LanguageLab.Domain.Entities;
 using LanguageLab.Domain.Languages;
 using LanguageLab.Infrastructure.Database;
@@ -62,6 +63,56 @@ public class BookFileImportServiceTests
         <FictionBook><description><title-info><book-title>Слово</book-title></title-info></description>
         <body><section><title><p>Один</p></title><p>Привіт світе як справи сьогодні</p></section></body></FictionBook>
         """;
+
+    /// <summary>
+    /// A client that hangs up after the dictionary is saved must not get the day's import back:
+    /// the cancellation used to reach the enqueue, and the catch-all released the reservation.
+    /// </summary>
+    [Fact]
+    public async Task A_cancel_after_the_dictionary_is_saved_still_spends_the_days_import()
+    {
+        await using var db = NewContext();
+        var quota = new ImportQuota(TimeProvider.System);
+        var queue = new HangUpQueue();
+        var service = new BookFileImportService(new BookParser(), Lexicon(ReaderBookWords), new BookImportService(db), queue, quota);
+
+        await service.ImportAsync(
+            BookFixtures.Utf8(BookFixtures.ReaderBookXml), "book.fb2", default, requestPublication: false,
+            ownerId: 1, UserRole.User, LearnerLanguages.Default, queue.Token);
+
+        Assert.Single(db.Dictionaries);
+        Assert.NotNull(quota.TryReserve(1, UserRole.User));
+    }
+
+    [Fact]
+    public async Task A_cancel_before_the_save_leaves_the_days_import_untouched()
+    {
+        await using var db = NewContext();
+        var quota = new ImportQuota(TimeProvider.System);
+        var (service, _) = Make(db, Lexicon(ReaderBookWords), quota);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ImportAsync(
+            BookFixtures.Utf8(BookFixtures.ReaderBookXml), "book.fb2", default, requestPublication: false,
+            ownerId: 1, UserRole.User, LearnerLanguages.Default, new CancellationToken(canceled: true)));
+
+        Assert.Empty(db.Dictionaries);
+        Assert.Null(quota.TryReserve(1, UserRole.User));
+    }
+
+    /// <summary>The client hangs up the moment the dictionary is saved: its token is cancelled as the enqueue starts.</summary>
+    private sealed class HangUpQueue : ITranslationQueue
+    {
+        private readonly CancellationTokenSource _client = new();
+
+        public CancellationToken Token => _client.Token;
+
+        public Task EnqueueAsync(long dictionaryId, LearnerLanguage language, CancellationToken cancellationToken)
+        {
+            _client.Cancel();
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+    }
 
     [Fact]
     public async Task Reads_a_plain_fb2_and_stores_the_server_computed_hash()
